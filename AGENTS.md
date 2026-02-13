@@ -18,6 +18,10 @@ Always follow this procedure when performing tasks:
 - Do not restore or roll back files/code that you did not modify yourself. Never attempt to "fix" or revert changes in files unrelated to your current task, including using `git checkout`.
 - Use `polars` then `pandas` library.
 - **Leverage Parallel Agent Execution**: In WSL2, multiple agents can run in parallel. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
+- Organize and separate each scripts by biomechanical variable categories:
+  - **COM-related variables**: xCOM, COM, MOS, BOS, ...
+  - **Torque variables**: Ankle torque, Knee torque, Hip torque, ...
+  - **Joint angle variables**: Ankle, Knee, Hip, Trunk, Neck, ...
 
 ---
 
