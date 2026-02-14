@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from replace_v3d.c3d_reader import read_c3d_points
-from replace_v3d.com import COMModelParams, compute_whole_body_com, derivative, compute_xcom
-from replace_v3d.events import load_trial_events, parse_trial_from_filename
-from replace_v3d.mos import compute_mos_timeseries
-from replace_v3d.angles import compute_lower_limb_angles
+from c3d_reader import read_c3d_points
+from com import COMModelParams, compute_whole_body_com, derivative, compute_xcom
+from events import load_trial_events, parse_trial_from_filename
+from mos import compute_mos_timeseries
+from angles import compute_lower_limb_angles
 
 
 def _corr(a: np.ndarray, b: np.ndarray) -> float:
@@ -92,7 +92,7 @@ def main() -> None:
     # Angles (optional)
     jc = None
     try:
-        from replace_v3d.com import compute_joint_centers
+        from com import compute_joint_centers
         jc = compute_joint_centers(c3d.points, c3d.labels)
         angles = compute_lower_limb_angles(c3d.points, c3d.labels, jc, end_frame=end_frame)
     except Exception:

@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from .geometry2d import (
+from geometry2d import (
     convex_hull_2d,
     polygon_area,
     polygon_bounds,
