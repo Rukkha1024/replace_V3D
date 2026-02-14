@@ -24,7 +24,7 @@
 </progress>
 
 ======
-1. scripts 한번에 싹 실행하는 main.py 생성 
 2. line graph: subject-velocity-trial 별로 생성하기. grid plot으로 생성하기. steponset 같은 정보 붙여야함. 분석을 검증할 수 있도록 최대한 많은 정보를 담아야 한다. legend 같은것.
      # 기존 aggregate 쪽 merging 하는 파일 ref 파일로 사용해서 붙여버리자.
 
+3. repo에서 forceplate "3" 을 사용하고 있나? 
