@@ -30,6 +30,24 @@ conda run -n module python scripts/run_mos_pipeline.py \
 Outputs:
 - `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
 
+## Quick start (batch MoS time series CSV)
+
+```bash
+conda run -n module python scripts/batch/run_batch_mos_timeseries_csv.py \
+  --c3d_dir data/all_data \
+  --event_xlsm data/perturb_inform.xlsm \
+  --out_csv output/all_trials_mos_timeseries.csv \
+  --overwrite
+```
+
+Options:
+- `--skip_unmatched`: skip files with subject-token/event mapping failures.
+- `--pre_frames`: local-event conversion assumption (default `100`).
+
+Output:
+- `output/all_trials_mos_timeseries.csv` (long-format; one row per `subject-velocity-trial` x `MocapFrame`)
+- Key columns include `subject-velocity-trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`.
+
 ## Quick start (ankle torque)
 
 ```bash
