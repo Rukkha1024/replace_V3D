@@ -4,7 +4,7 @@ import sys
 from pathlib import Path as _Path
 
 # Allow running without installing the package
-sys.path.insert(0, str((_Path(__file__).resolve().parents[1] / "src").resolve()))
+sys.path.insert(0, str((_Path(__file__).resolve().parent).resolve()))
 
 import argparse
 from pathlib import Path
@@ -39,7 +39,7 @@ def main() -> None:
     ap.add_argument("--velocity", type=float, default=None, help="Velocity (if not parsed from filename)")
     ap.add_argument("--trial", type=int, default=None, help="Trial (if not parsed from filename)")
     ap.add_argument("--v3d_com_xlsx", default=None, help="Optional Visual3D COM xlsx for validation")
-    ap.add_argument("--out_dir", default=".", help="Output directory")
+    ap.add_argument("--out_dir", default="output", help="Output directory")
     args = ap.parse_args()
 
     c3d_path = Path(args.c3d)

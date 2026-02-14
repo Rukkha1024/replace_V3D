@@ -23,7 +23,7 @@ conda run -n module python scripts/run_mos_pipeline.py \
   --event_xlsm /path/to/perturb_inform.xlsm \
   --subject "김우연" \
   --leg_length_cm 86 \
-  --out_dir /path/to/output
+  --out_dir output
 ```
 
 Outputs:
