@@ -11,6 +11,7 @@ Always follow this procedure when performing tasks:
 ## Environment rules
 - Use the existing conda env: `module`.
 - Always run Python/pip as: `conda run -n module python` / `conda run -n module pip`.
+- In this environment, `conda run -n module python -` may not receive stdin; prefer `-c` or running a `.py` file.
 
 ---
 ## **Codebase Rule: Configuration Management**
