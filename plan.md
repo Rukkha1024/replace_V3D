@@ -59,3 +59,8 @@ optitrack_marker_context.xml
 발길이_오른	240
 </김우연_신체계측>지금 첨부한 c3d는 motive optitrack의 conventional full body skeleton 모델사용해서 marker data를 촬영한 후, filtering까지 거친 motion 파일이다. 
 이거가지고 COM, BOS, xCOM, MOS, 발목, 무릎 각도 구해봐. 
+
+
+<other_info>
+mos는 steponset 기점으로 나누지 마.forceplate도 1개이고, 시각적으로 marker를 보면서 toe off까지 검출하긴 어렵다. 어차피 분석은 step onset 직전까지만 실시하니깐 그 이후 분석에 대해 신경쓰지 말고 mos 측정 기준 변화시키지 마라. 
+</other_info>
