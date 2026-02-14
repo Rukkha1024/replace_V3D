@@ -9,7 +9,8 @@ This repo contains a **pure-Python** pipeline to compute:
 
 ## Important constraints (matching your V3D tutorial logic)
 
-- No forceplate usage (forceplate=1, ignore).
+- **MoS pipeline**: no forceplate usage (matches your V3D tutorial logic).
+- **Ankle torque pipeline**: uses the C3D `FORCE_PLATFORM` metadata + analog channels.
 - BoS uses **foot landmark markers only** (no anthropometric expansion).
 - For **step trials**, analysis is reported **up to just before step onset**  
   (`analysis_end = step_onset_local - 1`).  
@@ -29,7 +30,21 @@ conda run -n module python scripts/run_mos_pipeline.py \
 Outputs:
 - `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
 
+## Quick start (ankle torque)
+
+```bash
+conda run -n module python scripts/run_ankle_torque_pipeline.py \
+  --c3d /path/to/251112_KUO_perturb_60_001.c3d \
+  --event_xlsm /path/to/perturb_inform.xlsm \
+  --subject "김우연" \
+  --out_dir output
+```
+
+Outputs:
+- `<trial>_ankle_torque.xlsx` (GRF/GRM → ankle torque at L/R and mid)
+
 ## Notes
 
 - C3D must be **trimmed** to `[platform_onset-100, platform_offset+100]` in the original 100 Hz mocap frames (as per your data rule).
 - Marker naming: supports both raw labels (e.g. `251112_KUO_LASI`) and stripped labels (`LASI`).
+- Library code lives under `src/replace_v3d/`, but entrypoints remain in `scripts/` (no install step).
