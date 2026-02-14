@@ -103,10 +103,12 @@ def main() -> None:
     out_xlsx = out_dir / f"{c3d_path.stem}_JOINT_ANGLES_preStep.xlsx"
 
     # CSV first (stable for MD5)
-    df_pl.write_csv(out_csv)
+    # NOTE: Use pandas formatting for stable exponent padding (e.g., e-07),
+    # matching the provided reference CSV used for MD5 validation.
+    df = df_pl.to_pandas()
+    df.to_csv(out_csv, index=False)
 
     # Excel (for inspection)
-    df = df_pl.to_pandas()
     meta = {
         "Trial": c3d_path.stem,
         "subject": events.subject,
@@ -134,4 +136,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
