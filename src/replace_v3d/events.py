@@ -98,3 +98,40 @@ def parse_trial_from_filename(c3d_name: str) -> Tuple[float, int]:
     velocity = float(parts[3])
     trial = int(parts[4])
     return velocity, trial
+
+
+def load_subject_body_mass_kg(
+    event_xlsm: str | Path,
+    subject: str,
+    sheet_name: str = "meta",
+    row_key: str = "몸무게",
+) -> Optional[float]:
+    """Load subject body mass (kg) from `perturb_inform.xlsm`.
+
+    The repo's `perturb_inform.xlsm` uses a wide format `meta` sheet:
+      - Column `subject`: metadata key labels (e.g., 성별/나이/키/몸무게)
+      - Each remaining column is a subject name (e.g., 김우연)
+
+    Returns None if the sheet/row/subject column is missing.
+    """
+
+    event_xlsm = Path(event_xlsm)
+    df = pd.read_excel(event_xlsm, sheet_name=sheet_name)
+    if "subject" not in df.columns:
+        return None
+    if subject not in df.columns:
+        return None
+
+    key_series = df["subject"].astype(str).str.strip()
+    row = df[key_series == str(row_key).strip()]
+    if len(row) < 1:
+        return None
+
+    val = row.iloc[0][subject]
+    if pd.isna(val):
+        return None
+    try:
+        return float(val)
+    except Exception:
+        return None
+

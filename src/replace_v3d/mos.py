@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 
-from geometry2d import (
+from .geometry2d import (
     convex_hull_2d,
     polygon_area,
     polygon_bounds,
@@ -14,21 +14,27 @@ from geometry2d import (
 
 
 BOS_MARKERS_DEFAULT = [
-    "LHEE", "LTOE", "LANK", "LFoot_3",
-    "RHEE", "RTOE", "RANK", "RFoot_3",
+    "LHEE",
+    "LTOE",
+    "LANK",
+    "LFoot_3",
+    "RHEE",
+    "RTOE",
+    "RANK",
+    "RFoot_3",
 ]
 
 
 @dataclass(frozen=True)
 class MOSResult:
-    MOS_signed: np.ndarray          # (T,)
-    MOS_AP_dir: np.ndarray          # (T,)
-    MOS_ML_dir: np.ndarray          # (T,)
-    BOS_area: np.ndarray            # (T,)
-    BOS_minX: np.ndarray            # (T,)
-    BOS_maxX: np.ndarray            # (T,)
-    BOS_minY: np.ndarray            # (T,)
-    BOS_maxY: np.ndarray            # (T,)
+    MOS_signed: np.ndarray  # (T,)
+    MOS_AP_dir: np.ndarray  # (T,)
+    MOS_ML_dir: np.ndarray  # (T,)
+    BOS_area: np.ndarray  # (T,)
+    BOS_minX: np.ndarray  # (T,)
+    BOS_maxX: np.ndarray  # (T,)
+    BOS_minY: np.ndarray  # (T,)
+    BOS_maxY: np.ndarray  # (T,)
 
 
 def compute_mos_timeseries(
@@ -108,3 +114,4 @@ def compute_mos_timeseries(
         BOS_minY=minY,
         BOS_maxY=maxY,
     )
+

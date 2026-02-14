@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict
 
 import numpy as np
 
@@ -9,14 +9,16 @@ import numpy as np
 @dataclass(frozen=True)
 class Anthropometrics:
     """Subject anthropometrics used for xCOM etc."""
+
     leg_length_m: float
 
 
 @dataclass(frozen=True)
 class COMModelParams:
     """Parameters chosen to mimic Visual3D's link-model COM reasonably well."""
+
     trunk_alpha: float = 0.45  # pelvis_origin -> C7
-    head_beta: float = 0.80   # C7 -> head_center
+    head_beta: float = 0.80  # C7 -> head_center
 
     # De Leva (1996) mass fractions (male) – sum to 1 with bilateral segments
     mass_head: float = 0.0694
@@ -213,3 +215,4 @@ def compute_xcom(COM: np.ndarray, vCOM: np.ndarray, leg_length_m: float, g: floa
     """Hof (XCoM) extrapolated COM."""
     w0 = np.sqrt(g / float(leg_length_m))
     return COM + vCOM / w0
+

@@ -132,3 +132,4 @@ def polygon_bounds(poly: np.ndarray) -> Tuple[float, float, float, float]:
     if len(poly) == 0:
         return (float("nan"),) * 4
     return float(np.min(poly[:, 0])), float(np.max(poly[:, 0])), float(np.min(poly[:, 1])), float(np.max(poly[:, 1]))
+

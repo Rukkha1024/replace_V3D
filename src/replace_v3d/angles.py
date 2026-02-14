@@ -86,3 +86,4 @@ def compute_lower_limb_angles(
         ankle_dorsi_L_deg=ankle_dorsi_L,
         ankle_dorsi_R_deg=ankle_dorsi_R,
     )
+
