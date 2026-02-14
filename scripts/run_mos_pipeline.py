@@ -8,6 +8,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 import argparse
+from dataclasses import replace as dc_replace
 
 import numpy as np
 import pandas as pd
@@ -30,6 +31,18 @@ def _corr(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.corrcoef(a, b)[0, 1])
 
 
+def _bias_rmse(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return (bias, rmse) over axis=0."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError("bias/rmse inputs must have the same shape")
+    d = a - b
+    bias = d.mean(axis=0)
+    rmse = np.sqrt((d * d).mean(axis=0))
+    return bias, rmse
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--c3d", required=True, help="Input C3D file")
@@ -39,6 +52,9 @@ def main() -> None:
     ap.add_argument("--velocity", type=float, default=None, help="Velocity (if not parsed from filename)")
     ap.add_argument("--trial", type=int, default=None, help="Trial (if not parsed from filename)")
     ap.add_argument("--v3d_com_xlsx", default=None, help="Optional Visual3D COM xlsx for validation")
+    ap.add_argument("--trunk_alpha", type=float, default=None, help="Override COMModelParams.trunk_alpha")
+    ap.add_argument("--thorax_w", type=float, default=None, help="Override COMModelParams.thorax_w (C7 weight)")
+    ap.add_argument("--head_beta", type=float, default=None, help="Override COMModelParams.head_beta")
     ap.add_argument("--out_dir", default="output", help="Output directory")
     args = ap.parse_args()
 
@@ -75,6 +91,12 @@ def main() -> None:
 
     # COM / xCOM
     params = COMModelParams()
+    if args.trunk_alpha is not None:
+        params = dc_replace(params, trunk_alpha=float(args.trunk_alpha))
+    if args.thorax_w is not None:
+        params = dc_replace(params, thorax_w=float(args.thorax_w))
+    if args.head_beta is not None:
+        params = dc_replace(params, head_beta=float(args.head_beta))
     COM = compute_whole_body_com(c3d.points, c3d.labels, params=params)
     vCOM = derivative(COM, dt=dt)
     leg_length_m = float(args.leg_length_cm) / 100.0
@@ -177,15 +199,30 @@ def main() -> None:
         v3d_df = pd.read_excel(args.v3d_com_xlsx, skiprows=1)
         v3d = v3d_df[["X ", "Y ", "Z "]].to_numpy(dtype=float)
 
+        bias_all, rmse_all = _bias_rmse(COM, v3d)
+        bias_pre, rmse_pre = _bias_rmse(COM[:end_frame], v3d[:end_frame])
+
         corr_all = {
             "corr_all_X": _corr(COM[:, 0], v3d[:, 0]),
             "corr_all_Y": _corr(COM[:, 1], v3d[:, 1]),
             "corr_all_Z": _corr(COM[:, 2], v3d[:, 2]),
+            "bias_all_X_mm": float(bias_all[0] * 1000.0),
+            "bias_all_Y_mm": float(bias_all[1] * 1000.0),
+            "bias_all_Z_mm": float(bias_all[2] * 1000.0),
+            "rmse_all_X_mm": float(rmse_all[0] * 1000.0),
+            "rmse_all_Y_mm": float(rmse_all[1] * 1000.0),
+            "rmse_all_Z_mm": float(rmse_all[2] * 1000.0),
         }
         corr_pre = {
             "corr_preStep_X": _corr(COM[:end_frame, 0], v3d[:end_frame, 0]),
             "corr_preStep_Y": _corr(COM[:end_frame, 1], v3d[:end_frame, 1]),
             "corr_preStep_Z": _corr(COM[:end_frame, 2], v3d[:end_frame, 2]),
+            "bias_preStep_X_mm": float(bias_pre[0] * 1000.0),
+            "bias_preStep_Y_mm": float(bias_pre[1] * 1000.0),
+            "bias_preStep_Z_mm": float(bias_pre[2] * 1000.0),
+            "rmse_preStep_X_mm": float(rmse_pre[0] * 1000.0),
+            "rmse_preStep_Y_mm": float(rmse_pre[1] * 1000.0),
+            "rmse_preStep_Z_mm": float(rmse_pre[2] * 1000.0),
         }
         validation = {**corr_all, **corr_pre}
 

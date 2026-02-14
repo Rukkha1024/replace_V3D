@@ -19,8 +19,28 @@ class Anthropometrics:
 class COMModelParams:
     """Parameters chosen to mimic Visual3D's link-model COM reasonably well."""
 
-    trunk_alpha: float = 0.45  # pelvis_origin -> C7
-    head_beta: float = 0.80  # C7 -> head_center
+    # --- Trunk / head segment geometry ---
+    #
+    # Visual3D's thorax (and thus the trunk COM) is typically defined using multiple
+    # thorax markers (e.g., C7/STRN/CLAV/T10). In this repo we use a lightweight proxy
+    # point on the thorax to avoid a full thorax coordinate system:
+    #
+    #   thorax_ref = thorax_w*C7 + (1-thorax_w)*STRN
+    #
+    # and place trunk COM along the line:
+    #
+    #   trunk_com = pelvis_origin + trunk_alpha*(thorax_ref - pelvis_origin)
+    #
+    # The defaults below were chosen to match the provided Visual3D export
+    # (LINK_MODEL_BASED::ORIGINAL::COM) closely for the OptiTrack Conventional 39-marker set.
+    trunk_alpha: float = 0.797  # pelvis_origin -> thorax_ref (0..1)
+
+    # Head COM is placed along C7 -> head_center.
+    # Setting this to 1.0 uses head_center directly.
+    head_beta: float = 1.00
+
+    # Weight for C7 vs STRN when building `thorax_ref` (0..1).
+    thorax_w: float = 0.56
 
     # De Leva (1996) mass fractions (male) – sum to 1 with bilateral segments
     mass_head: float = 0.0694
@@ -51,7 +71,7 @@ def compute_whole_body_com(
     Notes
     -----
     - Uses De Leva mass fractions (male) and simple segment definitions.
-    - Trunk COM is approximated on the line pelvis_origin -> C7 using `params.trunk_alpha`.
+    - Trunk COM is approximated on the line pelvis_origin -> thorax_ref using `params.trunk_alpha`.
     - Head COM is approximated on the line C7 -> head_center using `params.head_beta`.
     """
     jc: Dict[str, np.ndarray] = compute_joint_centers(points, labels)
@@ -74,8 +94,16 @@ def compute_whole_body_com(
     C7 = jc["C7"]
     head_center = jc["head_center"]
 
+    # Thorax reference point (proxy for a full thorax segment definition).
+    # Prefer STRN if present; fall back to C7 if not.
+    try:
+        STRN = m("STRN")
+        thorax_ref = params.thorax_w * C7 + (1.0 - params.thorax_w) * STRN
+    except KeyError:
+        thorax_ref = C7
+
     # segment COMs
-    trunk_com = pelvis_origin + params.trunk_alpha * (C7 - pelvis_origin)
+    trunk_com = pelvis_origin + params.trunk_alpha * (thorax_ref - pelvis_origin)
     head_com = C7 + params.head_beta * (head_center - C7)
 
     # upper limb COMs
@@ -120,4 +148,3 @@ def compute_xcom(COM: np.ndarray, vCOM: np.ndarray, leg_length_m: float, g: floa
     """Hof (XCoM) extrapolated COM."""
     w0 = np.sqrt(g / float(leg_length_m))
     return COM + vCOM / w0
-
