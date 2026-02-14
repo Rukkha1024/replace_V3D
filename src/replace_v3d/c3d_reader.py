@@ -153,7 +153,7 @@ def read_c3d_points(path: str | Path) -> C3DPoints:
         raise ValueError(f"Expected POINT:UNITS == 'm', got {units!r}")
 
     # Strip leading date/initial prefix like "251112_KUO_"
-    labels = [re.sub(r"^\\d+_[A-Z]+_", "", lab) for lab in labels_raw]
+    labels = [re.sub(r"^\d+_[A-Z]+_", "", lab) for lab in labels_raw]
 
     n_frames = last_frame - first_frame + 1
     data_start = (data_start_block - 1) * 512
@@ -181,4 +181,3 @@ def read_c3d_points(path: str | Path) -> C3DPoints:
         first_frame=int(first_frame),
         last_frame=int(last_frame),
     )
-
