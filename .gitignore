@@ -1,15 +1,4 @@
 __pycache__/
-*.py[cod]
-*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-.claude/
-
-output/
-*_MOS_preStep.xlsx
-*_ankle_torque.xlsx
-
-.DS_Store
-Thumbs.db

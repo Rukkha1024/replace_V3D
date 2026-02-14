@@ -1,0 +1,4 @@
+interface:
+  display_name: "Excel Xlwings Workflow"
+  short_description: "Use xlwings for Excel work and mandatory post-open validation"
+  default_prompt: "Use for Excel workbook creation/updates in this repo. Use xlwings for all Excel IO and table creation, keep sheets minimal (tables + table_guide), run via conda run -n module, and always reopen the saved workbook to validate formula errors and unexpected blanks."
