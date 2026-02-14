@@ -10,7 +10,7 @@ import pandas as pd
 import polars as pl
 
 # Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from replace_v3d.c3d_reader import read_c3d_points
@@ -38,9 +38,15 @@ def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
     return sorted([path for path in c3d_dir.rglob("*.c3d") if path.is_file()])
 
 
-def _append_rows_to_csv(out_csv: Path, df: pd.DataFrame, *, header_written: bool) -> bool:
+def _append_rows_to_csv(
+    out_csv: Path,
+    df: pd.DataFrame,
+    *,
+    header_written: bool,
+    encoding: str,
+) -> bool:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_csv, mode="a", index=False, header=not header_written)
+    df.to_csv(out_csv, mode="a", index=False, header=not header_written, encoding=encoding)
     return True
 
 
@@ -148,6 +154,11 @@ def main() -> None:
         action="store_true",
         help="Overwrite output CSV if it already exists.",
     )
+    parser.add_argument(
+        "--encoding",
+        default="utf-8-sig",
+        help="CSV text encoding (default: utf-8-sig; recommended for Korean text in Excel).",
+    )
     args = parser.parse_args()
 
     c3d_dir = Path(args.c3d_dir)
@@ -233,7 +244,12 @@ def main() -> None:
                 mos=mos,
             )
 
-            header_written = _append_rows_to_csv(out_csv, df_ts, header_written=header_written)
+            header_written = _append_rows_to_csv(
+                out_csv,
+                df_ts,
+                header_written=header_written,
+                encoding=str(args.encoding),
+            )
             processed += 1
         except Exception as exc:
             if args.skip_unmatched:

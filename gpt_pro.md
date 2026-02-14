@@ -6,7 +6,7 @@
 
 추가된 스크립트:
 
-* `scripts/batch/run_batch_mos_timeseries_csv.py`
+* `scripts/run_batch_mos_timeseries_csv.py`
 
   * `data/all_data` 아래의 모든 `.c3d`를 순회
   * 파일명에서 `(subject_token, velocity, trial)` 파싱
@@ -45,7 +45,7 @@
 AGENTS의 환경 규칙대로 `module` env로 실행: ([GitHub][2])
 
 ```bash
-conda run -n module python scripts/batch/run_batch_mos_timeseries_csv.py \
+conda run -n module python scripts/run_batch_mos_timeseries_csv.py \
   --c3d_dir data/all_data \
   --event_xlsm data/perturb_inform.xlsm \
   --out_csv output/all_trials_mos_timeseries.csv \
