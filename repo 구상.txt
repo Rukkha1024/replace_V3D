@@ -36,7 +36,7 @@
 
 
 ======
-replace_V3D_work_patch파일 repo에 맞게 이동해라. 
+replace_V3D_ankle_torque_update 폴더 내 파일 repo에 맞게 이동해라. 
 
 gpt pro.md 파일 읽고 코드 실행 후 결과 나오는지 확인해봐. 
 
