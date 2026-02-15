@@ -151,6 +151,12 @@ def parse_args() -> argparse.Namespace:
         default=100.0,
         help="Common x-axis resampling rate (Hz)",
     )
+    parser.add_argument(
+        "--xtick_sec",
+        type=float,
+        default=0.2,
+        help="Common x-axis tick spacing (sec)",
+    )
     return parser.parse_args()
 
 
@@ -188,6 +194,17 @@ def build_common_x_grid(df: pl.DataFrame, resample_hz: float) -> np.ndarray:
     grid_min = np.floor(t_min / step) * step
     grid_max = np.ceil(t_max / step) * step
     return np.arange(grid_min, grid_max + (step * 0.5), step, dtype=float)
+
+
+def build_common_xticks(x_grid: np.ndarray, xtick_sec: float) -> np.ndarray:
+    if xtick_sec <= 0:
+        raise ValueError("--xtick_sec must be > 0")
+    x_min = float(x_grid[0])
+    x_max = float(x_grid[-1])
+    tick_start = np.floor(x_min / xtick_sec) * xtick_sec
+    tick_end = np.ceil(x_max / xtick_sec) * xtick_sec
+    ticks = np.arange(tick_start, tick_end + (xtick_sec * 0.5), xtick_sec, dtype=float)
+    return np.round(ticks, 6)
 
 
 def resample_trial_column(trial_df: pl.DataFrame, col_name: str, x_grid: np.ndarray) -> np.ndarray:
@@ -319,6 +336,7 @@ def plot_subject_category(
     sample: bool,
     dpi: int,
     x_grid: np.ndarray,
+    x_ticks: np.ndarray,
 ) -> Path:
     nrows, ncols = spec["nrows"], spec["ncols"]
     fig, axes = plt.subplots(nrows, ncols, figsize=spec["figsize"], squeeze=False)
@@ -340,6 +358,8 @@ def plot_subject_category(
         ax.set_title(ylabel, fontsize=9)
         ax.grid(True, linewidth=0.35, alpha=0.5)
         ax.set_xlim(float(x_grid[0]), float(x_grid[-1]))
+        ax.set_xticks(x_ticks)
+        ax.margins(x=0.0)
         if r == nrows - 1:
             ax.set_xlabel("Time from platform onset (s)", fontsize=8)
         else:
@@ -375,6 +395,7 @@ def main() -> None:
     print(f"Loading data: {args.csv}")
     df = load_data(args.csv)
     x_grid = build_common_x_grid(df, args.resample_hz)
+    x_ticks = build_common_xticks(x_grid, args.xtick_sec)
     trial_count = df.select(TRIAL_KEYS).unique().height
     subjects = df.select("subject").unique().sort("subject").get_column("subject").to_list()
 
@@ -388,6 +409,7 @@ def main() -> None:
         f"[{x_grid[0]:.3f}, {x_grid[-1]:.3f}] sec "
         f"({x_grid.size} points @ {args.resample_hz:g} Hz)"
     )
+    print(f"Common x-axis ticks: every {args.xtick_sec:g} sec ({x_ticks.size} ticks)")
 
     for subject_value in subjects:
         subject_df = df.filter(pl.col("subject") == subject_value)
@@ -400,6 +422,7 @@ def main() -> None:
                 sample=args.sample,
                 dpi=args.dpi,
                 x_grid=x_grid,
+                x_ticks=x_ticks,
             )
             print(f"Saved: {out_path}")
 
