@@ -38,6 +38,11 @@ description: >-
   - Create a grid and hide unused axes (same off-policy).
   - Include subplot legend for each panel when labels exist.
 
+## X-axis normalization policy
+
+- The x-axis must always be normalized to **0–100 %** of the minimum analysis unit (window/segment duration).
+- Raw frame or time values must never appear on the x-axis; always display percent-normalized ticks (0, 20, 40, 60, 80, 100).
+
 ## Output policy
 
 - Save under `Path(config["output"]["base_dir"]) / <plot_type> / <filename>.png`.
