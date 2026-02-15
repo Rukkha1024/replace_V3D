@@ -24,25 +24,29 @@ This repo contains a **pure-Python** pipeline to compute:
 ## Quick start (single trial)
 
 ```bash
-conda run -n module python scripts/run_mos_pipeline.py \
+conda run -n module python main.py \
   --c3d /path/to/251112_KUO_perturb_60_001.c3d \
   --event_xlsm /path/to/perturb_inform.xlsm \
-  --subject "김우연" \
-  --leg_length_cm 86 \
-  --out_dir output
+  --out_dir output \
+  --steps all
 ```
 
 Outputs:
 - `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
+- `<trial>_JOINT_ANGLES_preStep.xlsx` / `.csv` (+ `_anat`, `_ana0` CSVs)
+- `<trial>_ankle_torque.xlsx` (if forceplate/analog is present)
 
-## Quick start (batch MoS time series CSV)
+Single-trial options:
+- `--steps mos`: MOS workbook only
+- `--steps angles`: joint angles only
+- `--steps torque`: ankle torque only
+
+## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
+
+Default 실행은 batch입니다:
 
 ```bash
-conda run -n module python scripts/run_batch_mos_timeseries_csv.py \
-  --c3d_dir data/all_data \
-  --event_xlsm data/perturb_inform.xlsm \
-  --out_csv output/all_trials_mos_timeseries.csv \
-  --overwrite
+conda run -n module python main.py --overwrite
 ```
 
 Options:
@@ -51,44 +55,15 @@ Options:
 - `--encoding`: CSV text encoding (default `utf-8-sig` for Korean text compatibility in Excel).
 
 Output:
-- `output/all_trials_mos_timeseries.csv` (long-format; one row per `subject-velocity-trial` x `MocapFrame`)
-- Key columns include `subject-velocity-trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`
+- `output/all_trials_timeseries.csv` (long-format; one row per (`subject`,`velocity`,`trial`) x `MocapFrame`)
+- Key columns include `subject`, `velocity`, `trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`
   (notably: `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`).
-
-## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
-
-This export is also **long-format** (row = (`subject`,`velocity`,`trial`) x `MocapFrame`), but includes:
-
-- COM / vCOM / xCOM / BOS / MOS
-- Visual3D-like 3D joint angles (ankle/knee/hip/trunk/neck)
-- Forceplate-based ankle torque time series (GRF/GRM/COP + joint moments)
-
-```bash
-conda run -n module python scripts/run_batch_all_timeseries_csv.py \
-  --c3d_dir data/all_data \
-  --event_xlsm data/perturb_inform.xlsm \
-  --out_csv output/all_trials_timeseries.csv \
-  --overwrite
-```
 
 Notes:
 - Torque requires `FORCE_PLATFORM` metadata + analog channels in the C3D.
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
-- By default, some metadata columns are excluded (e.g., `subject-velocity-trial`, `c3d_file`, `subject_token`, `rate_hz`, `Time_s`).
-
-## Quick start (ankle torque)
-
-```bash
-conda run -n module python scripts/run_ankle_torque_pipeline.py \
-  --c3d /path/to/251112_KUO_perturb_60_001.c3d \
-  --event_xlsm /path/to/perturb_inform.xlsm \
-  --subject "김우연" \
-  --out_dir output
-```
-
-Outputs:
-- `<trial>_ankle_torque.xlsx` (GRF/GRM → ankle torque at L/R and mid)
+- By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
 
 ## Notes
 
@@ -109,11 +84,11 @@ Angle definition:
 - Uses medial markers: `LShin_3/RShin_3` (knee), `LFoot_3/RFoot_3` (ankle)
 
 ```bash
-conda run -n module python scripts/run_joint_angles_pipeline.py \
+conda run -n module python main.py \
   --c3d /path/to/251112_KUO_perturb_60_001.c3d \
   --event_xlsm /path/to/perturb_inform.xlsm \
-  --subject "김우연" \
-  --out_dir output
+  --out_dir output \
+  --steps angles
 ```
 
 Outputs:

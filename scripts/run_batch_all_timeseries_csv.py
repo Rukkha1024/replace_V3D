@@ -13,6 +13,7 @@ import _bootstrap
 _bootstrap.ensure_src_on_path()
 _REPO_ROOT = _bootstrap.REPO_ROOT
 
+from replace_v3d.angles import compute_lower_limb_angles
 from replace_v3d.c3d_reader import read_c3d_points
 from replace_v3d.cli.batch_utils import append_rows_to_csv, iter_c3d_files
 from replace_v3d.com import (
@@ -59,6 +60,7 @@ def _make_timeseries_dataframe(
     xCOM: np.ndarray,
     mos: Any,
     angles: Any,
+    lower_limb_angles: Any | None,
     angles_ana0: dict[str, np.ndarray] | None = None,
     angles_anat: dict[str, np.ndarray] | None = None,
     torque_payload: dict[str, np.ndarray],
@@ -72,6 +74,17 @@ def _make_timeseries_dataframe(
         is_step_onset = mocap_frames == int(step_onset_local)
 
     frame_count = len(mocap_frames)
+    if lower_limb_angles is None:
+        knee_flex_L_deg = np.full(end_frame, np.nan, dtype=float)
+        knee_flex_R_deg = np.full(end_frame, np.nan, dtype=float)
+        ankle_dorsi_L_deg = np.full(end_frame, np.nan, dtype=float)
+        ankle_dorsi_R_deg = np.full(end_frame, np.nan, dtype=float)
+    else:
+        knee_flex_L_deg = lower_limb_angles.knee_flex_L_deg
+        knee_flex_R_deg = lower_limb_angles.knee_flex_R_deg
+        ankle_dorsi_L_deg = lower_limb_angles.ankle_dorsi_L_deg
+        ankle_dorsi_R_deg = lower_limb_angles.ankle_dorsi_R_deg
+
     payload: dict[str, Any] = {
         "subject": [subject] * frame_count,
         "velocity": [float(velocity)] * frame_count,
@@ -130,6 +143,11 @@ def _make_timeseries_dataframe(
         "Neck_X_deg": angles.neck_X,
         "Neck_Y_deg": angles.neck_Y,
         "Neck_Z_deg": angles.neck_Z,
+        # Simple sagittal summary angles (match single-trial MOS workbook schema)
+        "KneeFlex_L_deg": knee_flex_L_deg,
+        "KneeFlex_R_deg": knee_flex_R_deg,
+        "AnkleDorsi_L_deg": ankle_dorsi_L_deg,
+        "AnkleDorsi_R_deg": ankle_dorsi_R_deg,
     }
 
     # Optional: analysis-friendly joint angles (sign-unified + baseline-subtracted).
@@ -510,6 +528,18 @@ def main() -> None:
 
             angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
 
+            lower_limb_angles = None
+            try:
+                jc = compute_joint_centers(c3d.points, c3d.labels)
+                lower_limb_angles = compute_lower_limb_angles(
+                    c3d.points,
+                    c3d.labels,
+                    jc,
+                    end_frame=end_frame,
+                )
+            except Exception:
+                lower_limb_angles = None
+
             angles_ana0_payload: dict[str, np.ndarray] | None = None
             if args.angles_ana0:
                 mocap_frames = np.arange(1, end_frame + 1, dtype=int)
@@ -607,6 +637,7 @@ def main() -> None:
                 xCOM=xCOM,
                 mos=mos,
                 angles=angles,
+                lower_limb_angles=lower_limb_angles,
                 angles_ana0=angles_ana0_payload,
                 angles_anat=angles_anat_payload,
                 torque_payload=torque_payload,
