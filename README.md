@@ -5,7 +5,12 @@ This repo contains a **pure-Python** pipeline to compute:
 - **COM** (segment-based, De Leva mass fractions + simple marker-defined segment geometry)
 - **XCoM / xCOM** (Hof: `xCOM = COM + vCOM / ω0`, `ω0 = sqrt(g/leg_length)`)
 - **BoS** polygon (foot landmark markers → convex hull on the ground plane)
-- **MoS** (signed minimum distance from xCOM to BoS polygon boundary)
+- **MoS**
+  - `MOS_minDist_signed`: signed minimum distance from xCOM to BoS polygon boundary (+inside, -outside)
+  - `MOS_*_v3d`: Visual3D tutorial (Closest_Bound) style — distance to the *closest* BoS bound in AP/ML
+    (`MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`)
+  - `MOS_*_dir`: backward-compatible alias of `MOS_*_v3d` (same values)
+  - `MOS_*_velDir`: legacy velocity-direction switching (debug; can jump when vCOM crosses 0)
 
 ## Important constraints (matching your V3D tutorial logic)
 
@@ -47,7 +52,8 @@ Options:
 
 Output:
 - `output/all_trials_mos_timeseries.csv` (long-format; one row per `subject-velocity-trial` x `MocapFrame`)
-- Key columns include `subject-velocity-trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`.
+- Key columns include `subject-velocity-trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`
+  (notably: `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`).
 
 ## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
 

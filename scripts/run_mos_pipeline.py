@@ -146,8 +146,13 @@ def main() -> None:
             "BOS_minY": mos.BOS_minY,
             "BOS_maxY": mos.BOS_maxY,
             "MOS_minDist_signed": mos.MOS_signed,
+            "MOS_AP_v3d": mos.MOS_AP_v3d,
+            "MOS_ML_v3d": mos.MOS_ML_v3d,
+            "MOS_v3d": mos.MOS_v3d,
             "MOS_AP_dir": mos.MOS_AP_dir,
             "MOS_ML_dir": mos.MOS_ML_dir,
+            "MOS_AP_velDir": mos.MOS_AP_velDir,
+            "MOS_ML_velDir": mos.MOS_ML_velDir,
             "Is_platform_onset_frame": is_platform_onset,
             "Is_step_onset_frame": is_step_onset,
         }
@@ -178,18 +183,30 @@ def main() -> None:
         "platform_onset_local": events.platform_onset_local,
         "step_onset_local": events.step_onset_local,
         "analysis_end_local": end_frame,
+        # Polygon-signed MoS (convex hull boundary)
         "baseline_MOS_mean": float(baseline_df.select(pl.col("MOS_minDist_signed").mean()).item()),
         "baseline_MOS_min": float(baseline_df.select(pl.col("MOS_minDist_signed").min()).item()),
         "perturb_MOS_min": float(pert_df.select(pl.col("MOS_minDist_signed").min()).item()),
+        # Visual3D original-style MoS (closest bound)
+        "baseline_MOS_v3d_mean": float(baseline_df.select(pl.col("MOS_v3d").mean()).item()),
+        "baseline_MOS_v3d_min": float(baseline_df.select(pl.col("MOS_v3d").min()).item()),
+        "perturb_MOS_v3d_min": float(pert_df.select(pl.col("MOS_v3d").min()).item()),
     }
 
     if pert_df.height > 0:
+        onset_time = float(df_pl.filter(pl.col("Is_platform_onset_frame")).select(pl.col("Time_s")).item())
+
+        # Polygon-signed MoS min
         min_row = pert_df.sort("MOS_minDist_signed").head(1)
         summary["perturb_MOS_min_frame"] = int(min_row.select(pl.col("Frame")).item())
-
-        onset_time = float(df_pl.filter(pl.col("Is_platform_onset_frame")).select(pl.col("Time_s")).item())
         min_time = float(min_row.select(pl.col("Time_s")).item())
         summary["perturb_MOS_min_time_from_onset_s"] = float(min_time - onset_time)
+
+        # Visual3D closest-bound MoS min
+        min_row_v3d = pert_df.sort("MOS_v3d").head(1)
+        summary["perturb_MOS_v3d_min_frame"] = int(min_row_v3d.select(pl.col("Frame")).item())
+        min_time_v3d = float(min_row_v3d.select(pl.col("Time_s")).item())
+        summary["perturb_MOS_v3d_min_time_from_onset_s"] = float(min_time_v3d - onset_time)
 
     # Optional V3D COM validation
     validation = None

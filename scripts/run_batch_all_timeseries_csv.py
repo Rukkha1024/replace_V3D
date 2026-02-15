@@ -96,8 +96,13 @@ def _make_timeseries_dataframe(
         "BOS_minY": mos.BOS_minY,
         "BOS_maxY": mos.BOS_maxY,
         "MOS_minDist_signed": mos.MOS_signed,
+        "MOS_AP_v3d": mos.MOS_AP_v3d,
+        "MOS_ML_v3d": mos.MOS_ML_v3d,
+        "MOS_v3d": mos.MOS_v3d,
         "MOS_AP_dir": mos.MOS_AP_dir,
         "MOS_ML_dir": mos.MOS_ML_dir,
+        "MOS_AP_velDir": mos.MOS_AP_velDir,
+        "MOS_ML_velDir": mos.MOS_ML_velDir,
         "Is_platform_onset_frame": is_platform_onset,
         "Is_step_onset_frame": is_step_onset,
         # Joint angles (Visual3D-like)
