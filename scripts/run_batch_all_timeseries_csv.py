@@ -1,0 +1,500 @@
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import polars as pl
+
+# Allow running without installing the package
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_REPO_ROOT / "src"))
+
+from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.com import (
+    COMModelParams,
+    compute_joint_centers,
+    compute_whole_body_com,
+    compute_xcom,
+    derivative,
+)
+from replace_v3d.events import (
+    load_subject_body_mass_kg,
+    load_subject_leg_length_cm,
+    load_trial_events,
+    parse_subject_velocity_trial_from_filename,
+    resolve_subject_from_token,
+)
+from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
+from replace_v3d.mos import compute_mos_timeseries
+from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
+from replace_v3d.torque.forceplate import (
+    choose_active_force_platform,
+    extract_platform_wrenches_lab,
+    read_force_platforms,
+)
+
+
+def _format_velocity(velocity: float) -> str:
+    if float(velocity).is_integer():
+        return str(int(velocity))
+    return str(float(velocity))
+
+
+def _build_trial_key(subject: str, velocity: float, trial: int) -> str:
+    return f"{subject}-{_format_velocity(velocity)}-{int(trial)}"
+
+
+def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
+    return sorted([path for path in c3d_dir.rglob("*.c3d") if path.is_file()])
+
+
+def _append_rows_to_csv(
+    out_csv: Path,
+    df: pd.DataFrame,
+    *,
+    header_written: bool,
+    encoding: str,
+) -> bool:
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out_csv, mode="a", index=False, header=not header_written, encoding=encoding)
+    return True
+
+
+def _safe_div(num: np.ndarray, den: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    den2 = np.where(np.abs(den) < eps, np.nan, den)
+    return num / den2
+
+
+def _compute_cop_lab(
+    *,
+    F_plate: np.ndarray,
+    M_plate: np.ndarray,
+    fp_origin_lab: np.ndarray,
+    R_pl2lab: np.ndarray,
+) -> np.ndarray:
+    """COP in plate coordinates then rotate/translate into lab."""
+
+    Fz = F_plate[:, 2]
+    cop_x = _safe_div(-M_plate[:, 1], Fz)
+    cop_y = _safe_div(M_plate[:, 0], Fz)
+    cop_plate = np.column_stack([cop_x, cop_y, np.zeros_like(cop_x)])
+    return fp_origin_lab[None, :] + cop_plate @ R_pl2lab.T
+
+
+def _make_timeseries_dataframe(
+    *,
+    c3d_file: Path,
+    subject_token: str,
+    subject: str,
+    velocity: float,
+    trial: int,
+    leg_length_cm: float,
+    body_mass_kg: float | None,
+    force_plate_index_1based: int,
+    rate_hz: float,
+    end_frame: int,
+    platform_onset_local: int,
+    platform_offset_local: int,
+    step_onset_local: int | None,
+    COM: np.ndarray,
+    vCOM: np.ndarray,
+    xCOM: np.ndarray,
+    mos: Any,
+    angles: Any,
+    torque_payload: dict[str, np.ndarray],
+) -> pd.DataFrame:
+    mocap_frames = np.arange(1, end_frame + 1, dtype=int)
+    time_s = (mocap_frames - 1) / rate_hz
+    subject_key = _build_trial_key(subject, velocity, trial)
+
+    is_platform_onset = mocap_frames == int(platform_onset_local)
+    if step_onset_local is None:
+        is_step_onset = np.zeros_like(is_platform_onset, dtype=bool)
+    else:
+        is_step_onset = mocap_frames == int(step_onset_local)
+
+    frame_count = len(mocap_frames)
+    mass_list: list[float | None] = [None] * frame_count if body_mass_kg is None else [float(body_mass_kg)] * frame_count
+    payload: dict[str, Any] = {
+        "subject-velocity-trial": [subject_key] * frame_count,
+        "subject": [subject] * frame_count,
+        "velocity": [float(velocity)] * frame_count,
+        "trial": [int(trial)] * frame_count,
+        "c3d_file": [c3d_file.name] * frame_count,
+        "subject_token": [subject_token] * frame_count,
+        "rate_hz": [float(rate_hz)] * frame_count,
+        "leg_length_cm": [float(leg_length_cm)] * frame_count,
+        "body_mass_kg": mass_list,
+        "force_plate_index_1based": [int(force_plate_index_1based)] * frame_count,
+        "platform_onset_local": [int(platform_onset_local)] * frame_count,
+        "platform_offset_local": [int(platform_offset_local)] * frame_count,
+        "step_onset_local": [None if step_onset_local is None else int(step_onset_local)] * frame_count,
+        "analysis_end_local": [int(end_frame)] * frame_count,
+        "MocapFrame": mocap_frames,
+        "Time_s": time_s,
+        "COM_X": COM[:end_frame, 0],
+        "COM_Y": COM[:end_frame, 1],
+        "COM_Z": COM[:end_frame, 2],
+        "vCOM_X": vCOM[:end_frame, 0],
+        "vCOM_Y": vCOM[:end_frame, 1],
+        "vCOM_Z": vCOM[:end_frame, 2],
+        "xCOM_X": xCOM[:end_frame, 0],
+        "xCOM_Y": xCOM[:end_frame, 1],
+        "xCOM_Z": xCOM[:end_frame, 2],
+        "BOS_area": mos.BOS_area,
+        "BOS_minX": mos.BOS_minX,
+        "BOS_maxX": mos.BOS_maxX,
+        "BOS_minY": mos.BOS_minY,
+        "BOS_maxY": mos.BOS_maxY,
+        "MOS_minDist_signed": mos.MOS_signed,
+        "MOS_AP_dir": mos.MOS_AP_dir,
+        "MOS_ML_dir": mos.MOS_ML_dir,
+        "Is_platform_onset_frame": is_platform_onset,
+        "Is_step_onset_frame": is_step_onset,
+        # Joint angles (Visual3D-like)
+        "Hip_L_X_deg": angles.hip_L_X,
+        "Hip_L_Y_deg": angles.hip_L_Y,
+        "Hip_L_Z_deg": angles.hip_L_Z,
+        "Hip_R_X_deg": angles.hip_R_X,
+        "Hip_R_Y_deg": angles.hip_R_Y,
+        "Hip_R_Z_deg": angles.hip_R_Z,
+        "Knee_L_X_deg": angles.knee_L_X,
+        "Knee_L_Y_deg": angles.knee_L_Y,
+        "Knee_L_Z_deg": angles.knee_L_Z,
+        "Knee_R_X_deg": angles.knee_R_X,
+        "Knee_R_Y_deg": angles.knee_R_Y,
+        "Knee_R_Z_deg": angles.knee_R_Z,
+        "Ankle_L_X_deg": angles.ankle_L_X,
+        "Ankle_L_Y_deg": angles.ankle_L_Y,
+        "Ankle_L_Z_deg": angles.ankle_L_Z,
+        "Ankle_R_X_deg": angles.ankle_R_X,
+        "Ankle_R_Y_deg": angles.ankle_R_Y,
+        "Ankle_R_Z_deg": angles.ankle_R_Z,
+        "Trunk_X_deg": angles.trunk_X,
+        "Trunk_Y_deg": angles.trunk_Y,
+        "Trunk_Z_deg": angles.trunk_Z,
+        "Neck_X_deg": angles.neck_X,
+        "Neck_Y_deg": angles.neck_Y,
+        "Neck_Z_deg": angles.neck_Z,
+    }
+
+    for key, values in torque_payload.items():
+        payload[key] = values
+
+    return pl.DataFrame(payload).to_pandas()
+
+
+def _compute_ankle_torque_payload(
+    *,
+    c3d_file: Path,
+    points: np.ndarray,
+    labels: list[str],
+    rate_hz: float,
+    end_frame: int,
+    platform_onset_local: int,
+    force_plate_index_1based: int | None,
+    body_mass_kg: float | None,
+) -> tuple[int, dict[str, np.ndarray]]:
+    fp_coll = read_force_platforms(c3d_file)
+    analog_avg = fp_coll.analog.values
+    n_frames = int(points.shape[0])
+    if analog_avg.shape[0] != n_frames:
+        raise ValueError(
+            f"Analog frames ({analog_avg.shape[0]}) != point frames ({n_frames}). "
+            "Check that C3D is trimmed consistently."
+        )
+
+    if force_plate_index_1based is not None:
+        fp = next((p for p in fp_coll.platforms if p.index_1based == int(force_plate_index_1based)), None)
+        if fp is None:
+            raise ValueError(f"Requested force plate index not found: {force_plate_index_1based}")
+    else:
+        fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
+
+    F_lab, M_lab = extract_platform_wrenches_lab(analog_avg, fp)
+    idx = fp.channel_indices_0based.astype(int)
+    F_plate = analog_avg[:, idx[0:3]]
+    M_plate = analog_avg[:, idx[3:6]]
+    COP_lab = _compute_cop_lab(
+        F_plate=F_plate,
+        M_plate=M_plate,
+        fp_origin_lab=fp.origin_lab,
+        R_pl2lab=fp.R_pl2lab,
+    )
+
+    jc = compute_joint_centers(points, labels)
+    ankle_L = jc["ankle_L"]
+    ankle_R = jc["ankle_R"]
+
+    res = compute_ankle_torque_from_net_wrench(
+        F_lab=F_lab,
+        M_lab_at_fp_origin=M_lab,
+        COP_lab=COP_lab,
+        fp_origin_lab=fp.origin_lab,
+        ankle_L=ankle_L,
+        ankle_R=ankle_R,
+        body_mass_kg=body_mass_kg,
+    )
+
+    frames0 = np.arange(n_frames, dtype=int)
+    onset0 = int(platform_onset_local) - 1
+    time_from_onset = (frames0 - onset0) / float(rate_hz)
+
+    end = int(end_frame)
+    payload = {
+        "time_from_platform_onset_s": time_from_onset[:end],
+        "GRF_X_N": res.F_lab[:end, 0],
+        "GRF_Y_N": res.F_lab[:end, 1],
+        "GRF_Z_N": res.F_lab[:end, 2],
+        "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
+        "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
+        "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
+        "COP_X_m": res.COP_lab[:end, 0],
+        "COP_Y_m": res.COP_lab[:end, 1],
+        "COP_Z_m": res.COP_lab[:end, 2],
+        "FP_origin_X_m": np.full(end, float(res.fp_origin_lab[0])),
+        "FP_origin_Y_m": np.full(end, float(res.fp_origin_lab[1])),
+        "FP_origin_Z_m": np.full(end, float(res.fp_origin_lab[2])),
+        "L_ankleJC_X_m": res.ankle_L[:end, 0],
+        "L_ankleJC_Y_m": res.ankle_L[:end, 1],
+        "L_ankleJC_Z_m": res.ankle_L[:end, 2],
+        "R_ankleJC_X_m": res.ankle_R[:end, 0],
+        "R_ankleJC_Y_m": res.ankle_R[:end, 1],
+        "R_ankleJC_Z_m": res.ankle_R[:end, 2],
+        "AnkleMid_X_m": res.ankle_mid[:end, 0],
+        "AnkleMid_Y_m": res.ankle_mid[:end, 1],
+        "AnkleMid_Z_m": res.ankle_mid[:end, 2],
+        "AnkleTorqueMid_ext_X_Nm": res.torque_mid_ext[:end, 0],
+        "AnkleTorqueMid_ext_Y_Nm": res.torque_mid_ext[:end, 1],
+        "AnkleTorqueMid_ext_Z_Nm": res.torque_mid_ext[:end, 2],
+        "AnkleTorqueMid_int_X_Nm": res.torque_mid_int[:end, 0],
+        "AnkleTorqueMid_int_Y_Nm": res.torque_mid_int[:end, 1],
+        "AnkleTorqueMid_int_Z_Nm": res.torque_mid_int[:end, 2],
+        "AnkleTorqueMid_int_Y_Nm_per_kg": (
+            np.full(end, np.nan)
+            if res.torque_mid_int_Y_Nm_per_kg is None
+            else res.torque_mid_int_Y_Nm_per_kg[:end]
+        ),
+        "AnkleTorqueL_ext_X_Nm": res.torque_L_ext[:end, 0],
+        "AnkleTorqueL_ext_Y_Nm": res.torque_L_ext[:end, 1],
+        "AnkleTorqueL_ext_Z_Nm": res.torque_L_ext[:end, 2],
+        "AnkleTorqueL_int_X_Nm": res.torque_L_int[:end, 0],
+        "AnkleTorqueL_int_Y_Nm": res.torque_L_int[:end, 1],
+        "AnkleTorqueL_int_Z_Nm": res.torque_L_int[:end, 2],
+        "AnkleTorqueR_ext_X_Nm": res.torque_R_ext[:end, 0],
+        "AnkleTorqueR_ext_Y_Nm": res.torque_R_ext[:end, 1],
+        "AnkleTorqueR_ext_Z_Nm": res.torque_R_ext[:end, 2],
+        "AnkleTorqueR_int_X_Nm": res.torque_R_int[:end, 0],
+        "AnkleTorqueR_int_Y_Nm": res.torque_R_int[:end, 1],
+        "AnkleTorqueR_int_Z_Nm": res.torque_R_int[:end, 2],
+    }
+    return int(fp.index_1based), payload
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Batch export unified time series (MOS/COM/xCOM/BOS + joint angles + ankle torque) from C3D files.\n"
+            "\n"
+            "Output is a long-format CSV: one row per subject-velocity-trial x MocapFrame.\n"
+            "\n"
+            "Notes:\n"
+            "- Analysis is preStep: up to just before step onset (end_frame = step_onset_local - 1)\n"
+            "- FORCE_PLATFORM/ANALOG is required (torque); missing forceplate aborts the run.\n"
+        )
+    )
+    parser.add_argument("--c3d_dir", required=True, help="Directory containing C3D files (recursive).")
+    parser.add_argument("--event_xlsm", required=True, help="Event workbook (perturb_inform.xlsm).")
+    parser.add_argument(
+        "--out_csv",
+        default=str(_REPO_ROOT / "output" / "all_trials_timeseries.csv"),
+        help="Output CSV path (default: output/all_trials_timeseries.csv).",
+    )
+    parser.add_argument(
+        "--pre_frames",
+        type=int,
+        default=100,
+        help="Assumed pre-frames used when trimming mocap around platform onset (default: 100).",
+    )
+    parser.add_argument(
+        "--force_plate",
+        type=int,
+        default=None,
+        help="Optional force plate index (1-based). If omitted, auto-select by |Fz|.",
+    )
+    parser.add_argument(
+        "--skip_unmatched",
+        action="store_true",
+        help="Skip subject/event matching failures and continue batch processing (torque forceplate failures still abort).",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite output CSV if it already exists.",
+    )
+    parser.add_argument(
+        "--encoding",
+        default="utf-8-sig",
+        help="CSV text encoding (default: utf-8-sig; recommended for Korean text in Excel).",
+    )
+    parser.add_argument(
+        "--max_files",
+        type=int,
+        default=None,
+        help="Optional cap on number of C3D files (for quick checks).",
+    )
+    args = parser.parse_args()
+
+    c3d_dir = Path(args.c3d_dir)
+    event_xlsm = Path(args.event_xlsm)
+    out_csv = Path(args.out_csv)
+    pre_frames = int(args.pre_frames)
+
+    if not c3d_dir.exists():
+        raise FileNotFoundError(f"C3D directory not found: {c3d_dir}")
+    if not event_xlsm.exists():
+        raise FileNotFoundError(f"Event workbook not found: {event_xlsm}")
+
+    if out_csv.exists():
+        if args.overwrite:
+            out_csv.unlink()
+        else:
+            raise FileExistsError(f"Output already exists: {out_csv}. Use --overwrite to replace it.")
+
+    c3d_files = _iter_c3d_files(c3d_dir)
+    if args.max_files is not None:
+        c3d_files = c3d_files[: int(args.max_files)]
+    if not c3d_files:
+        raise FileNotFoundError(f"No .c3d files found under {c3d_dir}")
+
+    header_written = False
+    processed = 0
+    skipped = 0
+
+    for c3d_file in c3d_files:
+        # Subject/token + events matching can be skipped. Torque (forceplate) must abort.
+        try:
+            subject_token, velocity, trial = parse_subject_velocity_trial_from_filename(c3d_file.name)
+            subject = resolve_subject_from_token(event_xlsm, subject_token)
+            leg_length_cm = load_subject_leg_length_cm(event_xlsm, subject)
+            if leg_length_cm is None:
+                raise ValueError(f"Leg length not found for subject='{subject}'.")
+            body_mass_kg = load_subject_body_mass_kg(event_xlsm, subject)
+
+            events = load_trial_events(
+                event_xlsm=event_xlsm,
+                subject=subject,
+                velocity=velocity,
+                trial=trial,
+                pre_frames=pre_frames,
+                sheet_name="platform",
+            )
+        except Exception as exc:
+            message = f"[SKIP] {c3d_file.name}: {exc}"
+            if args.skip_unmatched:
+                skipped += 1
+                print(message)
+                continue
+            raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
+
+        # Read points
+        try:
+            c3d = read_c3d_points(c3d_file)
+        except Exception as exc:
+            message = f"[SKIP] {c3d_file.name}: cannot read C3D points ({exc})"
+            if args.skip_unmatched:
+                skipped += 1
+                print(message)
+                continue
+            raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
+
+        rate_hz = float(c3d.rate_hz)
+        dt = 1.0 / rate_hz
+        total_frames = int(c3d.points.shape[0])
+
+        if events.step_onset_local is not None:
+            end_frame = int(events.step_onset_local) - 1
+        else:
+            end_frame = total_frames
+        end_frame = max(1, min(end_frame, total_frames))
+
+        # Torque requires FORCE_PLATFORM/ANALOG; always abort on failure.
+        try:
+            force_plate_used, torque_payload = _compute_ankle_torque_payload(
+                c3d_file=c3d_file,
+                points=c3d.points,
+                labels=c3d.labels,
+                rate_hz=rate_hz,
+                end_frame=end_frame,
+                platform_onset_local=int(events.platform_onset_local),
+                force_plate_index_1based=None if args.force_plate is None else int(args.force_plate),
+                body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Forceplate/torque extraction failed for '{c3d_file.name}': {exc}") from exc
+
+        # Remaining computations can be skipped if requested.
+        try:
+            params = COMModelParams()
+            COM = compute_whole_body_com(c3d.points, c3d.labels, params=params)
+            vCOM = derivative(COM, dt=dt)
+            xCOM = compute_xcom(COM, vCOM, leg_length_m=float(leg_length_cm) / 100.0, g=9.81)
+
+            mos = compute_mos_timeseries(
+                points=c3d.points,
+                labels=c3d.labels,
+                xcom=xCOM,
+                vcom=vCOM,
+                end_frame=end_frame,
+            )
+
+            angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+
+            df_ts = _make_timeseries_dataframe(
+                c3d_file=c3d_file,
+                subject_token=subject_token,
+                subject=subject,
+                velocity=velocity,
+                trial=trial,
+                leg_length_cm=float(leg_length_cm),
+                body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
+                force_plate_index_1based=int(force_plate_used),
+                rate_hz=rate_hz,
+                end_frame=end_frame,
+                platform_onset_local=int(events.platform_onset_local),
+                platform_offset_local=int(events.platform_offset_local),
+                step_onset_local=None if events.step_onset_local is None else int(events.step_onset_local),
+                COM=COM,
+                vCOM=vCOM,
+                xCOM=xCOM,
+                mos=mos,
+                angles=angles,
+                torque_payload=torque_payload,
+            )
+
+            header_written = _append_rows_to_csv(
+                out_csv,
+                df_ts,
+                header_written=header_written,
+                encoding=str(args.encoding),
+            )
+            processed += 1
+        except Exception as exc:
+            message = f"[SKIP] {c3d_file.name}: {exc}"
+            if args.skip_unmatched:
+                skipped += 1
+                print(message)
+                continue
+            raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
+
+    print(f"[OK] Saved: {out_csv}")
+    print(f"Processed files: {processed}")
+    print(f"Skipped files: {skipped}")
+
+
+if __name__ == "__main__":
+    main()

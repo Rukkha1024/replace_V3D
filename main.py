@@ -108,12 +108,20 @@ def _compare_md5(outputs: list[Path], reference_dir: Path, output_root: Path) ->
 
 def _make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Run scripts in batch: MOS CSV export, MOS/JAngles/Ankle torque pipelines."
+        description="Run scripts in batch: MOS CSV export (or unified timeseries), MOS/JAngles/Ankle torque pipelines."
     )
     p.add_argument("--c3d_dir", default=str(_REPO_ROOT / "data" / "all_data"))
     p.add_argument("--event_xlsm", default=str(_REPO_ROOT / "data" / "perturb_inform.xlsm"))
     p.add_argument("--out_dir", default=str(_REPO_ROOT / "output"))
     p.add_argument("--batch_out_csv", default=str(_REPO_ROOT / "output" / "all_trials_mos_timeseries.csv"))
+    p.add_argument(
+        "--batch_all_out_csv",
+        default=None,
+        help=(
+            "Optional unified batch CSV path (MOS + joint angles + ankle torque). "
+            "If provided, runs scripts/run_batch_all_timeseries_csv.py instead of the MOS-only batch export."
+        ),
+    )
     p.add_argument("--pre_frames", type=int, default=100)
     p.add_argument("--encoding", default="utf-8-sig")
     p.add_argument("--overwrite", action="store_true", help="Overwrite batch timeseries CSV.")
@@ -141,6 +149,7 @@ def main() -> None:
     event_xlsm = Path(args.event_xlsm)
     out_dir = Path(args.out_dir)
     batch_out_csv = Path(args.batch_out_csv)
+    batch_all_out_csv: Optional[Path] = Path(args.batch_all_out_csv) if args.batch_all_out_csv else None
     md5_reference_dir: Optional[Path] = Path(args.md5_reference_dir) if args.md5_reference_dir else None
 
     if not c3d_dir.exists():
@@ -158,32 +167,58 @@ def main() -> None:
     run_batch = not args.run_file_only
     run_files = not args.run_batch_only
 
-    # 1) Batch MOS timeseries CSV
+    # 1) Batch timeseries CSV (MOS-only OR unified)
     if run_batch:
-        batch_cmd = [
-            sys.executable,
-            str(scripts_root / "run_batch_mos_timeseries_csv.py"),
-            "--c3d_dir",
-            str(c3d_dir),
-            "--event_xlsm",
-            str(event_xlsm),
-            "--out_csv",
-            str(batch_out_csv),
-            "--pre_frames",
-            str(args.pre_frames),
-            "--encoding",
-            str(args.encoding),
-        ]
-        if args.skip_unmatched:
-            batch_cmd.append("--skip_unmatched")
-        if args.overwrite:
-            batch_cmd.append("--overwrite")
-        print("[RUN] scripts/run_batch_mos_timeseries_csv.py")
-        if _run_command(batch_cmd, step_name="batch_mos_timeseries", on_error=args.on_error):
-            if batch_out_csv.exists():
-                produced.append(batch_out_csv)
+        if batch_all_out_csv is not None:
+            batch_cmd = [
+                sys.executable,
+                str(scripts_root / "run_batch_all_timeseries_csv.py"),
+                "--c3d_dir",
+                str(c3d_dir),
+                "--event_xlsm",
+                str(event_xlsm),
+                "--out_csv",
+                str(batch_all_out_csv),
+                "--pre_frames",
+                str(args.pre_frames),
+                "--encoding",
+                str(args.encoding),
+            ]
+            if args.skip_unmatched:
+                batch_cmd.append("--skip_unmatched")
+            if args.overwrite:
+                batch_cmd.append("--overwrite")
+            print("[RUN] scripts/run_batch_all_timeseries_csv.py")
+            if _run_command(batch_cmd, step_name="batch_all_timeseries", on_error=args.on_error):
+                if batch_all_out_csv.exists():
+                    produced.append(batch_all_out_csv)
+            else:
+                failed_files += 1
         else:
-            failed_files += 1
+            batch_cmd = [
+                sys.executable,
+                str(scripts_root / "run_batch_mos_timeseries_csv.py"),
+                "--c3d_dir",
+                str(c3d_dir),
+                "--event_xlsm",
+                str(event_xlsm),
+                "--out_csv",
+                str(batch_out_csv),
+                "--pre_frames",
+                str(args.pre_frames),
+                "--encoding",
+                str(args.encoding),
+            ]
+            if args.skip_unmatched:
+                batch_cmd.append("--skip_unmatched")
+            if args.overwrite:
+                batch_cmd.append("--overwrite")
+            print("[RUN] scripts/run_batch_mos_timeseries_csv.py")
+            if _run_command(batch_cmd, step_name="batch_mos_timeseries", on_error=args.on_error):
+                if batch_out_csv.exists():
+                    produced.append(batch_out_csv)
+            else:
+                failed_files += 1
 
     if args.run_batch_only:
         if md5_reference_dir is not None:

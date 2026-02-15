@@ -49,6 +49,27 @@ Output:
 - `output/all_trials_mos_timeseries.csv` (long-format; one row per `subject-velocity-trial` x `MocapFrame`)
 - Key columns include `subject-velocity-trial`, `MocapFrame`, `COM_*`, `vCOM_*`, `xCOM_*`, `BOS_*`, `MOS_*`.
 
+## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
+
+This export is also **long-format** (row = `subject-velocity-trial` x `MocapFrame`), but includes:
+
+- COM / vCOM / xCOM / BOS / MOS
+- Visual3D-like 3D joint angles (ankle/knee/hip/trunk/neck)
+- Forceplate-based ankle torque time series (GRF/GRM/COP + joint moments)
+
+```bash
+conda run -n module python scripts/run_batch_all_timeseries_csv.py \
+  --c3d_dir data/all_data \
+  --event_xlsm data/perturb_inform.xlsm \
+  --out_csv output/all_trials_timeseries.csv \
+  --overwrite
+```
+
+Notes:
+- Torque requires `FORCE_PLATFORM` metadata + analog channels in the C3D.
+- If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
+- Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` + `Time_s` once.
+
 ## Quick start (ankle torque)
 
 ```bash
