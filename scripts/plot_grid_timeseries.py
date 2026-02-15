@@ -168,6 +168,12 @@ def parse_args() -> argparse.Namespace:
         default=0.1,
         help="Tick spacing for normalized x-axis (used with --x_norm01)",
     )
+    parser.add_argument(
+        "--separate_step_nonstep",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Generate separate figures for step/nonstep trials (default: enabled)",
+    )
     return parser.parse_args()
 
 
@@ -424,6 +430,23 @@ def build_trial_list(subject_df: pl.DataFrame) -> list[pl.DataFrame]:
     ]
 
 
+def trial_has_step(trial_df: pl.DataFrame) -> bool:
+    if "step_onset_local" not in trial_df.columns:
+        return False
+    return trial_df.get_column("step_onset_local").drop_nulls().len() > 0
+
+
+def split_trials_by_step(trials: list[pl.DataFrame]) -> tuple[list[pl.DataFrame], list[pl.DataFrame]]:
+    step_trials: list[pl.DataFrame] = []
+    nonstep_trials: list[pl.DataFrame] = []
+    for trial_df in trials:
+        if trial_has_step(trial_df):
+            step_trials.append(trial_df)
+        else:
+            nonstep_trials.append(trial_df)
+    return step_trials, nonstep_trials
+
+
 def plot_subject_category(
     subject_df: pl.DataFrame,
     subject_value: str,
@@ -435,12 +458,21 @@ def plot_subject_category(
     x_ticks: np.ndarray,
     x_axis_label: str,
     normalize_per_trial: bool,
-) -> Path:
+    step_group: str = "all",
+) -> Path | None:
     nrows, ncols = spec["nrows"], spec["ncols"]
     fig, axes = plt.subplots(nrows, ncols, figsize=spec["figsize"], squeeze=False)
 
-    trials = build_trial_list(subject_df)
+    all_trials = build_trial_list(subject_df)
+    if step_group == "all":
+        trials = all_trials
+    else:
+        step_trials, nonstep_trials = split_trials_by_step(all_trials)
+        trials = step_trials if step_group == "step" else nonstep_trials
     trial_count = len(trials)
+    if trial_count == 0:
+        plt.close(fig)
+        return None
 
     for subplot in spec["subplots"]:
         r, c = subplot[0], subplot[1]
@@ -477,14 +509,16 @@ def plot_subject_category(
         axes[rr][cc].axis("off")
 
     mode_label = "sample" if sample else "all"
+    group_label = "all trials" if step_group == "all" else f"{step_group} only"
     fig.suptitle(
-        f"{spec['title']} | subject overlay ({trial_count} subject-velocity-trial lines) | {mode_label}",
+        f"{spec['title']} | {group_label} | subject overlay ({trial_count} subject-velocity-trial lines) | {mode_label}",
         fontsize=11,
         fontweight="bold",
     )
     fig.tight_layout(rect=[0, 0, 1, 0.96])
 
-    out_name = f"{spec['tag']}__subject-{safe_name(subject_value)}__{mode_label}.png"
+    suffix = f"__{step_group}" if step_group != "all" else ""
+    out_name = f"{spec['tag']}__subject-{safe_name(subject_value)}{suffix}__{mode_label}.png"
     out_path = out_dir / out_name
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -526,23 +560,55 @@ def main() -> None:
         print(f"Normalized x-axis tick spacing: {args.xtick_norm:g}")
     else:
         print(f"Common x-axis ticks: every {args.xtick_sec:g} sec ({x_ticks.size} ticks)")
+    if args.separate_step_nonstep:
+        trial_flags = (
+            df.select(TRIAL_KEYS + ["step_onset_local"])
+            .unique(TRIAL_KEYS)
+            .with_columns(pl.col("step_onset_local").is_not_null().alias("has_step"))
+        )
+        step_trial_count = trial_flags.filter(pl.col("has_step")).height
+        nonstep_trial_count = trial_flags.filter(~pl.col("has_step")).height
+        print(
+            "Step split enabled: "
+            f"step={step_trial_count}, nonstep={nonstep_trial_count} (criterion: step_onset_local non-null)"
+        )
 
     for subject_value in subjects:
         subject_df = df.filter(pl.col("subject") == subject_value)
         for spec in CATEGORIES:
-            out_path = plot_subject_category(
-                subject_df=subject_df,
-                subject_value=str(subject_value),
-                spec=spec,
-                out_dir=args.out_dir,
-                sample=args.sample,
-                dpi=args.dpi,
-                x_plot=x_plot,
-                x_ticks=x_ticks,
-                x_axis_label=x_axis_label,
-                normalize_per_trial=normalize_per_trial,
-            )
-            print(f"Saved: {out_path}")
+            if args.separate_step_nonstep:
+                for step_group in ["step", "nonstep"]:
+                    out_path = plot_subject_category(
+                        subject_df=subject_df,
+                        subject_value=str(subject_value),
+                        spec=spec,
+                        out_dir=args.out_dir,
+                        sample=args.sample,
+                        dpi=args.dpi,
+                        x_plot=x_plot,
+                        x_ticks=x_ticks,
+                        x_axis_label=x_axis_label,
+                        normalize_per_trial=normalize_per_trial,
+                        step_group=step_group,
+                    )
+                    if out_path is not None:
+                        print(f"Saved: {out_path}")
+            else:
+                out_path = plot_subject_category(
+                    subject_df=subject_df,
+                    subject_value=str(subject_value),
+                    spec=spec,
+                    out_dir=args.out_dir,
+                    sample=args.sample,
+                    dpi=args.dpi,
+                    x_plot=x_plot,
+                    x_ticks=x_ticks,
+                    x_axis_label=x_axis_label,
+                    normalize_per_trial=normalize_per_trial,
+                    step_group="all",
+                )
+                if out_path is not None:
+                    print(f"Saved: {out_path}")
 
     print("Done.")
 
