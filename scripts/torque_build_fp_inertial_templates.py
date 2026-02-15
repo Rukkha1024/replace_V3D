@@ -72,13 +72,25 @@ def _nearest_index(values: np.ndarray, target: int) -> int:
 def _apply_axis_transform(df: "pl.DataFrame", mapping: Dict[str, Dict[str, object]]) -> "pl.DataFrame":
     if pl is None:
         raise RuntimeError("polars is required for this script")
-    out = df
+    # Important: mapping can include swaps like Fx<-Fy and Fy<-Fx.
+    # We must compute all transformed columns from the *original* df, not in-place,
+    # otherwise the second assignment will read the already-overwritten value.
+    temp_exprs: List["pl.Expr"] = []
+    temp_to_target: Dict[str, str] = {}
     for tgt, rule in mapping.items():
         src = str(rule.get("source"))
         scale = float(rule.get("scale", 1.0))
-        if src in out.columns:
-            out = out.with_columns((pl.col(src) * scale).alias(tgt))
-    return out
+        if src in df.columns:
+            tmp = f"__axis_{tgt}"
+            temp_exprs.append((pl.col(src) * scale).alias(tmp))
+            temp_to_target[tmp] = tgt
+
+    if not temp_exprs:
+        return df
+
+    out = df.with_columns(temp_exprs)
+    out = out.with_columns([pl.col(tmp).alias(tgt) for tmp, tgt in temp_to_target.items()])
+    return out.drop(list(temp_to_target.keys()))
 
 
 def _read_forceplate_csv_table(
@@ -171,7 +183,9 @@ def _build_templates(
     for v_int in sorted(df0["velocity_int"].unique().to_list()):
         v_int = int(v_int)
         v_rows = df0.filter(pl.col("velocity_int") == v_int)
-        unload_range_frames = int(v_rows["unload_range_frames"].drop_nulls().item(0))
+        # Stage01 behavior: median duration can be X.5 when n_trials is even.
+        # Use Python's bankers rounding (round half to even) to match diagnostics.
+        unload_range_frames = int(round(float(v_rows["unload_range_frames"].drop_nulls().item(0))))
         if unload_range_frames <= 0:
             continue
 
