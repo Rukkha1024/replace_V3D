@@ -177,7 +177,7 @@ def _compute_ankle_torque_payload(
     platform_offset_local: int,
     force_plate_index_1based: int | None,
     body_mass_kg: float | None,
-    fp_inertial_templates: dict[int, Any] | None,
+    fp_inertial_templates: dict[int, Any],
     fp_inertial_policy: str,
     fp_inertial_qc_fz_threshold_n: float,
     fp_inertial_qc_margin_m: float,
@@ -200,29 +200,33 @@ def _compute_ankle_torque_payload(
         fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
 
     analog_used = analog_avg
-    if fp_inertial_templates is not None:
-        onset0 = int(platform_onset_local) - 1
-        offset0 = int(platform_offset_local) - 1
-        analog_used, inertial_info = apply_forceplate_inertial_subtract(
-            analog_avg,
-            fp,
-            velocity=float(velocity),
-            onset0=int(onset0),
-            offset0=int(offset0),
-            templates=fp_inertial_templates,
-            missing_policy=str(fp_inertial_policy),
-            qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold_n),
-            qc_margin_m=float(fp_inertial_qc_margin_m),
+    onset0 = int(platform_onset_local) - 1
+    offset0 = int(platform_offset_local) - 1
+    analog_used, inertial_info = apply_forceplate_inertial_subtract(
+        analog_avg,
+        fp,
+        velocity=float(velocity),
+        onset0=int(onset0),
+        offset0=int(offset0),
+        templates=fp_inertial_templates,
+        missing_policy=str(fp_inertial_policy),
+        qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold_n),
+        qc_margin_m=float(fp_inertial_qc_margin_m),
+    )
+    if not inertial_info.get("applied"):
+        raise ValueError(
+            "Forceplate inertial subtract did not apply "
+            f"for {c3d_file.name} (reason={inertial_info.get('reason')}, policy={inertial_info.get('missing_policy')})."
         )
-        if inertial_info.get("qc_failed"):
-            msg = (
-                "[WARN] Forceplate inertial subtract QC failed "
-                f"for {c3d_file.name} (COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
-                "Check axis transform / templates."
-            )
-            if fp_inertial_qc_strict:
-                raise ValueError(msg)
-            print(msg)
+    if inertial_info.get("qc_failed"):
+        msg = (
+            "[WARN] Forceplate inertial subtract QC failed "
+            f"for {c3d_file.name} (COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
+            "Check axis transform / templates."
+        )
+        if fp_inertial_qc_strict:
+            raise ValueError(msg)
+        print(msg)
 
     F_lab, M_lab = extract_platform_wrenches_lab(analog_used, fp)
     idx = fp.channel_indices_0based.astype(int)
@@ -347,11 +351,6 @@ def main() -> None:
         help="If template for this velocity is missing: skip | nearest | interpolate",
     )
     parser.add_argument(
-        "--no_fp_inertial_subtract",
-        action="store_true",
-        help="Disable Stage01-style inertial subtraction (use raw C3D forceplate).",
-    )
-    parser.add_argument(
         "--fp_inertial_qc_fz_threshold",
         type=float,
         default=20.0,
@@ -417,15 +416,12 @@ def main() -> None:
     processed = 0
     skipped = 0
 
-    fp_inertial_templates: dict[int, Any] | None = None
-    if not args.no_fp_inertial_subtract:
-        tmpl_path = Path(args.fp_inertial_templates)
-        if not tmpl_path.is_absolute():
-            tmpl_path = _REPO_ROOT / tmpl_path
-        if tmpl_path.exists():
-            fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
-        else:
-            print(f"[WARN] Inertial templates not found: {tmpl_path} (skipping inertial subtract)")
+    tmpl_path = Path(args.fp_inertial_templates)
+    if not tmpl_path.is_absolute():
+        tmpl_path = _REPO_ROOT / tmpl_path
+    if not tmpl_path.exists():
+        raise FileNotFoundError(f"Inertial templates not found: {tmpl_path}")
+    fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
 
     for c3d_file in c3d_files:
         # Subject/token + events matching can be skipped. Torque (forceplate) must abort.

@@ -86,11 +86,6 @@ def main() -> None:
         help="If template for this velocity is missing: skip | nearest | interpolate",
     )
     ap.add_argument(
-        "--no_fp_inertial_subtract",
-        action="store_true",
-        help="Disable Stage01-style inertial subtraction (use raw C3D forceplate).",
-    )
-    ap.add_argument(
         "--fp_inertial_qc_fz_threshold",
         type=float,
         default=20.0,
@@ -164,56 +159,46 @@ def main() -> None:
     # Apply Stage01-style inertial subtraction (template) before wrench/COP.
     # Note: C3D forceplate axes are already transformed in the provided dataset.
     inertial_info = {
-        "enabled": (not args.no_fp_inertial_subtract),
+        "enabled": True,
         "applied": False,
-        "reason": "disabled" if args.no_fp_inertial_subtract else "not_run",
+        "reason": "not_run",
     }
     analog_used = analog_avg
-    if not args.no_fp_inertial_subtract:
-        tmpl_path = Path(args.fp_inertial_templates)
-        if not tmpl_path.is_absolute():
-            tmpl_path = _REPO_ROOT / tmpl_path
-        if tmpl_path.exists():
-            try:
-                templates = load_forceplate_inertial_templates(tmpl_path)
-                analog_used, inertial_info = apply_forceplate_inertial_subtract(
-                    analog_avg,
-                    fp,
-                    velocity=float(velocity),
-                    onset0=int(onset0),
-                    offset0=int(offset0),
-                    templates=templates,
-                    missing_policy=str(args.fp_inertial_policy),
-                    qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
-                    qc_margin_m=float(args.fp_inertial_qc_margin_m),
-                )
-                # Keep a few top-level flags even when apply() returns a fresh dict.
-                inertial_info["enabled"] = True
-                inertial_info["templates_path"] = str(tmpl_path)
-                if inertial_info.get("qc_failed"):
-                    msg = (
-                        "[WARN] Forceplate inertial subtract QC failed "
-                        f"(COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
-                        "Check axis transform / template file."
-                    )
-                    if args.fp_inertial_qc_strict:
-                        raise ValueError(msg)
-                    print(msg)
-            except Exception as e:
-                inertial_info = {
-                    "enabled": True,
-                    "applied": False,
-                    "reason": f"error:{type(e).__name__}",
-                    "error": str(e),
-                }
-                print(f"[WARN] Failed to apply inertial subtraction: {e}")
-        else:
-            inertial_info = {
-                "enabled": True,
-                "applied": False,
-                "reason": f"templates_missing:{tmpl_path}",
-            }
-            print(f"[WARN] Inertial templates not found: {tmpl_path} (skipping)")
+    tmpl_path = Path(args.fp_inertial_templates)
+    if not tmpl_path.is_absolute():
+        tmpl_path = _REPO_ROOT / tmpl_path
+    if not tmpl_path.exists():
+        raise FileNotFoundError(f"Inertial templates not found: {tmpl_path}")
+
+    templates = load_forceplate_inertial_templates(tmpl_path)
+    analog_used, inertial_info = apply_forceplate_inertial_subtract(
+        analog_avg,
+        fp,
+        velocity=float(velocity),
+        onset0=int(onset0),
+        offset0=int(offset0),
+        templates=templates,
+        missing_policy=str(args.fp_inertial_policy),
+        qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
+        qc_margin_m=float(args.fp_inertial_qc_margin_m),
+    )
+    inertial_info["enabled"] = True
+    inertial_info["templates_path"] = str(tmpl_path)
+
+    if not inertial_info.get("applied"):
+        raise ValueError(
+            "Forceplate inertial subtract did not apply "
+            f"(reason={inertial_info.get('reason')}, policy={inertial_info.get('missing_policy')})."
+        )
+    if inertial_info.get("qc_failed"):
+        msg = (
+            "[WARN] Forceplate inertial subtract QC failed "
+            f"(COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
+            "Check axis transform / template file."
+        )
+        if args.fp_inertial_qc_strict:
+            raise ValueError(msg)
+        print(msg)
 
     # Extract plate wrenches
     F_lab, M_lab = extract_platform_wrenches_lab(analog_used, fp)
