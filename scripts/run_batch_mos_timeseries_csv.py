@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -9,11 +8,13 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-# Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+import _bootstrap
+
+_bootstrap.ensure_src_on_path()
+_REPO_ROOT = _bootstrap.REPO_ROOT
 
 from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.cli.batch_utils import append_rows_to_csv, build_trial_key, iter_c3d_files
 from replace_v3d.com import COMModelParams, compute_whole_body_com, compute_xcom, derivative
 from replace_v3d.events import (
     load_subject_leg_length_cm,
@@ -22,32 +23,6 @@ from replace_v3d.events import (
     resolve_subject_from_token,
 )
 from replace_v3d.mos import compute_mos_timeseries
-
-
-def _format_velocity(velocity: float) -> str:
-    if float(velocity).is_integer():
-        return str(int(velocity))
-    return str(float(velocity))
-
-
-def _build_trial_key(subject: str, velocity: float, trial: int) -> str:
-    return f"{subject}-{_format_velocity(velocity)}-{int(trial)}"
-
-
-def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
-    return sorted([path for path in c3d_dir.rglob("*.c3d") if path.is_file()])
-
-
-def _append_rows_to_csv(
-    out_csv: Path,
-    df: pd.DataFrame,
-    *,
-    header_written: bool,
-    encoding: str,
-) -> bool:
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_csv, mode="a", index=False, header=not header_written, encoding=encoding)
-    return True
 
 
 def _make_timeseries_dataframe(
@@ -70,7 +45,7 @@ def _make_timeseries_dataframe(
 ) -> pd.DataFrame:
     mocap_frames = np.arange(1, end_frame + 1, dtype=int)
     time_s = (mocap_frames - 1) / rate_hz
-    subject_key = _build_trial_key(subject, velocity, trial)
+    subject_key = build_trial_key(subject, velocity, trial)
 
     is_platform_onset = mocap_frames == int(platform_onset_local)
     if step_onset_local is None:
@@ -177,7 +152,7 @@ def main() -> None:
         else:
             raise FileExistsError(f"Output already exists: {out_csv}. Use --overwrite to replace it.")
 
-    c3d_files = _iter_c3d_files(c3d_dir)
+    c3d_files = iter_c3d_files(c3d_dir)
     if not c3d_files:
         raise FileNotFoundError(f"No .c3d files found under {c3d_dir}")
 
@@ -244,7 +219,7 @@ def main() -> None:
                 mos=mos,
             )
 
-            header_written = _append_rows_to_csv(
+            header_written = append_rows_to_csv(
                 out_csv,
                 df_ts,
                 header_written=header_written,

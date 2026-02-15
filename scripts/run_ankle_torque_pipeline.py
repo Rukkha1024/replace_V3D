@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-# Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+import _bootstrap
+
+_bootstrap.ensure_src_on_path()
+_REPO_ROOT = _bootstrap.REPO_ROOT
 
 import argparse
 
@@ -18,9 +18,11 @@ except Exception:  # pragma: no cover
     pl = None
 
 from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.com import compute_joint_centers
 from replace_v3d.events import load_subject_body_mass_kg, load_trial_events, parse_trial_from_filename
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
+from replace_v3d.torque.cop import compute_cop_lab
 from replace_v3d.torque.forceplate import (
     choose_active_force_platform,
     extract_platform_wrenches_lab,
@@ -30,27 +32,6 @@ from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
     load_forceplate_inertial_templates,
 )
-
-
-def _safe_div(num: np.ndarray, den: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    den2 = np.where(np.abs(den) < eps, np.nan, den)
-    return num / den2
-
-
-def _compute_cop_lab(
-    *,
-    F_plate: np.ndarray,
-    M_plate: np.ndarray,
-    fp_origin_lab: np.ndarray,
-    R_pl2lab: np.ndarray,
-) -> np.ndarray:
-    """COP in plate coordinates then rotate/translate into lab."""
-
-    Fz = F_plate[:, 2]
-    cop_x = _safe_div(-M_plate[:, 1], Fz)
-    cop_y = _safe_div(M_plate[:, 0], Fz)
-    cop_plate = np.column_stack([cop_x, cop_y, np.zeros_like(cop_x)])
-    return fp_origin_lab[None, :] + cop_plate @ R_pl2lab.T
 
 
 def main() -> None:
@@ -109,14 +90,12 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Parse velocity/trial from filename unless provided
-    if args.velocity is None or args.trial is None:
-        vel, tr = parse_trial_from_filename(c3d_path.name)
-        velocity = vel if args.velocity is None else float(args.velocity)
-        trial = tr if args.trial is None else int(args.trial)
-    else:
-        velocity = float(args.velocity)
-        trial = int(args.trial)
+    velocity, trial = resolve_velocity_trial(
+        c3d_name=c3d_path.name,
+        velocity_arg=args.velocity,
+        trial_arg=args.trial,
+        parse_fn=parse_trial_from_filename,
+    )
 
     # Read kinematics
     c3d = read_c3d_points(c3d_path)
@@ -205,7 +184,12 @@ def main() -> None:
     idx = fp.channel_indices_0based.astype(int)
     F_plate = analog_used[:, idx[0:3]]
     M_plate = analog_used[:, idx[3:6]]
-    COP_lab = _compute_cop_lab(F_plate=F_plate, M_plate=M_plate, fp_origin_lab=fp.origin_lab, R_pl2lab=fp.R_pl2lab)
+    COP_lab = compute_cop_lab(
+        F_plate=F_plate,
+        M_plate=M_plate,
+        fp_origin_lab=fp.origin_lab,
+        R_pl2lab=fp.R_pl2lab,
+    )
 
     # Joint centers (medial markers already baked into com.compute_joint_centers)
     jc = compute_joint_centers(c3d.points, c3d.labels)

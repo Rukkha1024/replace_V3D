@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-# Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+import _bootstrap
+
+_bootstrap.ensure_src_on_path()
 
 import argparse
 from dataclasses import replace as dc_replace
@@ -16,6 +15,7 @@ import polars as pl
 
 from replace_v3d.angles import compute_lower_limb_angles
 from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.com import COMModelParams, compute_whole_body_com, compute_xcom, derivative
 from replace_v3d.events import load_trial_events, parse_trial_from_filename
 from replace_v3d.mos import compute_mos_timeseries
@@ -62,14 +62,12 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Parse velocity/trial from filename unless provided
-    if args.velocity is None or args.trial is None:
-        vel, tr = parse_trial_from_filename(c3d_path.name)
-        velocity = vel if args.velocity is None else float(args.velocity)
-        trial = tr if args.trial is None else int(args.trial)
-    else:
-        velocity = float(args.velocity)
-        trial = int(args.trial)
+    velocity, trial = resolve_velocity_trial(
+        c3d_name=c3d_path.name,
+        velocity_arg=args.velocity,
+        trial_arg=args.trial,
+        parse_fn=parse_trial_from_filename,
+    )
 
     c3d = read_c3d_points(c3d_path)
     rate = c3d.rate_hz

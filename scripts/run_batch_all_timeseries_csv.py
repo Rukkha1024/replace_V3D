@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -9,11 +8,13 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-# Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+import _bootstrap
+
+_bootstrap.ensure_src_on_path()
+_REPO_ROOT = _bootstrap.REPO_ROOT
 
 from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.cli.batch_utils import append_rows_to_csv, iter_c3d_files
 from replace_v3d.com import (
     COMModelParams,
     compute_joint_centers,
@@ -31,6 +32,7 @@ from replace_v3d.events import (
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
+from replace_v3d.torque.cop import compute_cop_lab
 from replace_v3d.torque.forceplate import (
     choose_active_force_platform,
     extract_platform_wrenches_lab,
@@ -40,43 +42,6 @@ from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
     load_forceplate_inertial_templates,
 )
-
-
-def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
-    return sorted([path for path in c3d_dir.rglob("*.c3d") if path.is_file()])
-
-
-def _append_rows_to_csv(
-    out_csv: Path,
-    df: pd.DataFrame,
-    *,
-    header_written: bool,
-    encoding: str,
-) -> bool:
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_csv, mode="a", index=False, header=not header_written, encoding=encoding)
-    return True
-
-
-def _safe_div(num: np.ndarray, den: np.ndarray, eps: float = 1e-12) -> np.ndarray:
-    den2 = np.where(np.abs(den) < eps, np.nan, den)
-    return num / den2
-
-
-def _compute_cop_lab(
-    *,
-    F_plate: np.ndarray,
-    M_plate: np.ndarray,
-    fp_origin_lab: np.ndarray,
-    R_pl2lab: np.ndarray,
-) -> np.ndarray:
-    """COP in plate coordinates then rotate/translate into lab."""
-
-    Fz = F_plate[:, 2]
-    cop_x = _safe_div(-M_plate[:, 1], Fz)
-    cop_y = _safe_div(M_plate[:, 0], Fz)
-    cop_plate = np.column_stack([cop_x, cop_y, np.zeros_like(cop_x)])
-    return fp_origin_lab[None, :] + cop_plate @ R_pl2lab.T
 
 
 def _make_timeseries_dataframe(
@@ -232,7 +197,7 @@ def _compute_ankle_torque_payload(
     idx = fp.channel_indices_0based.astype(int)
     F_plate = analog_used[:, idx[0:3]]
     M_plate = analog_used[:, idx[3:6]]
-    COP_lab = _compute_cop_lab(
+    COP_lab = compute_cop_lab(
         F_plate=F_plate,
         M_plate=M_plate,
         fp_origin_lab=fp.origin_lab,
@@ -406,7 +371,7 @@ def main() -> None:
         else:
             raise FileExistsError(f"Output already exists: {out_csv}. Use --overwrite to replace it.")
 
-    c3d_files = _iter_c3d_files(c3d_dir)
+    c3d_files = iter_c3d_files(c3d_dir)
     if args.max_files is not None:
         c3d_files = c3d_files[: int(args.max_files)]
     if not c3d_files:
@@ -525,7 +490,7 @@ def main() -> None:
                 torque_payload=torque_payload,
             )
 
-            header_written = _append_rows_to_csv(
+            header_written = append_rows_to_csv(
                 out_csv,
                 df_ts,
                 header_written=header_written,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -9,9 +8,10 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-# Allow running without installing the package
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+import _bootstrap
+
+_bootstrap.ensure_src_on_path()
+_REPO_ROOT = _bootstrap.REPO_ROOT
 
 from replace_v3d.torque.forceplate_inertial import ForceplateInertialTemplate, load_forceplate_inertial_templates
 
@@ -373,4 +373,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
