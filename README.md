@@ -65,6 +65,39 @@ Notes:
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
 - By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
 
+## Grid plots (subject × velocity × variable category)
+
+After generating `output/all_trials_timeseries.csv`, you can render grid plots for quick trial/variable sanity checks.
+
+- Category definitions (variables + subplot layout) live in `config.yaml > plot_grid_timeseries.categories`.
+- Default output dir is `output/figures/grid_timeseries/` (also configurable via `config.yaml` or `--out_dir`).
+
+Sample preview (recommended):
+
+```bash
+conda run -n module python scripts/plot_grid_timeseries.py --sample
+```
+
+All subject×velocity groups:
+
+```bash
+conda run -n module python scripts/plot_grid_timeseries.py --group_by subject_velocity
+```
+
+Legacy subject-wise overlay (all velocities together):
+
+```bash
+conda run -n module python scripts/plot_grid_timeseries.py --group_by subject
+```
+
+Filters (optional):
+
+```bash
+conda run -n module python scripts/plot_grid_timeseries.py \
+  --only_subjects 김우연,가윤호 \
+  --only_velocities 60,70
+```
+
 ## Notes
 
 - C3D must be **trimmed** to `[platform_onset-100, platform_offset+100]` in the original 100 Hz mocap frames (as per your data rule).

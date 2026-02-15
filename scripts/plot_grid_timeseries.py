@@ -2,11 +2,14 @@
 
 Usage
 -----
-# Sample mode (subject-wise preview)
+# Sample mode (subject×velocity-wise preview; recommended for sanity checks)
 conda run -n module python scripts/plot_grid_timeseries.py --sample
 
-# All subjects
+# All subject×velocity groups (default)
 conda run -n module python scripts/plot_grid_timeseries.py
+
+# Legacy: subject-wise overlay (all velocities together)
+conda run -n module python scripts/plot_grid_timeseries.py --group_by subject
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ _bootstrap.ensure_src_on_path()
 import matplotlib
 import numpy as np
 import polars as pl
+import yaml
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -29,108 +33,9 @@ import matplotlib.pyplot as plt
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "grid_timeseries"
+DEFAULT_CONFIG = REPO_ROOT / "config.yaml"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 TIME_COL = "time_from_platform_onset_s"
-
-CATEGORIES: list[dict] = [
-    {
-        "tag": "mos_bos",
-        "title": "MOS / BOS",
-        "nrows": 2,
-        "ncols": 2,
-        "figsize": (11, 8),
-        "subplots": [
-            (0, 0, "MOS_minDist_signed", "MOS minDist (signed)"),
-            (0, 1, "MOS_AP_dir", "MOS AP"),
-            (1, 0, "MOS_ML_dir", "MOS ML"),
-            (1, 1, "BOS_area", "BOS area"),
-        ],
-    },
-    {
-        "tag": "com_family",
-        "title": "COM / vCOM / xCOM",
-        "nrows": 3,
-        "ncols": 3,
-        "figsize": (14, 10),
-        "subplots": [
-            (0, 0, "COM_X", "COM X"),
-            (0, 1, "COM_Y", "COM Y"),
-            (0, 2, "COM_Z", "COM Z"),
-            (1, 0, "vCOM_X", "vCOM X"),
-            (1, 1, "vCOM_Y", "vCOM Y"),
-            (1, 2, "vCOM_Z", "vCOM Z"),
-            (2, 0, "xCOM_X", "xCOM X"),
-            (2, 1, "xCOM_Y", "xCOM Y"),
-            (2, 2, "xCOM_Z", "xCOM Z"),
-        ],
-    },
-    {
-        "tag": "joint_angles_lower",
-        "title": "Joint Angles - Lower Extremity",
-        "nrows": 3,
-        "ncols": 3,
-        "figsize": (14, 10),
-        "subplots": [
-            (0, 0, [("Hip_L_X_deg", "L", "-"), ("Hip_R_X_deg", "R", "--")], "Hip X (deg)"),
-            (0, 1, [("Hip_L_Y_deg", "L", "-"), ("Hip_R_Y_deg", "R", "--")], "Hip Y (deg)"),
-            (0, 2, [("Hip_L_Z_deg", "L", "-"), ("Hip_R_Z_deg", "R", "--")], "Hip Z (deg)"),
-            (1, 0, [("Knee_L_X_deg", "L", "-"), ("Knee_R_X_deg", "R", "--")], "Knee X (deg)"),
-            (1, 1, [("Knee_L_Y_deg", "L", "-"), ("Knee_R_Y_deg", "R", "--")], "Knee Y (deg)"),
-            (1, 2, [("Knee_L_Z_deg", "L", "-"), ("Knee_R_Z_deg", "R", "--")], "Knee Z (deg)"),
-            (2, 0, [("Ankle_L_X_deg", "L", "-"), ("Ankle_R_X_deg", "R", "--")], "Ankle X (deg)"),
-            (2, 1, [("Ankle_L_Y_deg", "L", "-"), ("Ankle_R_Y_deg", "R", "--")], "Ankle Y (deg)"),
-            (2, 2, [("Ankle_L_Z_deg", "L", "-"), ("Ankle_R_Z_deg", "R", "--")], "Ankle Z (deg)"),
-        ],
-    },
-    {
-        "tag": "joint_angles_upper",
-        "title": "Joint Angles - Trunk / Neck",
-        "nrows": 2,
-        "ncols": 3,
-        "figsize": (14, 7),
-        "subplots": [
-            (0, 0, "Trunk_X_deg", "Trunk X (deg)"),
-            (0, 1, "Trunk_Y_deg", "Trunk Y (deg)"),
-            (0, 2, "Trunk_Z_deg", "Trunk Z (deg)"),
-            (1, 0, "Neck_X_deg", "Neck X (deg)"),
-            (1, 1, "Neck_Y_deg", "Neck Y (deg)"),
-            (1, 2, "Neck_Z_deg", "Neck Z (deg)"),
-        ],
-    },
-    {
-        "tag": "ankle_torque_internal",
-        "title": "Ankle Torque (Internal)",
-        "nrows": 3,
-        "ncols": 3,
-        "figsize": (14, 10),
-        "subplots": [
-            (0, 0, "AnkleTorqueMid_int_X_Nm", "Mid int X (Nm)"),
-            (0, 1, "AnkleTorqueMid_int_Y_Nm", "Mid int Y (Nm)"),
-            (0, 2, "AnkleTorqueMid_int_Z_Nm", "Mid int Z (Nm)"),
-            (1, 0, "AnkleTorqueL_int_X_Nm", "L int X (Nm)"),
-            (1, 1, "AnkleTorqueL_int_Y_Nm", "L int Y (Nm)"),
-            (1, 2, "AnkleTorqueL_int_Z_Nm", "L int Z (Nm)"),
-            (2, 0, "AnkleTorqueR_int_X_Nm", "R int X (Nm)"),
-            (2, 1, "AnkleTorqueR_int_Y_Nm", "R int Y (Nm)"),
-            (2, 2, "AnkleTorqueR_int_Z_Nm", "R int Z (Nm)"),
-        ],
-    },
-    {
-        "tag": "grf_cop",
-        "title": "GRF / COP",
-        "nrows": 2,
-        "ncols": 3,
-        "figsize": (14, 7),
-        "subplots": [
-            (0, 0, "GRF_X_N", "GRF X (N)"),
-            (0, 1, "GRF_Y_N", "GRF Y (N)"),
-            (0, 2, "GRF_Z_N", "GRF Z (N)"),
-            (1, 0, "COP_X_m", "COP X (m)"),
-            (1, 1, "COP_Y_m", "COP Y (m)"),
-            (1, 2, "COP_Z_m", "COP Z (m)"),
-        ],
-    },
-]
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,8 +47,43 @@ def parse_args() -> argparse.Namespace:
         default=3,
         help="Number of subjects to render in sample mode",
     )
+    parser.add_argument(
+        "--sample_velocities",
+        type=int,
+        default=2,
+        help="Number of velocities per subject in sample mode (used with --group_by subject_velocity)",
+    )
+    parser.add_argument(
+        "--group_by",
+        choices=["subject_velocity", "subject"],
+        default="subject_velocity",
+        help="Render one figure per grouping unit (default: subject_velocity)",
+    )
+    parser.add_argument(
+        "--only_subjects",
+        type=str,
+        default=None,
+        help="Comma-separated subject whitelist (e.g. 김우연,가윤호). Default: all",
+    )
+    parser.add_argument(
+        "--only_velocities",
+        type=str,
+        default=None,
+        help="Comma-separated velocity whitelist (e.g. 60,70). Default: all",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help="YAML config path (reads plot_grid_timeseries.*)",
+    )
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV, help="Input CSV path")
-    parser.add_argument("--out_dir", type=Path, default=DEFAULT_OUT, help="Output directory")
+    parser.add_argument(
+        "--out_dir",
+        type=Path,
+        default=None,
+        help="Output directory (overrides config.yaml if provided)",
+    )
     parser.add_argument("--dpi", type=int, default=300, help="Figure DPI")
     parser.add_argument(
         "--resample_hz",
@@ -181,6 +121,139 @@ def safe_name(text: str) -> str:
     value = re.sub(r"[\\/:*?\"<>|]+", "_", str(text))
     value = re.sub(r"\s+", "_", value).strip("_")
     return value if value else "unknown"
+
+
+def resolve_repo_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def parse_csv_list(text: str | None) -> list[str] | None:
+    if text is None:
+        return None
+    items = [chunk.strip() for chunk in str(text).split(",")]
+    items = [item for item in items if item]
+    return items if items else None
+
+
+def parse_float_list(text: str | None) -> list[float] | None:
+    items = parse_csv_list(text)
+    if not items:
+        return None
+    out: list[float] = []
+    for raw in items:
+        try:
+            out.append(float(raw))
+        except ValueError as exc:
+            raise ValueError(f"Invalid float in list: {raw!r}") from exc
+    return out
+
+
+def format_velocity(value: object) -> str:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if not np.isfinite(v):
+        return str(value)
+    if abs(v - round(v)) < 1e-9:
+        return str(int(round(v)))
+    text = f"{v:.6f}".rstrip("0").rstrip(".")
+    return text if text else str(v)
+
+
+def load_plot_specs(config_path: Path) -> tuple[Path | None, list[dict]]:
+    config_path = resolve_repo_path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Config not found: {config_path}. Expected a YAML file with plot_grid_timeseries.*"
+        )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("config.yaml must be a mapping at the top level")
+    root = raw.get("plot_grid_timeseries")
+    if not isinstance(root, dict):
+        raise ValueError("config.yaml is missing required key: plot_grid_timeseries")
+
+    out_dir_raw = root.get("out_dir")
+    out_dir: Path | None = None
+    if out_dir_raw is not None:
+        out_dir = resolve_repo_path(Path(str(out_dir_raw)))
+
+    categories_raw = root.get("categories")
+    if not isinstance(categories_raw, list) or not categories_raw:
+        raise ValueError("plot_grid_timeseries.categories must be a non-empty list")
+
+    categories: list[dict] = []
+    for cat_idx, cat in enumerate(categories_raw):
+        if not isinstance(cat, dict):
+            raise ValueError(f"categories[{cat_idx}] must be a mapping")
+        tag = str(cat.get("tag", "")).strip()
+        title = str(cat.get("title", "")).strip()
+        if not tag or not title:
+            raise ValueError(f"categories[{cat_idx}] requires 'tag' and 'title'")
+        try:
+            nrows = int(cat.get("nrows"))
+            ncols = int(cat.get("ncols"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"categories[{cat_idx}] requires integer nrows/ncols") from exc
+        figsize_raw = cat.get("figsize")
+        if not isinstance(figsize_raw, (list, tuple)) or len(figsize_raw) != 2:
+            raise ValueError(f"categories[{cat_idx}].figsize must be a 2-item list like [14, 10]")
+        try:
+            figsize = (float(figsize_raw[0]), float(figsize_raw[1]))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"categories[{cat_idx}].figsize must be numeric") from exc
+
+        subplots_raw = cat.get("subplots")
+        if not isinstance(subplots_raw, list) or not subplots_raw:
+            raise ValueError(f"categories[{cat_idx}].subplots must be a non-empty list")
+        subplots: list[tuple[int, int, object, str]] = []
+        for sp_idx, sp in enumerate(subplots_raw):
+            if not isinstance(sp, dict):
+                raise ValueError(f"categories[{cat_idx}].subplots[{sp_idx}] must be a mapping")
+            try:
+                r = int(sp.get("row"))
+                c = int(sp.get("col"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"subplots[{sp_idx}] requires integer row/col") from exc
+            ylabel = str(sp.get("ylabel", "")).strip()
+            if not ylabel:
+                raise ValueError(f"subplots[{sp_idx}] requires 'ylabel'")
+            series_raw = sp.get("series")
+            if not isinstance(series_raw, list) or not series_raw:
+                raise ValueError(f"subplots[{sp_idx}].series must be a non-empty list")
+
+            series_specs: list[tuple[str, str, str]] = []
+            for ser_idx, ser in enumerate(series_raw):
+                if not isinstance(ser, dict) or "col" not in ser:
+                    raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}] must be a mapping with 'col'")
+                col_name = str(ser.get("col", "")).strip()
+                if not col_name:
+                    raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}].col must be a non-empty string")
+                side = str(ser.get("side", "")).strip()
+                linestyle = str(ser.get("linestyle", "-")).strip() or "-"
+                series_specs.append((col_name, side, linestyle))
+
+            if len(series_specs) == 1 and not series_specs[0][1] and series_specs[0][2] == "-":
+                col_spec: object = series_specs[0][0]
+            else:
+                col_spec = series_specs
+            subplots.append((r, c, col_spec, ylabel))
+
+        categories.append(
+            {
+                "tag": tag,
+                "title": title,
+                "nrows": nrows,
+                "ncols": ncols,
+                "figsize": figsize,
+                "subplots": subplots,
+            }
+        )
+
+    return out_dir, categories
 
 
 def load_data(csv_path: Path) -> pl.DataFrame:
@@ -450,6 +523,8 @@ def split_trials_by_step(trials: list[pl.DataFrame]) -> tuple[list[pl.DataFrame]
 def plot_subject_category(
     subject_df: pl.DataFrame,
     subject_value: str,
+    velocity_value: object | None,
+    group_by: str,
     spec: dict,
     out_dir: Path,
     sample: bool,
@@ -510,15 +585,28 @@ def plot_subject_category(
 
     mode_label = "sample" if sample else "all"
     group_label = "all trials" if step_group == "all" else f"{step_group} only"
-    fig.suptitle(
-        f"{spec['title']} | {group_label} | subject overlay ({trial_count} subject-velocity-trial lines) | {mode_label}",
-        fontsize=11,
-        fontweight="bold",
-    )
+    if group_by == "subject":
+        suptitle = (
+            f"{spec['title']} | {group_label} | subject overlay ({trial_count} subject-velocity-trial lines) | {mode_label}"
+        )
+    else:
+        velocity_token = "unknown"
+        if velocity_value is not None:
+            velocity_token = format_velocity(velocity_value)
+        suptitle = f"{spec['title']} | velocity={velocity_token} | {group_label} | trial overlay ({trial_count} trial lines) | {mode_label}"
+    fig.suptitle(suptitle, fontsize=11, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     suffix = f"__{step_group}" if step_group != "all" else ""
-    out_name = f"{spec['tag']}__subject-{safe_name(subject_value)}{suffix}__{mode_label}.png"
+    if group_by == "subject":
+        out_name = f"{spec['tag']}__subject-{safe_name(subject_value)}{suffix}__{mode_label}.png"
+    else:
+        velocity_token = "unknown"
+        if velocity_value is not None:
+            velocity_token = format_velocity(velocity_value)
+        out_name = (
+            f"{spec['tag']}__subject-{safe_name(subject_value)}__velocity-{safe_name(velocity_token)}{suffix}__{mode_label}.png"
+        )
     out_path = out_dir / out_name
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -527,10 +615,26 @@ def plot_subject_category(
 
 def main() -> None:
     args = parse_args()
+    config_out_dir, categories = load_plot_specs(args.config)
+    if args.out_dir is None:
+        args.out_dir = config_out_dir if config_out_dir is not None else DEFAULT_OUT
+    args.out_dir = resolve_repo_path(args.out_dir)
+    args.csv = resolve_repo_path(args.csv)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading data: {args.csv}")
     df = load_data(args.csv)
+    only_subjects = parse_csv_list(args.only_subjects)
+    if only_subjects:
+        df = df.filter(pl.col("subject").is_in(only_subjects))
+        print(f"Filter: only_subjects={only_subjects} (remaining rows={df.height})")
+    only_velocities = parse_float_list(args.only_velocities)
+    if only_velocities:
+        df = df.filter(pl.col("velocity").is_in(only_velocities))
+        print(f"Filter: only_velocities={only_velocities} (remaining rows={df.height})")
+
+    if df.height == 0:
+        raise ValueError("No rows to plot after applying filters.")
     x_grid = build_common_x_grid(df, args.resample_hz)
     if args.x_norm01:
         x_ticks = build_normalized_xticks(args.xtick_norm)
@@ -543,13 +647,15 @@ def main() -> None:
         x_axis_label = "Time from platform onset (s)"
         normalize_per_trial = False
     trial_count = df.select(TRIAL_KEYS).unique().height
-    subjects = df.select("subject").unique().sort("subject").get_column("subject").to_list()
-
+    subjects_all = df.select("subject").unique().sort("subject").get_column("subject").to_list()
     if args.sample:
-        subjects = subjects[: max(1, args.sample_subjects)]
+        subjects = subjects_all[: max(1, args.sample_subjects)]
+    else:
+        subjects = subjects_all
 
     print(f"Rows: {df.height}, Trials: {trial_count}, Subjects to render: {len(subjects)}")
     print(f"Mode: {'sample' if args.sample else 'all'}")
+    print(f"Grouping: {args.group_by}")
     print(
         "Common x-axis range: "
         f"[{x_grid[0]:.3f}, {x_grid[-1]:.3f}] sec "
@@ -573,14 +679,35 @@ def main() -> None:
             f"step={step_trial_count}, nonstep={nonstep_trial_count} (criterion: step_onset_local non-null)"
         )
 
-    for subject_value in subjects:
-        subject_df = df.filter(pl.col("subject") == subject_value)
-        for spec in CATEGORIES:
-            if args.separate_step_nonstep:
-                for step_group in ["step", "nonstep"]:
+    if args.group_by == "subject":
+        for subject_value in subjects:
+            subject_df = df.filter(pl.col("subject") == subject_value)
+            for spec in categories:
+                if args.separate_step_nonstep:
+                    for step_group in ["step", "nonstep"]:
+                        out_path = plot_subject_category(
+                            subject_df=subject_df,
+                            subject_value=str(subject_value),
+                            velocity_value=None,
+                            group_by=args.group_by,
+                            spec=spec,
+                            out_dir=args.out_dir,
+                            sample=args.sample,
+                            dpi=args.dpi,
+                            x_plot=x_plot,
+                            x_ticks=x_ticks,
+                            x_axis_label=x_axis_label,
+                            normalize_per_trial=normalize_per_trial,
+                            step_group=step_group,
+                        )
+                        if out_path is not None:
+                            print(f"Saved: {out_path}")
+                else:
                     out_path = plot_subject_category(
                         subject_df=subject_df,
                         subject_value=str(subject_value),
+                        velocity_value=None,
+                        group_by=args.group_by,
                         spec=spec,
                         out_dir=args.out_dir,
                         sample=args.sample,
@@ -589,26 +716,62 @@ def main() -> None:
                         x_ticks=x_ticks,
                         x_axis_label=x_axis_label,
                         normalize_per_trial=normalize_per_trial,
-                        step_group=step_group,
+                        step_group="all",
                     )
                     if out_path is not None:
                         print(f"Saved: {out_path}")
+    else:
+        if args.sample and args.sample_velocities <= 0:
+            raise ValueError("--sample_velocities must be >= 1 (sample mode)")
+        for subject_value in subjects:
+            subject_df_all = df.filter(pl.col("subject") == subject_value)
+            velocities_all = (
+                subject_df_all.select("velocity").unique().sort("velocity").get_column("velocity").to_list()
+            )
+            if args.sample:
+                velocities = velocities_all[: max(1, args.sample_velocities)]
             else:
-                out_path = plot_subject_category(
-                    subject_df=subject_df,
-                    subject_value=str(subject_value),
-                    spec=spec,
-                    out_dir=args.out_dir,
-                    sample=args.sample,
-                    dpi=args.dpi,
-                    x_plot=x_plot,
-                    x_ticks=x_ticks,
-                    x_axis_label=x_axis_label,
-                    normalize_per_trial=normalize_per_trial,
-                    step_group="all",
-                )
-                if out_path is not None:
-                    print(f"Saved: {out_path}")
+                velocities = velocities_all
+            for velocity_value in velocities:
+                group_df = subject_df_all.filter(pl.col("velocity") == velocity_value)
+                for spec in categories:
+                    if args.separate_step_nonstep:
+                        for step_group in ["step", "nonstep"]:
+                            out_path = plot_subject_category(
+                                subject_df=group_df,
+                                subject_value=str(subject_value),
+                                velocity_value=velocity_value,
+                                group_by=args.group_by,
+                                spec=spec,
+                                out_dir=args.out_dir,
+                                sample=args.sample,
+                                dpi=args.dpi,
+                                x_plot=x_plot,
+                                x_ticks=x_ticks,
+                                x_axis_label=x_axis_label,
+                                normalize_per_trial=normalize_per_trial,
+                                step_group=step_group,
+                            )
+                            if out_path is not None:
+                                print(f"Saved: {out_path}")
+                    else:
+                        out_path = plot_subject_category(
+                            subject_df=group_df,
+                            subject_value=str(subject_value),
+                            velocity_value=velocity_value,
+                            group_by=args.group_by,
+                            spec=spec,
+                            out_dir=args.out_dir,
+                            sample=args.sample,
+                            dpi=args.dpi,
+                            x_plot=x_plot,
+                            x_ticks=x_ticks,
+                            x_axis_label=x_axis_label,
+                            normalize_per_trial=normalize_per_trial,
+                            step_group="all",
+                        )
+                        if out_path is not None:
+                            print(f"Saved: {out_path}")
 
     print("Done.")
 

@@ -1,0 +1,305 @@
+plot_grid_timeseries:
+  out_dir: output/figures/grid_timeseries
+  categories:
+    - tag: mos_bos
+      title: "MOS / BOS"
+      nrows: 2
+      ncols: 2
+      figsize: [11, 8]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "MOS minDist (signed)"
+          series:
+            - col: MOS_minDist_signed
+        - row: 0
+          col: 1
+          ylabel: "MOS AP"
+          series:
+            - col: MOS_AP_dir
+        - row: 1
+          col: 0
+          ylabel: "MOS ML"
+          series:
+            - col: MOS_ML_dir
+        - row: 1
+          col: 1
+          ylabel: "BOS area"
+          series:
+            - col: BOS_area
+
+    - tag: com_family
+      title: "COM / vCOM / xCOM"
+      nrows: 3
+      ncols: 3
+      figsize: [14, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "COM X"
+          series:
+            - col: COM_X
+        - row: 0
+          col: 1
+          ylabel: "COM Y"
+          series:
+            - col: COM_Y
+        - row: 0
+          col: 2
+          ylabel: "COM Z"
+          series:
+            - col: COM_Z
+        - row: 1
+          col: 0
+          ylabel: "vCOM X"
+          series:
+            - col: vCOM_X
+        - row: 1
+          col: 1
+          ylabel: "vCOM Y"
+          series:
+            - col: vCOM_Y
+        - row: 1
+          col: 2
+          ylabel: "vCOM Z"
+          series:
+            - col: vCOM_Z
+        - row: 2
+          col: 0
+          ylabel: "xCOM X"
+          series:
+            - col: xCOM_X
+        - row: 2
+          col: 1
+          ylabel: "xCOM Y"
+          series:
+            - col: xCOM_Y
+        - row: 2
+          col: 2
+          ylabel: "xCOM Z"
+          series:
+            - col: xCOM_Z
+
+    - tag: joint_angles_lower
+      title: "Joint Angles - Lower Extremity"
+      nrows: 3
+      ncols: 3
+      figsize: [14, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Hip X (deg)"
+          series:
+            - col: Hip_L_X_deg
+              side: L
+              linestyle: "-"
+            - col: Hip_R_X_deg
+              side: R
+              linestyle: "--"
+        - row: 0
+          col: 1
+          ylabel: "Hip Y (deg)"
+          series:
+            - col: Hip_L_Y_deg
+              side: L
+              linestyle: "-"
+            - col: Hip_R_Y_deg
+              side: R
+              linestyle: "--"
+        - row: 0
+          col: 2
+          ylabel: "Hip Z (deg)"
+          series:
+            - col: Hip_L_Z_deg
+              side: L
+              linestyle: "-"
+            - col: Hip_R_Z_deg
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 0
+          ylabel: "Knee X (deg)"
+          series:
+            - col: Knee_L_X_deg
+              side: L
+              linestyle: "-"
+            - col: Knee_R_X_deg
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 1
+          ylabel: "Knee Y (deg)"
+          series:
+            - col: Knee_L_Y_deg
+              side: L
+              linestyle: "-"
+            - col: Knee_R_Y_deg
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 2
+          ylabel: "Knee Z (deg)"
+          series:
+            - col: Knee_L_Z_deg
+              side: L
+              linestyle: "-"
+            - col: Knee_R_Z_deg
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 0
+          ylabel: "Ankle X (deg)"
+          series:
+            - col: Ankle_L_X_deg
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_X_deg
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 1
+          ylabel: "Ankle Y (deg)"
+          series:
+            - col: Ankle_L_Y_deg
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_Y_deg
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 2
+          ylabel: "Ankle Z (deg)"
+          series:
+            - col: Ankle_L_Z_deg
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_Z_deg
+              side: R
+              linestyle: "--"
+
+    - tag: joint_angles_upper
+      title: "Joint Angles - Trunk / Neck"
+      nrows: 2
+      ncols: 3
+      figsize: [14, 7]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Trunk X (deg)"
+          series:
+            - col: Trunk_X_deg
+        - row: 0
+          col: 1
+          ylabel: "Trunk Y (deg)"
+          series:
+            - col: Trunk_Y_deg
+        - row: 0
+          col: 2
+          ylabel: "Trunk Z (deg)"
+          series:
+            - col: Trunk_Z_deg
+        - row: 1
+          col: 0
+          ylabel: "Neck X (deg)"
+          series:
+            - col: Neck_X_deg
+        - row: 1
+          col: 1
+          ylabel: "Neck Y (deg)"
+          series:
+            - col: Neck_Y_deg
+        - row: 1
+          col: 2
+          ylabel: "Neck Z (deg)"
+          series:
+            - col: Neck_Z_deg
+
+    - tag: ankle_torque_internal
+      title: "Ankle Torque (Internal)"
+      nrows: 3
+      ncols: 3
+      figsize: [14, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Mid int X (Nm)"
+          series:
+            - col: AnkleTorqueMid_int_X_Nm
+        - row: 0
+          col: 1
+          ylabel: "Mid int Y (Nm)"
+          series:
+            - col: AnkleTorqueMid_int_Y_Nm
+        - row: 0
+          col: 2
+          ylabel: "Mid int Z (Nm)"
+          series:
+            - col: AnkleTorqueMid_int_Z_Nm
+        - row: 1
+          col: 0
+          ylabel: "L int X (Nm)"
+          series:
+            - col: AnkleTorqueL_int_X_Nm
+        - row: 1
+          col: 1
+          ylabel: "L int Y (Nm)"
+          series:
+            - col: AnkleTorqueL_int_Y_Nm
+        - row: 1
+          col: 2
+          ylabel: "L int Z (Nm)"
+          series:
+            - col: AnkleTorqueL_int_Z_Nm
+        - row: 2
+          col: 0
+          ylabel: "R int X (Nm)"
+          series:
+            - col: AnkleTorqueR_int_X_Nm
+        - row: 2
+          col: 1
+          ylabel: "R int Y (Nm)"
+          series:
+            - col: AnkleTorqueR_int_Y_Nm
+        - row: 2
+          col: 2
+          ylabel: "R int Z (Nm)"
+          series:
+            - col: AnkleTorqueR_int_Z_Nm
+
+    - tag: grf_cop
+      title: "GRF / COP"
+      nrows: 2
+      ncols: 3
+      figsize: [14, 7]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "GRF X (N)"
+          series:
+            - col: GRF_X_N
+        - row: 0
+          col: 1
+          ylabel: "GRF Y (N)"
+          series:
+            - col: GRF_Y_N
+        - row: 0
+          col: 2
+          ylabel: "GRF Z (N)"
+          series:
+            - col: GRF_Z_N
+        - row: 1
+          col: 0
+          ylabel: "COP X (m)"
+          series:
+            - col: COP_X_m
+        - row: 1
+          col: 1
+          ylabel: "COP Y (m)"
+          series:
+            - col: COP_Y_m
+        - row: 1
+          col: 2
+          ylabel: "COP Z (m)"
+          series:
+            - col: COP_Z_m
+
