@@ -2,12 +2,3 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# Generated analysis outputs
-output/
-
-# Archived development artifacts
-Archive/
-
-# Claude tooling (redundant with `.codex/` skills in this repo)
-.claude/
