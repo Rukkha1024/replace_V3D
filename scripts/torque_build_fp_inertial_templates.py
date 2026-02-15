@@ -30,7 +30,7 @@ Run
 conda run -n module python scripts/torque_build_fp_inertial_templates.py \
   --unload_data_dir /path/to/Archive/unload_data \
   --timing_xlsx /path/to/Archive/unload_data/FP_platform_on-offset.xlsx \
-  --out_npz assets/fp_inertial_templates.npz
+  --out_npz src/replace_v3d/torque/assets/fp_inertial_templates.npz
 """
 
 import argparse
@@ -363,7 +363,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--out_npz",
-        default="assets/fp_inertial_templates.npz",
+        default="src/replace_v3d/torque/assets/fp_inertial_templates.npz",
         help="Output .npz path (small; can be committed)",
     )
     args = ap.parse_args()

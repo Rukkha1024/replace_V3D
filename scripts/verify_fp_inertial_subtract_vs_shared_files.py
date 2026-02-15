@@ -179,7 +179,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--templates_npz",
-        default="assets/fp_inertial_templates.npz",
+        default="src/replace_v3d/torque/assets/fp_inertial_templates.npz",
         help="Templates NPZ built by scripts/torque_build_fp_inertial_templates.py",
     )
     ap.add_argument(

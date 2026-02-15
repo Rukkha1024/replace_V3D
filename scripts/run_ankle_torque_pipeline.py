@@ -57,7 +57,7 @@ def main() -> None:
     # Forceplate inertial subtract (Stage01-compatible)
     ap.add_argument(
         "--fp_inertial_templates",
-        default="assets/fp_inertial_templates.npz",
+        default="src/replace_v3d/torque/assets/fp_inertial_templates.npz",
         help="NPZ created by scripts/torque_build_fp_inertial_templates.py (repo-relative OK)",
     )
     ap.add_argument(
