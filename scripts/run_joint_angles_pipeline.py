@@ -12,9 +12,9 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.cli.trial_resolve import resolve_velocity_trial
-from replace_v3d.events import load_trial_events, parse_trial_from_filename
+from replace_v3d.io.events_excel import load_trial_events, parse_trial_from_filename
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 

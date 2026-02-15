@@ -13,8 +13,8 @@ import _bootstrap
 _bootstrap.ensure_src_on_path()
 _REPO_ROOT = _bootstrap.REPO_ROOT
 
-from replace_v3d.angles import compute_lower_limb_angles
-from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
+from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.cli.batch_utils import append_rows_to_csv, iter_c3d_files
 from replace_v3d.com import (
     COMModelParams,
@@ -23,7 +23,7 @@ from replace_v3d.com import (
     compute_xcom,
     derivative,
 )
-from replace_v3d.events import (
+from replace_v3d.io.events_excel import (
     load_subject_body_mass_kg,
     load_subject_leg_length_cm,
     load_trial_events,

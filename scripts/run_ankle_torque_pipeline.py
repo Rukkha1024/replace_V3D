@@ -17,10 +17,10 @@ try:
 except Exception:  # pragma: no cover
     pl = None
 
-from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.com import compute_joint_centers
-from replace_v3d.events import load_subject_body_mass_kg, load_trial_events, parse_trial_from_filename
+from replace_v3d.io.events_excel import load_subject_body_mass_kg, load_trial_events, parse_trial_from_filename
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_lab
 from replace_v3d.torque.forceplate import (

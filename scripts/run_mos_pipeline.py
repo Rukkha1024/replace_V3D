@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from replace_v3d.angles import compute_lower_limb_angles
-from replace_v3d.c3d_reader import read_c3d_points
+from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
+from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.com import COMModelParams, compute_whole_body_com, compute_xcom, derivative
-from replace_v3d.events import load_trial_events, parse_trial_from_filename
+from replace_v3d.io.events_excel import load_trial_events, parse_trial_from_filename
 from replace_v3d.mos import compute_mos_timeseries
 
 

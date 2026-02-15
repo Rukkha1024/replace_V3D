@@ -13,7 +13,7 @@ _SRC_ROOT = _REPO_ROOT / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from replace_v3d.events import (
+from replace_v3d.io.events_excel import (
     load_subject_leg_length_cm,
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
