@@ -36,6 +36,10 @@ from replace_v3d.torque.forceplate import (
     extract_platform_wrenches_lab,
     read_force_platforms,
 )
+from replace_v3d.torque.forceplate_inertial import (
+    apply_forceplate_inertial_subtract,
+    load_forceplate_inertial_templates,
+)
 
 
 def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
@@ -164,13 +168,20 @@ def _make_timeseries_dataframe(
 def _compute_ankle_torque_payload(
     *,
     c3d_file: Path,
+    velocity: float,
     points: np.ndarray,
     labels: list[str],
     rate_hz: float,
     end_frame: int,
     platform_onset_local: int,
+    platform_offset_local: int,
     force_plate_index_1based: int | None,
     body_mass_kg: float | None,
+    fp_inertial_templates: dict[int, Any] | None,
+    fp_inertial_policy: str,
+    fp_inertial_qc_fz_threshold_n: float,
+    fp_inertial_qc_margin_m: float,
+    fp_inertial_qc_strict: bool,
 ) -> tuple[int, dict[str, np.ndarray]]:
     fp_coll = read_force_platforms(c3d_file)
     analog_avg = fp_coll.analog.values
@@ -188,10 +199,35 @@ def _compute_ankle_torque_payload(
     else:
         fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
 
-    F_lab, M_lab = extract_platform_wrenches_lab(analog_avg, fp)
+    analog_used = analog_avg
+    if fp_inertial_templates is not None:
+        onset0 = int(platform_onset_local) - 1
+        offset0 = int(platform_offset_local) - 1
+        analog_used, inertial_info = apply_forceplate_inertial_subtract(
+            analog_avg,
+            fp,
+            velocity=float(velocity),
+            onset0=int(onset0),
+            offset0=int(offset0),
+            templates=fp_inertial_templates,
+            missing_policy=str(fp_inertial_policy),
+            qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold_n),
+            qc_margin_m=float(fp_inertial_qc_margin_m),
+        )
+        if inertial_info.get("qc_failed"):
+            msg = (
+                "[WARN] Forceplate inertial subtract QC failed "
+                f"for {c3d_file.name} (COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
+                "Check axis transform / templates."
+            )
+            if fp_inertial_qc_strict:
+                raise ValueError(msg)
+            print(msg)
+
+    F_lab, M_lab = extract_platform_wrenches_lab(analog_used, fp)
     idx = fp.channel_indices_0based.astype(int)
-    F_plate = analog_avg[:, idx[0:3]]
-    M_plate = analog_avg[:, idx[3:6]]
+    F_plate = analog_used[:, idx[0:3]]
+    M_plate = analog_used[:, idx[3:6]]
     COP_lab = _compute_cop_lab(
         F_plate=F_plate,
         M_plate=M_plate,
@@ -300,6 +336,39 @@ def main() -> None:
         help="Optional force plate index (1-based). If omitted, auto-select by |Fz|.",
     )
     parser.add_argument(
+        "--fp_inertial_templates",
+        default="assets/fp_inertial_templates.npz",
+        help="NPZ created by scripts/torque_build_fp_inertial_templates.py (repo-relative OK)",
+    )
+    parser.add_argument(
+        "--fp_inertial_policy",
+        choices=["skip", "nearest", "interpolate"],
+        default="skip",
+        help="If template for this velocity is missing: skip | nearest | interpolate",
+    )
+    parser.add_argument(
+        "--no_fp_inertial_subtract",
+        action="store_true",
+        help="Disable Stage01-style inertial subtraction (use raw C3D forceplate).",
+    )
+    parser.add_argument(
+        "--fp_inertial_qc_fz_threshold",
+        type=float,
+        default=20.0,
+        help="QC threshold (N) for COP-in-bounds check",
+    )
+    parser.add_argument(
+        "--fp_inertial_qc_margin_m",
+        type=float,
+        default=0.0,
+        help="QC margin (m) added to plate bounds when checking COP",
+    )
+    parser.add_argument(
+        "--fp_inertial_qc_strict",
+        action="store_true",
+        help="If QC fails after subtraction, raise instead of warning.",
+    )
+    parser.add_argument(
         "--skip_unmatched",
         action="store_true",
         help="Skip subject/event matching failures and continue batch processing (torque forceplate failures still abort).",
@@ -347,6 +416,16 @@ def main() -> None:
     header_written = False
     processed = 0
     skipped = 0
+
+    fp_inertial_templates: dict[int, Any] | None = None
+    if not args.no_fp_inertial_subtract:
+        tmpl_path = Path(args.fp_inertial_templates)
+        if not tmpl_path.is_absolute():
+            tmpl_path = _REPO_ROOT / tmpl_path
+        if tmpl_path.exists():
+            fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
+        else:
+            print(f"[WARN] Inertial templates not found: {tmpl_path} (skipping inertial subtract)")
 
     for c3d_file in c3d_files:
         # Subject/token + events matching can be skipped. Torque (forceplate) must abort.
@@ -399,13 +478,20 @@ def main() -> None:
         try:
             force_plate_used, torque_payload = _compute_ankle_torque_payload(
                 c3d_file=c3d_file,
+                velocity=float(velocity),
                 points=c3d.points,
                 labels=c3d.labels,
                 rate_hz=rate_hz,
                 end_frame=end_frame,
                 platform_onset_local=int(events.platform_onset_local),
+                platform_offset_local=int(events.platform_offset_local),
                 force_plate_index_1based=None if args.force_plate is None else int(args.force_plate),
                 body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
+                fp_inertial_templates=fp_inertial_templates,
+                fp_inertial_policy=str(args.fp_inertial_policy),
+                fp_inertial_qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
+                fp_inertial_qc_margin_m=float(args.fp_inertial_qc_margin_m),
+                fp_inertial_qc_strict=bool(args.fp_inertial_qc_strict),
             )
         except Exception as exc:
             raise RuntimeError(f"Forceplate/torque extraction failed for '{c3d_file.name}': {exc}") from exc
