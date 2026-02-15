@@ -1,0 +1,406 @@
+diff --git a/scripts/run_batch_all_timeseries_csv.py b/scripts/run_batch_all_timeseries_csv.py
+index 09d37c9..5c0b0f8 100644
+--- a/scripts/run_batch_all_timeseries_csv.py
++++ b/scripts/run_batch_all_timeseries_csv.py
+@@ -59,6 +59,7 @@ def _make_timeseries_dataframe(
+     vCOM: np.ndarray,
+     xCOM: np.ndarray,
+     mos: Any,
+     angles: Any,
+     angles_ana0: dict[str, np.ndarray] | None = None,
++    angles_anat: dict[str, np.ndarray] | None = None,
+     torque_payload: dict[str, np.ndarray],
+ ) -> pd.DataFrame:
+@@ -131,6 +132,12 @@ def _make_timeseries_dataframe(
+         for k, v in angles_ana0.items():
+             payload[k] = v
++
++    # Optional: anatomical-convention joint angles (sign-unified only).
++    # These columns get suffix `_anat` to avoid breaking existing schemas.
++    if angles_anat is not None:
++        for k, v in angles_anat.items():
++            payload[k] = v
+ 
+     for key, values in torque_payload.items():
+         payload[key] = values
+@@ -363,6 +370,16 @@ def main() -> None:
+     parser.add_argument(
+         "--angles_ana0",
+         action="store_true",
+         help=(
+             "Also export analysis-friendly joint angles with suffix `_ana0`: "
+             "LEFT Y/Z sign-unified + quiet-standing baseline removed (frames 1..11)."
+         ),
+     )
++    parser.add_argument(
++        "--angles_anat",
++        action="store_true",
++        help=(
++            "Also export anatomical-convention joint angles with suffix `_anat`: "
++            "flip LEFT Y/Z only (no baseline subtraction)."
++        ),
++    )
+     parser.add_argument(
+         "--max_files",
+         type=int,
+@@ -490,6 +507,57 @@ def main() -> None:
+ 
+             angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+ 
+             angles_ana0_payload: dict[str, np.ndarray] | None = None
+             if args.angles_ana0:
+@@ -537,6 +605,56 @@ def main() -> None:
+                 angle_cols = [c for c in df_pp.columns if c.endswith("_deg")]
+                 angles_ana0_payload = {f"{c}_ana0": df_pp[c].to_numpy() for c in angle_cols}
++
++            angles_anat_payload: dict[str, np.ndarray] | None = None
++            if args.angles_anat:
++                # Build an angles-only DF and apply sign-unification only.
++                mocap_frames = np.arange(1, end_frame + 1, dtype=int)
++                df_angles = pl.DataFrame(
++                    {
++                        "MocapFrame": mocap_frames,
++                        "Hip_L_X_deg": angles.hip_L_X,
++                        "Hip_L_Y_deg": angles.hip_L_Y,
++                        "Hip_L_Z_deg": angles.hip_L_Z,
++                        "Hip_R_X_deg": angles.hip_R_X,
++                        "Hip_R_Y_deg": angles.hip_R_Y,
++                        "Hip_R_Z_deg": angles.hip_R_Z,
++                        "Knee_L_X_deg": angles.knee_L_X,
++                        "Knee_L_Y_deg": angles.knee_L_Y,
++                        "Knee_L_Z_deg": angles.knee_L_Z,
++                        "Knee_R_X_deg": angles.knee_R_X,
++                        "Knee_R_Y_deg": angles.knee_R_Y,
++                        "Knee_R_Z_deg": angles.knee_R_Z,
++                        "Ankle_L_X_deg": angles.ankle_L_X,
++                        "Ankle_L_Y_deg": angles.ankle_L_Y,
++                        "Ankle_L_Z_deg": angles.ankle_L_Z,
++                        "Ankle_R_X_deg": angles.ankle_R_X,
++                        "Ankle_R_Y_deg": angles.ankle_R_Y,
++                        "Ankle_R_Z_deg": angles.ankle_R_Z,
++                        "Trunk_X_deg": angles.trunk_X,
++                        "Trunk_Y_deg": angles.trunk_Y,
++                        "Trunk_Z_deg": angles.trunk_Z,
++                        "Neck_X_deg": angles.neck_X,
++                        "Neck_Y_deg": angles.neck_Y,
++                        "Neck_Z_deg": angles.neck_Z,
++                    }
++                )
++
++                df_pp_anat, _meta_anat = postprocess_joint_angles(
++                    df_angles,
++                    frame_col="MocapFrame",
++                    unify_lr_sign=True,
++                    baseline_frames=None,
++                )
++                angle_cols = [c for c in df_pp_anat.columns if c.endswith("_deg")]
++                angles_anat_payload = {f"{c}_anat": df_pp_anat[c].to_numpy() for c in angle_cols}
+ 
+             df_ts = _make_timeseries_dataframe(
+                 subject=subject,
+                 velocity=velocity,
+@@ -547,6 +665,7 @@ def main() -> None:
+                 xCOM=xCOM,
+                 mos=mos,
+                 angles=angles,
+                 angles_ana0=angles_ana0_payload,
++                angles_anat=angles_anat_payload,
+                 torque_payload=torque_payload,
+             )
+ 
+diff --git a/scripts/run_joint_angles_pipeline.py b/scripts/run_joint_angles_pipeline.py
+index d3d5ab9..65dc6f3 100644
+--- a/scripts/run_joint_angles_pipeline.py
++++ b/scripts/run_joint_angles_pipeline.py
+@@ -108,6 +108,15 @@ def main() -> None:
+     df_pl_ana0, meta_pp = postprocess_joint_angles(
+         df_pl,
+         frame_col="Frame",
+         unify_lr_sign=True,
+         baseline_frames=(1, 11),
+     )
++
++    # ---------------------------------------------------------------------
++    # Anatomical convention (Visual3D-style presentation):
++    # flip LEFT Y/Z only so that ab/adduction and axial rotation have
++    # consistent sign meaning between left and right.
++    # No baseline subtraction in this export.
++    # ---------------------------------------------------------------------
++    df_pl_anat, meta_anat = postprocess_joint_angles(
++        df_pl, frame_col="Frame", unify_lr_sign=True, baseline_frames=None
++    )
+@@ -118,6 +127,7 @@ def main() -> None:
+ 
+     # Post-processed outputs (extra; safe for analysis but not for MD5 validation)
+     out_csv_ana0 = out_dir / f"{c3d_path.stem}_JOINT_ANGLES_preStep_ana0.csv"
++    out_csv_anat = out_dir / f"{c3d_path.stem}_JOINT_ANGLES_preStep_anat.csv"
+@@ -132,6 +142,10 @@ def main() -> None:
+     # Post-processed CSV (same schema, but sign-unified + baseline-subtracted)
+     df_ana0 = df_pl_ana0.to_pandas()
+     df_ana0.to_csv(out_csv_ana0, index=False)
++
++    # Anatomical convention CSV (sign-unified only)
++    df_anat = df_pl_anat.to_pandas()
++    df_anat.to_csv(out_csv_anat, index=False)
+@@ -150,6 +164,7 @@ def main() -> None:
+     with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
+         df.to_excel(writer, sheet_name="timeseries_preStep", index=False)
+         df_ana0.to_excel(writer, sheet_name="timeseries_preStep_ana0", index=False)
++        df_anat.to_excel(writer, sheet_name="timeseries_preStep_anat", index=False)
+         pl.DataFrame([meta]).to_pandas().to_excel(writer, sheet_name="meta", index=False)
+         pl.DataFrame([meta_pp.__dict__]).to_pandas().to_excel(
+             writer, sheet_name="meta_postprocess", index=False
+         )
++        pl.DataFrame([meta_anat.__dict__]).to_pandas().to_excel(
++            writer, sheet_name="meta_postprocess_anat", index=False
++        )
+         pl.DataFrame([vars(events)]).to_pandas().to_excel(writer, sheet_name="events", index=False)
+ 
+     print(f"[OK] Saved: {out_csv}")
+     print(f"[OK] Saved: {out_csv_ana0}")
++    print(f"[OK] Saved: {out_csv_anat}")
+     print(f"[OK] Saved: {out_xlsx}")
+ 
+
+diff --git a/JOINT_ANGLE_CONVENTIONS.md b/JOINT_ANGLE_CONVENTIONS.md
+new file mode 100644
+index 0000000..f7c2d2f
+--- /dev/null
++++ b/JOINT_ANGLE_CONVENTIONS.md
+@@ -0,0 +1,270 @@
++# Joint angle conventions (raw Visual3D-like vs anatomical)
++
++This repo computes 3D joint angles using a Visual3D-like workflow:
++
++* Each segment gets a local coordinate system (LCS / SCS)
++* The distal segment orientation is expressed relative to the proximal segment
++* Euler/Cardan angles are extracted using an **intrinsic XYZ** sequence
++
++Because Visual3D rigidly follows the **Right Hand Rule**, the default left/right
++sign convention for some DOFs is not symmetric. In practice, many Visual3D
++users flip the **left** Y/Z components when presenting data.
++
++This document is the **DOF definition sheet** for the joint-angle outputs.
++
++---
++
++## Outputs
++
++The joint-angle pipeline can produce three files (same columns, different conventions):
++
++1. `*_JOINT_ANGLES_preStep.csv`
++   * **Raw Visual3D-like** (RHR) output.
++   * Use for strict validation / MD5 matching.
++
++2. `*_JOINT_ANGLES_preStep_anat.csv`
++   * **Anatomical presentation** convention (left/right sign unified for Y/Z).
++   * Implements the common Visual3D practice: **negate LEFT Y and Z**.
++
++3. `*_JOINT_ANGLES_preStep_ana0.csv`
++   * Same as `_anat`, plus **quiet-standing baseline subtraction**.
++   * Baseline window: **frames 1..11** (inclusive) == python indices `[0..10]`.
++
++---
++
++## How angles are computed (math)
++
++### Segment frames
++
++Each segment frame is a 3×3 matrix `R_seg` whose **columns** are the segment unit axes
++`[X, Y, Z]` expressed in the global coordinate system.
++
++In code, the repo builds all segment frames with the same axis naming:
++
++* **X = +Right**
++* **Y = +Anterior**
++* **Z = +Up / +Proximal**
++
++### Relative rotation
++
++For a joint, with proximal/reference frame `R_ref` and distal frame `R_dist`, the relative
++rotation used for angles is:
++
++`R_rel = R_refᵀ · R_dist`
++
++### Euler extraction
++
++Angles are extracted as **intrinsic XYZ** from `R_rel` (degrees):
++
++* X rotation: about reference X
++* Y rotation: about a floating Y (after X)
++* Z rotation: about the distal Z (after X,Y)
++
++This matches the repo metadata string:
++"Intrinsic XYZ (Visual3D-like: reference X, floating Y, non-reference Z)".
++
++---
++
++## Segment coordinate system definitions (what the axes mean)
++
++This is the practical definition used in `build_segment_frames()`.
++
++### Pelvis
++
++* Origin: midpoint of LASI/RASI
++* X: LASI → RASI (right)
++* Y: midPSIS → ASIS-midpoint (anterior)
++* Z: right-handed completion
++
++### Thigh (L/R)
++
++* Z: knee → hip (proximal)
++* X: constructed from knee marker and medial marker (`LShin_3` / `RShin_3`) with a
++  **right-hint** so that X always points to global +Right
++* Y: right-handed completion
++
++### Shank (L/R)
++
++* Z: ankle → knee (proximal)
++* X: constructed from ankle marker and medial marker (`LFoot_3` / `RFoot_3`) with a
++  **right-hint** so that X always points to global +Right
++* Y: right-handed completion
++
++### Foot (L/R)
++
++* X: ankle medial-lateral axis (right-hint to global +Right)
++* Y: heel → toe (anterior)
++* Z: right-handed completion
++
++### Thorax (trunk)
++
++* Z: T10 → C7
++* Y: (CLAV/STRN midpoint) minus (C7/T10 midpoint)
++* X: right-hint from LSHO → RSHO
++
++### Head (neck)
++
++* X: LFHD → RFHD
++* Y: (front midpoint) minus (back midpoint)
++* Z: right-handed completion
++
++---
++
++## Joint definitions (proximal, distal)
++
++| Signal group | Distal segment | Proximal/reference segment |
++|---|---|---|
++| Hip | Thigh | Pelvis |
++| Knee | Shank | Thigh |
++| Ankle | Foot | Shank |
++| Trunk | Thorax | Pelvis |
++| Neck | Head | Thorax |
++
++---
++
++## DOF meanings (X/Y/Z)
++
++With the default Visual3D axis naming (Z-up, Y-anterior), Visual3D documents that the
++default Cardan sequence **X-Y-Z** maps to:
++
++1. **X:** Flexion / Extension
++2. **Y:** Abduction / Adduction
++3. **Z:** Axial Rotation
++
++So in this repo:
++
++### Hip (thigh relative to pelvis)
++
++* `Hip_*_X_deg`: hip flexion/extension
++* `Hip_*_Y_deg`: hip abduction/adduction
++* `Hip_*_Z_deg`: hip internal/external rotation
++
++### Knee (shank relative to thigh)
++
++* `Knee_*_X_deg`: knee flexion/extension
++* `Knee_*_Y_deg`: knee ab/ad (varus/valgus style)
++* `Knee_*_Z_deg`: shank axial rotation (int/ext)
++
++### Ankle (foot relative to shank)
++
++Interpretation depends on your preferred anatomical labels, but under the X/Y/Z axes above:
++
++* `Ankle_*_X_deg`: dorsiflexion/plantarflexion (sagittal)
++* `Ankle_*_Y_deg`: inversion/eversion (frontal)
++* `Ankle_*_Z_deg`: foot/shank axial rotation (transverse)
++
++### Trunk (thorax relative to pelvis)
++
++* `Trunk_X_deg`: trunk flexion/extension
++* `Trunk_Y_deg`: lateral bending
++* `Trunk_Z_deg`: axial rotation
++
++### Neck (head relative to thorax)
++
++* `Neck_X_deg`: neck flexion/extension
++* `Neck_Y_deg`: lateral bending
++* `Neck_Z_deg`: axial rotation
++
++---
++
++## Visual3D default sign conventions (raw file)
++
++Visual3D explicitly notes that because it uses the RHR and the left/right medial-lateral
++axis differs, **Y and Z are not sign-symmetric** across limbs.
++
++For the default SCS, Visual3D documents the following positive directions (Hip/Knee):
++
++| Joint | Side | +X | +Y | +Z |
++|---|---|---|---|---|
++| Hip | Left | Flexion | Abduction | External rotation |
++| Hip | Right | Flexion | Adduction | Internal rotation |
++| Knee | Left | Extension | Abduction | External rotation |
++| Knee | Right | Extension | Adduction | Internal rotation |
++
++Visual3D tutorial material also highlights that knee flexion is often seen as a negative
++X-angle under the default convention.
++
++---
++
++## Anatomical presentation convention (`*_anat.csv`)
++
++This repo's `_anat` output applies a single, explicit post-process:
++
++For **Hip/Knee/Ankle** (left side only):
++
++* `*_L_Y_deg = - *_L_Y_deg`
++* `*_L_Z_deg = - *_L_Z_deg`
++
++No baseline subtraction.
++
++### Practical interpretation after `_anat`
++
++After the flip, the intended anatomical meanings become consistent between sides:
++
++* **Y positive:** adduction (both L/R)
++* **Z positive:** internal rotation (both L/R)
++
++X is unchanged (so knee X remains extension-positive unless you add a separate
++post-process).
++
++---
++
++## Baseline-normalized anatomical convention (`*_ana0.csv`)
++
++`*_ana0.csv` starts from the same sign-flipped angles as `_anat`, then subtracts a
++quiet-standing baseline.
++
++* Baseline window: **frames 1..11** (inclusive)
++* For every `*_deg` column:
++  * `angle = angle - mean(angle[1..11])`
++
++This is useful for comparing **Δangles** and removing static offsets due to small SCS
++misalignments.
++
++---
++
++## References (Visual3D)
++
++* Joint Angle documentation (default conventions + sign discussion):
++  https://www.wiki.has-motion.com/doku.php?id=visual3d:documentation:pipeline:model_based_data_commands:joint_angle
++* Right Hand Rule (sign convention):
++  https://www.wiki.has-motion.com/doku.php?id=visual3d:documentation:definitions:right_hand_rule
++* Tutorial 8 (knee sign + common practice to negate left Y/Z for presentation):
++  https://www.yumpu.com/en/document/view/22208776/tutorial-8
++* Joint Rotation matrix background:
++  https://www.wiki.has-motion.com/doku.php?id=visual3d:documentation:pipeline:model_based_data_commands:joint_rotation
++
