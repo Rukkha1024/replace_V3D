@@ -68,7 +68,7 @@ conda run -n module python scripts/run_batch_all_timeseries_csv.py \
 Notes:
 - Torque requires `FORCE_PLATFORM` metadata + analog channels in the C3D.
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
-- Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` + `Time_s` once.
+- Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
 
 ## Quick start (ankle torque)
 

@@ -38,16 +38,6 @@ from replace_v3d.torque.forceplate import (
 )
 
 
-def _format_velocity(velocity: float) -> str:
-    if float(velocity).is_integer():
-        return str(int(velocity))
-    return str(float(velocity))
-
-
-def _build_trial_key(subject: str, velocity: float, trial: int) -> str:
-    return f"{subject}-{_format_velocity(velocity)}-{int(trial)}"
-
-
 def _iter_c3d_files(c3d_dir: Path) -> list[Path]:
     return sorted([path for path in c3d_dir.rglob("*.c3d") if path.is_file()])
 
@@ -87,15 +77,9 @@ def _compute_cop_lab(
 
 def _make_timeseries_dataframe(
     *,
-    c3d_file: Path,
-    subject_token: str,
     subject: str,
     velocity: float,
     trial: int,
-    leg_length_cm: float,
-    body_mass_kg: float | None,
-    force_plate_index_1based: int,
-    rate_hz: float,
     end_frame: int,
     platform_onset_local: int,
     platform_offset_local: int,
@@ -108,8 +92,6 @@ def _make_timeseries_dataframe(
     torque_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     mocap_frames = np.arange(1, end_frame + 1, dtype=int)
-    time_s = (mocap_frames - 1) / rate_hz
-    subject_key = _build_trial_key(subject, velocity, trial)
 
     is_platform_onset = mocap_frames == int(platform_onset_local)
     if step_onset_local is None:
@@ -118,24 +100,15 @@ def _make_timeseries_dataframe(
         is_step_onset = mocap_frames == int(step_onset_local)
 
     frame_count = len(mocap_frames)
-    mass_list: list[float | None] = [None] * frame_count if body_mass_kg is None else [float(body_mass_kg)] * frame_count
     payload: dict[str, Any] = {
-        "subject-velocity-trial": [subject_key] * frame_count,
         "subject": [subject] * frame_count,
         "velocity": [float(velocity)] * frame_count,
         "trial": [int(trial)] * frame_count,
-        "c3d_file": [c3d_file.name] * frame_count,
-        "subject_token": [subject_token] * frame_count,
-        "rate_hz": [float(rate_hz)] * frame_count,
-        "leg_length_cm": [float(leg_length_cm)] * frame_count,
-        "body_mass_kg": mass_list,
-        "force_plate_index_1based": [int(force_plate_index_1based)] * frame_count,
         "platform_onset_local": [int(platform_onset_local)] * frame_count,
         "platform_offset_local": [int(platform_offset_local)] * frame_count,
         "step_onset_local": [None if step_onset_local is None else int(step_onset_local)] * frame_count,
         "analysis_end_local": [int(end_frame)] * frame_count,
         "MocapFrame": mocap_frames,
-        "Time_s": time_s,
         "COM_X": COM[:end_frame, 0],
         "COM_Y": COM[:end_frame, 1],
         "COM_Z": COM[:end_frame, 2],
@@ -455,15 +428,9 @@ def main() -> None:
             angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
 
             df_ts = _make_timeseries_dataframe(
-                c3d_file=c3d_file,
-                subject_token=subject_token,
                 subject=subject,
                 velocity=velocity,
                 trial=trial,
-                leg_length_cm=float(leg_length_cm),
-                body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
-                force_plate_index_1based=int(force_plate_used),
-                rate_hz=rate_hz,
                 end_frame=end_frame,
                 platform_onset_local=int(events.platform_onset_local),
                 platform_offset_local=int(events.platform_offset_local),
