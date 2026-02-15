@@ -160,7 +160,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--x_norm01",
         action="store_true",
-        help="Normalize displayed x-axis to 0-1 using common x-axis min/max",
+        help="Normalize displayed x-axis to 0-1 per trial",
     )
     parser.add_argument(
         "--xtick_norm",
@@ -232,6 +232,15 @@ def normalize_x_scalar(x_value: float, x_min: float, x_max: float) -> float:
     return float((x_value - x_min) / span)
 
 
+def get_trial_time_bounds(trial_df: pl.DataFrame) -> tuple[float, float] | None:
+    x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
+    valid = np.isfinite(x_raw)
+    if np.count_nonzero(valid) == 0:
+        return None
+    x = x_raw[valid]
+    return float(np.min(x)), float(np.max(x))
+
+
 def build_normalized_xticks(xtick_norm: float) -> np.ndarray:
     if xtick_norm <= 0:
         raise ValueError("--xtick_norm must be > 0")
@@ -241,12 +250,7 @@ def build_normalized_xticks(xtick_norm: float) -> np.ndarray:
     return np.round(ticks, 6)
 
 
-def resample_trial_column(trial_df: pl.DataFrame, col_name: str, x_grid: np.ndarray) -> np.ndarray:
-    if col_name not in trial_df.columns:
-        return np.full(x_grid.shape, np.nan, dtype=float)
-
-    x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
-    y_raw = np.asarray(trial_df.get_column(col_name).to_list(), dtype=float)
+def resample_xy(x_raw: np.ndarray, y_raw: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
     valid = np.isfinite(x_raw) & np.isfinite(y_raw)
     if np.count_nonzero(valid) == 0:
         return np.full(x_grid.shape, np.nan, dtype=float)
@@ -266,6 +270,25 @@ def resample_trial_column(trial_df: pl.DataFrame, col_name: str, x_grid: np.ndar
         out[int(np.argmin(np.abs(x_grid - x[0])))] = y[0]
         return out
     return np.interp(x_grid, x, y, left=np.nan, right=np.nan)
+
+
+def resample_trial_column(
+    trial_df: pl.DataFrame,
+    col_name: str,
+    x_grid: np.ndarray,
+    normalize_per_trial: bool,
+) -> np.ndarray:
+    if col_name not in trial_df.columns:
+        return np.full(x_grid.shape, np.nan, dtype=float)
+
+    x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
+    y_raw = np.asarray(trial_df.get_column(col_name).to_list(), dtype=float)
+    if normalize_per_trial:
+        bounds = get_trial_time_bounds(trial_df)
+        if bounds is None:
+            return np.full(x_grid.shape, np.nan, dtype=float)
+        x_raw = normalize_x_values(x_raw, bounds[0], bounds[1])
+    return resample_xy(x_raw=x_raw, y_raw=y_raw, x_grid=x_grid)
 
 
 def draw_events(
@@ -307,9 +330,8 @@ def plot_single_col(
     trials: list[pl.DataFrame],
     col_name: str,
     sample: bool,
-    x_grid: np.ndarray,
     x_plot: np.ndarray,
-    x_norm_bounds: tuple[float, float] | None,
+    normalize_per_trial: bool,
 ) -> None:
     if not trials or col_name not in trials[0].columns:
         ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
@@ -320,7 +342,13 @@ def plot_single_col(
     event_alpha = 1.0 if sample else 0.20
 
     for idx, trial_df in enumerate(trials):
-        y_vals = resample_trial_column(trial_df, col_name, x_grid)
+        trial_bounds = get_trial_time_bounds(trial_df) if normalize_per_trial else None
+        y_vals = resample_trial_column(
+            trial_df=trial_df,
+            col_name=col_name,
+            x_grid=x_plot,
+            normalize_per_trial=normalize_per_trial,
+        )
         ax.plot(
             x_plot,
             y_vals,
@@ -334,7 +362,7 @@ def plot_single_col(
             trial_df,
             alpha=event_alpha,
             label_once=(idx == 0),
-            x_norm_bounds=x_norm_bounds,
+            x_norm_bounds=trial_bounds,
         )
 
 
@@ -343,9 +371,8 @@ def plot_lr_overlay(
     trials: list[pl.DataFrame],
     col_specs: list[tuple[str, str, str]],
     sample: bool,
-    x_grid: np.ndarray,
     x_plot: np.ndarray,
-    x_norm_bounds: tuple[float, float] | None,
+    normalize_per_trial: bool,
 ) -> None:
     if not trials:
         return
@@ -356,11 +383,17 @@ def plot_lr_overlay(
     side_color = {"L": "tab:blue", "R": "tab:orange"}
 
     for trial_idx, trial_df in enumerate(trials):
+        trial_bounds = get_trial_time_bounds(trial_df) if normalize_per_trial else None
         trial_cols = set(trial_df.columns)
         for col_name, side, style in col_specs:
             if col_name not in trial_cols:
                 continue
-            y_vals = resample_trial_column(trial_df, col_name, x_grid)
+            y_vals = resample_trial_column(
+                trial_df=trial_df,
+                col_name=col_name,
+                x_grid=x_plot,
+                normalize_per_trial=normalize_per_trial,
+            )
             ax.plot(
                 x_plot,
                 y_vals,
@@ -375,7 +408,7 @@ def plot_lr_overlay(
             trial_df,
             alpha=event_alpha,
             label_once=(trial_idx == 0),
-            x_norm_bounds=x_norm_bounds,
+            x_norm_bounds=trial_bounds,
         )
 
 
@@ -398,11 +431,10 @@ def plot_subject_category(
     out_dir: Path,
     sample: bool,
     dpi: int,
-    x_grid: np.ndarray,
     x_plot: np.ndarray,
     x_ticks: np.ndarray,
     x_axis_label: str,
-    x_norm_bounds: tuple[float, float] | None,
+    normalize_per_trial: bool,
 ) -> Path:
     nrows, ncols = spec["nrows"], spec["ncols"]
     fig, axes = plt.subplots(nrows, ncols, figsize=spec["figsize"], squeeze=False)
@@ -417,9 +449,9 @@ def plot_subject_category(
         ax = axes[r][c]
 
         if isinstance(col_spec, str):
-            plot_single_col(ax, trials, col_spec, sample, x_grid, x_plot, x_norm_bounds)
+            plot_single_col(ax, trials, col_spec, sample, x_plot, normalize_per_trial)
         else:
-            plot_lr_overlay(ax, trials, col_spec, sample, x_grid, x_plot, x_norm_bounds)
+            plot_lr_overlay(ax, trials, col_spec, sample, x_plot, normalize_per_trial)
 
         ax.set_title(ylabel, fontsize=9)
         ax.grid(True, linewidth=0.35, alpha=0.5)
@@ -470,12 +502,12 @@ def main() -> None:
         x_ticks = build_normalized_xticks(args.xtick_norm)
         x_plot = normalize_x_values(x_grid, float(x_grid[0]), float(x_grid[-1]))
         x_axis_label = "Normalized time (0-1)"
-        x_norm_bounds = (float(x_grid[0]), float(x_grid[-1]))
+        normalize_per_trial = True
     else:
         x_ticks = build_common_xticks(x_grid, args.xtick_sec)
         x_plot = x_grid
         x_axis_label = "Time from platform onset (s)"
-        x_norm_bounds = None
+        normalize_per_trial = False
     trial_count = df.select(TRIAL_KEYS).unique().height
     subjects = df.select("subject").unique().sort("subject").get_column("subject").to_list()
 
@@ -490,7 +522,7 @@ def main() -> None:
         f"({x_grid.size} points @ {args.resample_hz:g} Hz)"
     )
     if args.x_norm01:
-        print(f"Normalized x-axis enabled: [0.000, 1.000] with {x_ticks.size} ticks")
+        print(f"Normalized x-axis enabled (per trial): [0.000, 1.000] with {x_ticks.size} ticks")
         print(f"Normalized x-axis tick spacing: {args.xtick_norm:g}")
     else:
         print(f"Common x-axis ticks: every {args.xtick_sec:g} sec ({x_ticks.size} ticks)")
@@ -505,11 +537,10 @@ def main() -> None:
                 out_dir=args.out_dir,
                 sample=args.sample,
                 dpi=args.dpi,
-                x_grid=x_grid,
                 x_plot=x_plot,
                 x_ticks=x_ticks,
                 x_axis_label=x_axis_label,
-                x_norm_bounds=x_norm_bounds,
+                normalize_per_trial=normalize_per_trial,
             )
             print(f"Saved: {out_path}")
 
