@@ -28,3 +28,4 @@
      # 기존 aggregate 쪽 merging 하는 파일 ref 파일로 사용해서 붙여버리자.
 
 3. repo에서 forceplate "3" 을 사용하고 있나? 
+4. src 폴더 내 중복되는 코드 정리하기.
