@@ -1,4 +1,0 @@
-interface:
-  display_name: "MD Style Preserving Edit"
-  short_description: "Preserve existing Markdown style"
-  default_prompt: "Use when editing existing .md reports. Preserve current writing style and structure; prefer insert/append over replace unless explicitly requested. Scan headings, tables, terminology, and link style before adding new content."
