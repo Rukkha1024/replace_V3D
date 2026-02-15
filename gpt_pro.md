@@ -79,7 +79,7 @@ conda run -n module python scripts/run_batch_mos_timeseries_csv.py \
   * `MOS_ML_velDir`
 
 즉, 네가 지금 보던 “MOS_AP_dir 라인이 수직에 가깝다” 문제는
-패치 적용 후에는 **MOS_AP_dir 자체가 V3D값(closest-bound)으로 바뀌어서** 바로 해결되어야 해.
+변경 반영 후에는 **MOS_AP_dir 자체가 V3D값(closest-bound)으로 바뀌어서** 바로 해결되어야 해.
 
 ---
 
