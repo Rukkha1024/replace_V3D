@@ -10,7 +10,6 @@ This repo contains a **pure-Python** pipeline to compute:
   - `MOS_*_v3d`: Visual3D tutorial (Closest_Bound) style — distance to the *closest* BoS bound in AP/ML
     (`MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`)
   - `MOS_*_dir`: backward-compatible alias of `MOS_*_v3d` (same values)
-  - `MOS_*_velDir`: legacy velocity-direction switching (debug; can jump when vCOM crosses 0)
 
 ## Important constraints (matching your V3D tutorial logic)
 

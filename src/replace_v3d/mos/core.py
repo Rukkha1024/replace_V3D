@@ -47,9 +47,6 @@ class MOSResult:
         Backward-compatible aliases of the Visual3D-style values above.
         (Kept because downstream scripts/plots often referenced "*_dir".)
 
-    - MOS_AP_velDir / MOS_ML_velDir:
-        The previous velocity-switching version (debug only).
-
     - MOS_signed:
         Polygon-based signed min distance to the convex hull boundary (+inside).
         This is *not* the same as Visual3D's original scalar MoS, but can be
@@ -67,10 +64,6 @@ class MOSResult:
     # Backward-compatible aliases (same as MOS_*_v3d)
     MOS_AP_dir: np.ndarray  # (T,)
     MOS_ML_dir: np.ndarray  # (T,)
-
-    # Legacy: velocity-direction based bound selection (debug; discontinuous)
-    MOS_AP_velDir: np.ndarray  # (T,)
-    MOS_ML_velDir: np.ndarray  # (T,)
 
     # BoS geometry summaries
     BOS_area: np.ndarray  # (T,)
@@ -125,9 +118,6 @@ def compute_mos_timeseries(
     - MOS_AP_dir / MOS_ML_dir:
         Aliases of MOS_AP_v3d / MOS_ML_v3d (for backward compatibility)
 
-    - MOS_AP_velDir / MOS_ML_velDir:
-        Legacy velocity-direction switching (debug only)
-
     Parameters
     ----------
     points:
@@ -171,10 +161,6 @@ def compute_mos_timeseries(
     MOS_AP_dir = np.zeros(end, dtype=float)
     MOS_ML_dir = np.zeros(end, dtype=float)
 
-    # Legacy velocity-switching (debug)
-    MOS_AP_velDir = np.zeros(end, dtype=float)
-    MOS_ML_velDir = np.zeros(end, dtype=float)
-
     area = np.zeros(end, dtype=float)
     minX = np.zeros(end, dtype=float)
     maxX = np.zeros(end, dtype=float)
@@ -198,17 +184,6 @@ def compute_mos_timeseries(
         MOS_ML_v3d[t] = _closest_bound_1d(float(p[1]), bminy, bmaxy)
         MOS_v3d[t] = min(MOS_AP_v3d[t], MOS_ML_v3d[t])
 
-        # Legacy: velocity-direction switching (debug only)
-        if vcom[t, 0] < 0:
-            MOS_AP_velDir[t] = p[0] - bminx
-        else:
-            MOS_AP_velDir[t] = bmaxx - p[0]
-
-        if vcom[t, 1] < 0:
-            MOS_ML_velDir[t] = p[1] - bminy
-        else:
-            MOS_ML_velDir[t] = bmaxy - p[1]
-
     # Backward-compat aliases
     MOS_AP_dir[:] = MOS_AP_v3d
     MOS_ML_dir[:] = MOS_ML_v3d
@@ -220,8 +195,6 @@ def compute_mos_timeseries(
         MOS_v3d=MOS_v3d,
         MOS_AP_dir=MOS_AP_dir,
         MOS_ML_dir=MOS_ML_dir,
-        MOS_AP_velDir=MOS_AP_velDir,
-        MOS_ML_velDir=MOS_ML_velDir,
         BOS_area=area,
         BOS_minX=minX,
         BOS_maxX=maxX,

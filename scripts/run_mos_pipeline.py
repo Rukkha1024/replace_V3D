@@ -151,8 +151,6 @@ def main() -> None:
             "MOS_v3d": mos.MOS_v3d,
             "MOS_AP_dir": mos.MOS_AP_dir,
             "MOS_ML_dir": mos.MOS_ML_dir,
-            "MOS_AP_velDir": mos.MOS_AP_velDir,
-            "MOS_ML_velDir": mos.MOS_ML_velDir,
             "Is_platform_onset_frame": is_platform_onset,
             "Is_step_onset_frame": is_step_onset,
         }
