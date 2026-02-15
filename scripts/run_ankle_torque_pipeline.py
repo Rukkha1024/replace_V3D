@@ -26,6 +26,10 @@ from replace_v3d.torque.forceplate import (
     extract_platform_wrenches_lab,
     read_force_platforms,
 )
+from replace_v3d.torque.forceplate_inertial import (
+    apply_forceplate_inertial_subtract,
+    load_forceplate_inertial_templates,
+)
 
 
 def _safe_div(num: np.ndarray, den: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -68,6 +72,41 @@ def main() -> None:
         default=None,
         help="Force plate index (1-based). Default: auto-select by |Fz|.",
     )
+
+    # Forceplate inertial subtract (Stage01-compatible)
+    ap.add_argument(
+        "--fp_inertial_templates",
+        default="assets/fp_inertial_templates.npz",
+        help="NPZ created by scripts/torque_build_fp_inertial_templates.py (repo-relative OK)",
+    )
+    ap.add_argument(
+        "--fp_inertial_policy",
+        choices=["skip", "nearest", "interpolate"],
+        default="skip",
+        help="If template for this velocity is missing: skip | nearest | interpolate",
+    )
+    ap.add_argument(
+        "--no_fp_inertial_subtract",
+        action="store_true",
+        help="Disable Stage01-style inertial subtraction (use raw C3D forceplate).",
+    )
+    ap.add_argument(
+        "--fp_inertial_qc_fz_threshold",
+        type=float,
+        default=20.0,
+        help="QC threshold (N) for COP-in-bounds check",
+    )
+    ap.add_argument(
+        "--fp_inertial_qc_margin_m",
+        type=float,
+        default=0.0,
+        help="QC margin (m) added to plate bounds when checking COP",
+    )
+    ap.add_argument(
+        "--fp_inertial_qc_strict",
+        action="store_true",
+        help="If QC fails after subtraction, raise instead of warning.",
+    )
     ap.add_argument("--out_dir", default="output", help="Output directory")
     args = ap.parse_args()
 
@@ -99,6 +138,10 @@ def main() -> None:
         sheet_name="platform",
     )
 
+    # File-local onset/offset (0-based) used by inertial subtraction and time axis
+    onset0 = int(events.platform_onset_local) - 1
+    offset0 = int(events.platform_offset_local) - 1
+
     # Body mass
     mass_kg = float(args.mass_kg) if args.mass_kg is not None else load_subject_body_mass_kg(args.event_xlsm, args.subject)
 
@@ -118,11 +161,65 @@ def main() -> None:
     else:
         fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
 
+    # Apply Stage01-style inertial subtraction (template) before wrench/COP.
+    # Note: C3D forceplate axes are already transformed in the provided dataset.
+    inertial_info = {
+        "enabled": (not args.no_fp_inertial_subtract),
+        "applied": False,
+        "reason": "disabled" if args.no_fp_inertial_subtract else "not_run",
+    }
+    analog_used = analog_avg
+    if not args.no_fp_inertial_subtract:
+        tmpl_path = Path(args.fp_inertial_templates)
+        if not tmpl_path.is_absolute():
+            tmpl_path = _REPO_ROOT / tmpl_path
+        if tmpl_path.exists():
+            try:
+                templates = load_forceplate_inertial_templates(tmpl_path)
+                analog_used, inertial_info = apply_forceplate_inertial_subtract(
+                    analog_avg,
+                    fp,
+                    velocity=float(velocity),
+                    onset0=int(onset0),
+                    offset0=int(offset0),
+                    templates=templates,
+                    missing_policy=str(args.fp_inertial_policy),
+                    qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
+                    qc_margin_m=float(args.fp_inertial_qc_margin_m),
+                )
+                # Keep a few top-level flags even when apply() returns a fresh dict.
+                inertial_info["enabled"] = True
+                inertial_info["templates_path"] = str(tmpl_path)
+                if inertial_info.get("qc_failed"):
+                    msg = (
+                        "[WARN] Forceplate inertial subtract QC failed "
+                        f"(COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
+                        "Check axis transform / template file."
+                    )
+                    if args.fp_inertial_qc_strict:
+                        raise ValueError(msg)
+                    print(msg)
+            except Exception as e:
+                inertial_info = {
+                    "enabled": True,
+                    "applied": False,
+                    "reason": f"error:{type(e).__name__}",
+                    "error": str(e),
+                }
+                print(f"[WARN] Failed to apply inertial subtraction: {e}")
+        else:
+            inertial_info = {
+                "enabled": True,
+                "applied": False,
+                "reason": f"templates_missing:{tmpl_path}",
+            }
+            print(f"[WARN] Inertial templates not found: {tmpl_path} (skipping)")
+
     # Extract plate wrenches
-    F_lab, M_lab = extract_platform_wrenches_lab(analog_avg, fp)
+    F_lab, M_lab = extract_platform_wrenches_lab(analog_used, fp)
     idx = fp.channel_indices_0based.astype(int)
-    F_plate = analog_avg[:, idx[0:3]]
-    M_plate = analog_avg[:, idx[3:6]]
+    F_plate = analog_used[:, idx[0:3]]
+    M_plate = analog_used[:, idx[3:6]]
     COP_lab = _compute_cop_lab(F_plate=F_plate, M_plate=M_plate, fp_origin_lab=fp.origin_lab, R_pl2lab=fp.R_pl2lab)
 
     # Joint centers (medial markers already baked into com.compute_joint_centers)
@@ -143,7 +240,6 @@ def main() -> None:
     # Time axis (0-based frames like the V3D export)
     frames0 = np.arange(n_frames, dtype=int)
     time_s = frames0 / rate
-    onset0 = int(events.platform_onset_local) - 1
     time_from_onset = (frames0 - onset0) / rate
 
     df_dict = {
@@ -233,6 +329,27 @@ def main() -> None:
         ("body_mass_kg", mass_kg),
         ("active_force_plate_index_1based", fp.index_1based),
         ("force_plate_type", fp.fp_type),
+        ("fp_inertial_templates_path", inertial_info.get("templates_path", args.fp_inertial_templates)),
+        ("fp_inertial_subtract_enabled", bool(inertial_info.get("enabled", False))),
+        ("fp_inertial_subtract_applied", bool(inertial_info.get("applied", False))),
+        ("fp_inertial_subtract_reason", inertial_info.get("reason")),
+        ("fp_inertial_template_policy", inertial_info.get("template_policy")),
+        ("fp_inertial_template_velocity_int_used", inertial_info.get("template_velocity_int_used")),
+        ("fp_inertial_template_velocity_int_lo", inertial_info.get("template_velocity_int_lo")),
+        ("fp_inertial_template_velocity_int_hi", inertial_info.get("template_velocity_int_hi")),
+        ("fp_inertial_template_interp_weight", inertial_info.get("template_interp_weight")),
+        ("fp_inertial_template_len", inertial_info.get("template_len")),
+        ("fp_inertial_unload_range_frames", inertial_info.get("unload_range_frames")),
+        ("fp_inertial_template_n_trials", inertial_info.get("template_n_trials")),
+        ("fp_inertial_qc_fz_threshold_n", inertial_info.get("qc_fz_threshold_n")),
+        ("fp_inertial_qc_margin_m", inertial_info.get("qc_margin_m")),
+        ("fp_inertial_qc_valid_n_before", inertial_info.get("before_qc_valid_n")),
+        ("fp_inertial_qc_valid_n_after", inertial_info.get("after_qc_valid_n")),
+        ("fp_inertial_qc_cop_in_bounds_frac_before", inertial_info.get("before_qc_cop_in_bounds_frac")),
+        ("fp_inertial_qc_cop_in_bounds_frac_after", inertial_info.get("after_qc_cop_in_bounds_frac")),
+        ("fp_inertial_qc_fz_positive_frac_before", inertial_info.get("before_qc_fz_positive_frac")),
+        ("fp_inertial_qc_fz_positive_frac_after", inertial_info.get("after_qc_fz_positive_frac")),
+        ("fp_inertial_qc_failed", inertial_info.get("qc_failed")),
     ]
     meta_df = pd.DataFrame(meta_rows, columns=["key", "value"])
 
