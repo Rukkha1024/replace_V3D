@@ -30,6 +30,7 @@ from replace_v3d.events import (
     resolve_subject_from_token,
 )
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
+from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_lab
@@ -58,6 +59,8 @@ def _make_timeseries_dataframe(
     xCOM: np.ndarray,
     mos: Any,
     angles: Any,
+    angles_ana0: dict[str, np.ndarray] | None = None,
+    angles_anat: dict[str, np.ndarray] | None = None,
     torque_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     mocap_frames = np.arange(1, end_frame + 1, dtype=int)
@@ -123,6 +126,18 @@ def _make_timeseries_dataframe(
         "Neck_Y_deg": angles.neck_Y,
         "Neck_Z_deg": angles.neck_Z,
     }
+
+    # Optional: analysis-friendly joint angles (sign-unified + baseline-subtracted).
+    # These columns get suffix `_ana0` to avoid breaking existing schemas.
+    if angles_ana0 is not None:
+        for k, v in angles_ana0.items():
+            payload[k] = v
+
+    # Optional: anatomical-convention joint angles (sign-unified only).
+    # These columns get suffix `_anat` to avoid breaking existing schemas.
+    if angles_anat is not None:
+        for k, v in angles_anat.items():
+            payload[k] = v
 
     for key, values in torque_payload.items():
         payload[key] = values
@@ -348,6 +363,22 @@ def main() -> None:
         help="CSV text encoding (default: utf-8-sig; recommended for Korean text in Excel).",
     )
     parser.add_argument(
+        "--angles_ana0",
+        action="store_true",
+        help=(
+            "Also export analysis-friendly joint angles with suffix `_ana0`: "
+            "LEFT Y/Z sign-unified + quiet-standing baseline removed (frames 1..11)."
+        ),
+    )
+    parser.add_argument(
+        "--angles_anat",
+        action="store_true",
+        help=(
+            "Also export anatomical-convention joint angles with suffix `_anat`: "
+            "flip LEFT Y/Z only (no baseline subtraction)."
+        ),
+    )
+    parser.add_argument(
         "--max_files",
         type=int,
         default=None,
@@ -474,6 +505,90 @@ def main() -> None:
 
             angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
 
+            angles_ana0_payload: dict[str, np.ndarray] | None = None
+            if args.angles_ana0:
+                mocap_frames = np.arange(1, end_frame + 1, dtype=int)
+                df_angles = pl.DataFrame(
+                    {
+                        "MocapFrame": mocap_frames,
+                        "Hip_L_X_deg": angles.hip_L_X,
+                        "Hip_L_Y_deg": angles.hip_L_Y,
+                        "Hip_L_Z_deg": angles.hip_L_Z,
+                        "Hip_R_X_deg": angles.hip_R_X,
+                        "Hip_R_Y_deg": angles.hip_R_Y,
+                        "Hip_R_Z_deg": angles.hip_R_Z,
+                        "Knee_L_X_deg": angles.knee_L_X,
+                        "Knee_L_Y_deg": angles.knee_L_Y,
+                        "Knee_L_Z_deg": angles.knee_L_Z,
+                        "Knee_R_X_deg": angles.knee_R_X,
+                        "Knee_R_Y_deg": angles.knee_R_Y,
+                        "Knee_R_Z_deg": angles.knee_R_Z,
+                        "Ankle_L_X_deg": angles.ankle_L_X,
+                        "Ankle_L_Y_deg": angles.ankle_L_Y,
+                        "Ankle_L_Z_deg": angles.ankle_L_Z,
+                        "Ankle_R_X_deg": angles.ankle_R_X,
+                        "Ankle_R_Y_deg": angles.ankle_R_Y,
+                        "Ankle_R_Z_deg": angles.ankle_R_Z,
+                        "Trunk_X_deg": angles.trunk_X,
+                        "Trunk_Y_deg": angles.trunk_Y,
+                        "Trunk_Z_deg": angles.trunk_Z,
+                        "Neck_X_deg": angles.neck_X,
+                        "Neck_Y_deg": angles.neck_Y,
+                        "Neck_Z_deg": angles.neck_Z,
+                    }
+                )
+
+                df_pp, _meta_pp = postprocess_joint_angles(
+                    df_angles,
+                    frame_col="MocapFrame",
+                    unify_lr_sign=True,
+                    baseline_frames=(1, 11),
+                )
+                angle_cols = [c for c in df_pp.columns if c.endswith("_deg")]
+                angles_ana0_payload = {f"{c}_ana0": df_pp[c].to_numpy() for c in angle_cols}
+
+            angles_anat_payload: dict[str, np.ndarray] | None = None
+            if args.angles_anat:
+                mocap_frames = np.arange(1, end_frame + 1, dtype=int)
+                df_angles = pl.DataFrame(
+                    {
+                        "MocapFrame": mocap_frames,
+                        "Hip_L_X_deg": angles.hip_L_X,
+                        "Hip_L_Y_deg": angles.hip_L_Y,
+                        "Hip_L_Z_deg": angles.hip_L_Z,
+                        "Hip_R_X_deg": angles.hip_R_X,
+                        "Hip_R_Y_deg": angles.hip_R_Y,
+                        "Hip_R_Z_deg": angles.hip_R_Z,
+                        "Knee_L_X_deg": angles.knee_L_X,
+                        "Knee_L_Y_deg": angles.knee_L_Y,
+                        "Knee_L_Z_deg": angles.knee_L_Z,
+                        "Knee_R_X_deg": angles.knee_R_X,
+                        "Knee_R_Y_deg": angles.knee_R_Y,
+                        "Knee_R_Z_deg": angles.knee_R_Z,
+                        "Ankle_L_X_deg": angles.ankle_L_X,
+                        "Ankle_L_Y_deg": angles.ankle_L_Y,
+                        "Ankle_L_Z_deg": angles.ankle_L_Z,
+                        "Ankle_R_X_deg": angles.ankle_R_X,
+                        "Ankle_R_Y_deg": angles.ankle_R_Y,
+                        "Ankle_R_Z_deg": angles.ankle_R_Z,
+                        "Trunk_X_deg": angles.trunk_X,
+                        "Trunk_Y_deg": angles.trunk_Y,
+                        "Trunk_Z_deg": angles.trunk_Z,
+                        "Neck_X_deg": angles.neck_X,
+                        "Neck_Y_deg": angles.neck_Y,
+                        "Neck_Z_deg": angles.neck_Z,
+                    }
+                )
+
+                df_pp_anat, _meta_anat = postprocess_joint_angles(
+                    df_angles,
+                    frame_col="MocapFrame",
+                    unify_lr_sign=True,
+                    baseline_frames=None,
+                )
+                angle_cols = [c for c in df_pp_anat.columns if c.endswith("_deg")]
+                angles_anat_payload = {f"{c}_anat": df_pp_anat[c].to_numpy() for c in angle_cols}
+
             df_ts = _make_timeseries_dataframe(
                 subject=subject,
                 velocity=velocity,
@@ -487,6 +602,8 @@ def main() -> None:
                 xCOM=xCOM,
                 mos=mos,
                 angles=angles,
+                angles_ana0=angles_ana0_payload,
+                angles_anat=angles_anat_payload,
                 torque_payload=torque_payload,
             )
 

@@ -2,10 +2,13 @@
 
 from .sagittal import LowerLimbAngles, compute_lower_limb_angles
 from .v3d_joint_angles import V3DJointAngles3D, compute_v3d_joint_angles_3d
+from .postprocess import JointAnglePostprocessMeta, postprocess_joint_angles
 
 __all__ = [
     "LowerLimbAngles",
     "compute_lower_limb_angles",
     "V3DJointAngles3D",
     "compute_v3d_joint_angles_3d",
+    "JointAnglePostprocessMeta",
+    "postprocess_joint_angles",
 ]
