@@ -51,7 +51,7 @@ Output:
 
 ## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
 
-This export is also **long-format** (row = `subject-velocity-trial` x `MocapFrame`), but includes:
+This export is also **long-format** (row = (`subject`,`velocity`,`trial`) x `MocapFrame`), but includes:
 
 - COM / vCOM / xCOM / BOS / MOS
 - Visual3D-like 3D joint angles (ankle/knee/hip/trunk/neck)
@@ -69,6 +69,7 @@ Notes:
 - Torque requires `FORCE_PLATFORM` metadata + analog channels in the C3D.
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
+- By default, some metadata columns are excluded (e.g., `subject-velocity-trial`, `c3d_file`, `subject_token`, `rate_hz`, `Time_s`).
 
 ## Quick start (ankle torque)
 
