@@ -134,6 +134,15 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Generate separate figures for step/nonstep trials (default: enabled)",
     )
+    parser.add_argument(
+        "--y_zero_onset",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Plot-only: subtract the value at platform onset (t=0) per trial/series "
+            "so each line starts at 0. Disable with --no-y_zero_onset."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -363,38 +372,80 @@ def estimate_dt_seconds(df: pl.DataFrame) -> float:
 def piecewise_warp_times(
     t_raw_s: np.ndarray,
     *,
+    pre_start_s: float,
     offset_time_s: float,
-    mid_duration_s: float,
+    post_end_s: float,
+    segment_window_s: float,
 ) -> np.ndarray:
     out = np.asarray(t_raw_s, dtype=float).copy()
     if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
         return out
-    if not np.isfinite(mid_duration_s) or mid_duration_s <= 0.0:
+    if not np.isfinite(segment_window_s) or segment_window_s <= 0.0:
         return out
+
+    if not np.isfinite(pre_start_s):
+        pre_start_s = float(np.nanmin(out))
+    if not np.isfinite(post_end_s):
+        post_end_s = float(np.nanmax(out))
+
+    pre_start_s = float(pre_start_s)
+    post_end_s = float(post_end_s)
+    segment_window_s = float(segment_window_s)
+
+    pre_mask = out < 0.0
     mid_mask = (out >= 0.0) & (out <= offset_time_s)
     post_mask = out > offset_time_s
-    out[mid_mask] = (out[mid_mask] / offset_time_s) * mid_duration_s
-    out[post_mask] = mid_duration_s + (out[post_mask] - offset_time_s)
+
+    pre_span = 0.0 - pre_start_s
+    if np.isfinite(pre_span) and pre_span > 0.0:
+        out[pre_mask] = ((out[pre_mask] - pre_start_s) / pre_span) * segment_window_s - segment_window_s
+
+    out[mid_mask] = (out[mid_mask] / offset_time_s) * segment_window_s
+
+    post_span = post_end_s - float(offset_time_s)
+    if np.isfinite(post_span) and post_span > 0.0:
+        out[post_mask] = (
+            segment_window_s
+            + ((out[post_mask] - float(offset_time_s)) / post_span) * segment_window_s
+        )
     return out
 
 
 def piecewise_warp_scalar(
     t_raw_s: float,
     *,
+    pre_start_s: float,
     offset_time_s: float,
-    mid_duration_s: float,
+    post_end_s: float,
+    segment_window_s: float,
 ) -> float:
     if not np.isfinite(t_raw_s):
         return float("nan")
     if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
         return float(t_raw_s)
-    if not np.isfinite(mid_duration_s) or mid_duration_s <= 0.0:
+    if not np.isfinite(segment_window_s) or segment_window_s <= 0.0:
         return float(t_raw_s)
+
+    if not np.isfinite(pre_start_s):
+        pre_start_s = float(t_raw_s) - float(segment_window_s)
+    if not np.isfinite(post_end_s):
+        post_end_s = float(offset_time_s) + float(segment_window_s)
+
+    pre_start_s = float(pre_start_s)
+    post_end_s = float(post_end_s)
+    segment_window_s = float(segment_window_s)
+
     if t_raw_s < 0.0:
-        return float(t_raw_s)
+        pre_span = 0.0 - pre_start_s
+        if not np.isfinite(pre_span) or pre_span <= 0.0:
+            return float(t_raw_s)
+        return float(((t_raw_s - pre_start_s) / pre_span) * segment_window_s - segment_window_s)
     if t_raw_s <= offset_time_s:
-        return float((t_raw_s / offset_time_s) * mid_duration_s)
-    return float(mid_duration_s + (t_raw_s - offset_time_s))
+        return float((t_raw_s / offset_time_s) * segment_window_s)
+    post_span = post_end_s - float(offset_time_s)
+    if not np.isfinite(post_span) or post_span <= 0.0:
+        return float(segment_window_s)
+    return float(segment_window_s + ((t_raw_s - float(offset_time_s)) / post_span) * segment_window_s)
 
 
 def get_trial_scalar(trial_df: pl.DataFrame, col_name: str) -> float | None:
@@ -450,14 +501,46 @@ def resample_trial_column(
         x_raw = normalize_x_values(x_raw, bounds[0], bounds[1])
     elif x_mode == "piecewise":
         offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
-        if offset_time_s is not None:
-            mid_s = float(piecewise_mid_duration_s) if piecewise_mid_duration_s is not None else 0.0
+        bounds = get_trial_time_bounds(trial_df)
+        if offset_time_s is not None and bounds is not None and piecewise_mid_duration_s is not None:
+            segment_window_s = float(piecewise_mid_duration_s)
             x_raw = piecewise_warp_times(
                 x_raw,
+                pre_start_s=float(bounds[0]),
                 offset_time_s=float(offset_time_s),
-                mid_duration_s=mid_s,
+                post_end_s=float(bounds[1]),
+                segment_window_s=segment_window_s,
             )
     return resample_xy(x_raw=x_raw, y_raw=y_raw, x_grid=x_grid)
+
+
+def subtract_baseline_at_x(y_vals: np.ndarray, x_plot: np.ndarray, baseline_x: float) -> np.ndarray:
+    if y_vals.size == 0:
+        return y_vals
+    if x_plot.size == 0:
+        return y_vals
+    if not np.isfinite(baseline_x):
+        return y_vals
+
+    idx0 = int(np.argmin(np.abs(x_plot - float(baseline_x))))
+    baseline = float(y_vals[idx0]) if np.isfinite(y_vals[idx0]) else float("nan")
+
+    if not np.isfinite(baseline):
+        left = idx0 - 1
+        right = idx0 + 1
+        while left >= 0 or right < y_vals.size:
+            if left >= 0 and np.isfinite(y_vals[left]):
+                baseline = float(y_vals[left])
+                break
+            if right < y_vals.size and np.isfinite(y_vals[right]):
+                baseline = float(y_vals[right])
+                break
+            left -= 1
+            right += 1
+
+    if not np.isfinite(baseline):
+        return y_vals
+    return y_vals - baseline
 
 
 def draw_events(
@@ -468,46 +551,58 @@ def draw_events(
     x_mode: str,
     piecewise_mid_duration_s: float | None,
     x_norm_bounds: tuple[float, float] | None = None,
+    *,
+    draw_platform: bool = True,
+    draw_step: bool = True,
 ) -> None:
     onset_time_s = 0.0
     offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
     step_time_s = get_trial_scalar(trial_df, "step_onset_time_s")
 
-    mid_s = float(piecewise_mid_duration_s) if piecewise_mid_duration_s is not None else 0.0
+    segment_window_s = float(piecewise_mid_duration_s) if piecewise_mid_duration_s is not None else 0.0
+    trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "piecewise" else None
 
     def map_time(t_raw_s: float) -> float:
         if x_mode == "norm01" and x_norm_bounds is not None:
             return normalize_x_scalar(t_raw_s, x_norm_bounds[0], x_norm_bounds[1])
-        if x_mode == "piecewise" and offset_time_s is not None:
+        if x_mode == "piecewise" and offset_time_s is not None and segment_window_s > 0.0:
+            pre_start_s = -segment_window_s
+            post_end_s = float(offset_time_s) + segment_window_s
+            if trial_bounds is not None:
+                pre_start_s = float(trial_bounds[0])
+                post_end_s = float(trial_bounds[1])
             return piecewise_warp_scalar(
                 t_raw_s,
+                pre_start_s=float(pre_start_s),
                 offset_time_s=float(offset_time_s),
-                mid_duration_s=mid_s,
+                post_end_s=float(post_end_s),
+                segment_window_s=float(segment_window_s),
             )
         return float(t_raw_s)
 
-    platform_x = map_time(onset_time_s)
-    ax.axvline(
-        platform_x,
-        color="red",
-        linewidth=0.9,
-        alpha=alpha,
-        linestyle="-",
-        label="platform_onset" if label_once else None,
-    )
-
-    if offset_time_s is not None:
-        offset_x = map_time(float(offset_time_s))
+    if draw_platform:
+        platform_x = map_time(onset_time_s)
         ax.axvline(
-            offset_x,
-            color="green",
+            platform_x,
+            color="red",
             linewidth=0.9,
             alpha=alpha,
             linestyle="-",
-            label="platform_offset" if label_once else None,
+            label="platform_onset" if label_once else None,
         )
 
-    if step_time_s is not None:
+        if offset_time_s is not None:
+            offset_x = map_time(float(offset_time_s))
+            ax.axvline(
+                offset_x,
+                color="green",
+                linewidth=0.9,
+                alpha=alpha,
+                linestyle="-",
+                label="platform_offset" if label_once else None,
+            )
+
+    if draw_step and step_time_s is not None:
         step_x = map_time(float(step_time_s))
         ax.axvline(
             step_x,
@@ -527,6 +622,7 @@ def plot_single_col(
     x_plot: np.ndarray,
     x_mode: str,
     piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
 ) -> None:
     if not trials or col_name not in trials[0].columns:
         ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
@@ -535,6 +631,18 @@ def plot_single_col(
     line_width = 1.2 if sample else 0.6
     line_alpha = 0.95 if sample else 0.30
     event_alpha = 1.0 if sample else 0.20
+
+    if x_mode == "piecewise":
+        draw_events(
+            ax,
+            trials[0],
+            alpha=event_alpha,
+            label_once=True,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+            draw_platform=True,
+            draw_step=False,
+        )
 
     for idx, trial_df in enumerate(trials):
         trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
@@ -545,6 +653,11 @@ def plot_single_col(
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
         )
+        if y_zero_onset:
+            onset_x = 0.0
+            if x_mode == "norm01" and trial_bounds is not None:
+                onset_x = normalize_x_scalar(0.0, trial_bounds[0], trial_bounds[1])
+            y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
         ax.plot(
             x_plot,
             y_vals,
@@ -561,6 +674,8 @@ def plot_single_col(
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
             x_norm_bounds=trial_bounds,
+            draw_platform=(x_mode != "piecewise"),
+            draw_step=True,
         )
 
 
@@ -572,6 +687,7 @@ def plot_lr_overlay(
     x_plot: np.ndarray,
     x_mode: str,
     piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
 ) -> None:
     if not trials:
         return
@@ -580,6 +696,18 @@ def plot_lr_overlay(
     line_alpha = 0.90 if sample else 0.30
     event_alpha = 1.0 if sample else 0.20
     side_color = {"L": "tab:blue", "R": "tab:orange"}
+
+    if x_mode == "piecewise":
+        draw_events(
+            ax,
+            trials[0],
+            alpha=event_alpha,
+            label_once=True,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+            draw_platform=True,
+            draw_step=False,
+        )
 
     for trial_idx, trial_df in enumerate(trials):
         trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
@@ -594,6 +722,11 @@ def plot_lr_overlay(
                 x_mode=x_mode,
                 piecewise_mid_duration_s=piecewise_mid_duration_s,
             )
+            if y_zero_onset:
+                onset_x = 0.0
+                if x_mode == "norm01" and trial_bounds is not None:
+                    onset_x = normalize_x_scalar(0.0, trial_bounds[0], trial_bounds[1])
+                y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
             ax.plot(
                 x_plot,
                 y_vals,
@@ -611,6 +744,8 @@ def plot_lr_overlay(
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
             x_norm_bounds=trial_bounds,
+            draw_platform=(x_mode != "piecewise"),
+            draw_step=True,
         )
 
 
@@ -657,6 +792,7 @@ def plot_subject_category(
     x_axis_label: str,
     x_mode: str,
     piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
     step_group: str = "all",
 ) -> Path | None:
     nrows, ncols = spec["nrows"], spec["ncols"]
@@ -688,6 +824,7 @@ def plot_subject_category(
                 x_plot,
                 x_mode,
                 piecewise_mid_duration_s,
+                y_zero_onset,
             )
         else:
             plot_lr_overlay(
@@ -698,6 +835,7 @@ def plot_subject_category(
                 x_plot,
                 x_mode,
                 piecewise_mid_duration_s,
+                y_zero_onset,
             )
 
         ax.set_title(ylabel, fontsize=9)
@@ -875,6 +1013,7 @@ def main() -> None:
                             x_axis_label=x_axis_label,
                             x_mode=x_mode,
                             piecewise_mid_duration_s=piecewise_mid_duration_s,
+                            y_zero_onset=bool(args.y_zero_onset),
                             step_group=step_group,
                         )
                         if out_path is not None:
@@ -894,6 +1033,7 @@ def main() -> None:
                         x_axis_label=x_axis_label,
                         x_mode=x_mode,
                         piecewise_mid_duration_s=piecewise_mid_duration_s,
+                        y_zero_onset=bool(args.y_zero_onset),
                         step_group="all",
                     )
                     if out_path is not None:
@@ -929,6 +1069,7 @@ def main() -> None:
                                 x_axis_label=x_axis_label,
                                 x_mode=x_mode,
                                 piecewise_mid_duration_s=piecewise_mid_duration_s,
+                                y_zero_onset=bool(args.y_zero_onset),
                                 step_group=step_group,
                             )
                             if out_path is not None:
@@ -948,6 +1089,7 @@ def main() -> None:
                             x_axis_label=x_axis_label,
                             x_mode=x_mode,
                             piecewise_mid_duration_s=piecewise_mid_duration_s,
+                            y_zero_onset=bool(args.y_zero_onset),
                             step_group="all",
                         )
                         if out_path is not None:
