@@ -26,6 +26,7 @@ Always follow this procedure when performing tasks:
   - **Joint angle variables**: Ankle, Knee, Hip, Trunk, Neck, ...
 - Do not create subfolders under `scripts`; keep runnable entry scripts directly under `scripts/`.
 - When exporting CSV files that may include Korean text, use UTF-8 with BOM (`utf-8-sig`) by default.
+- Unless the user instructs otherwise: **Bug fixes / corrections** to existing logic must **replace** the old logic and its outputs entirely (do not keep both). For **new logic additions**, ask the user whether the existing logic should be kept or removed before proceeding.
 
 ---
 
