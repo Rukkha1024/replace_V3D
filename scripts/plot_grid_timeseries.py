@@ -40,6 +40,8 @@ DEFAULT_CONFIG = REPO_ROOT / "config.yaml"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 TIME_COL = "time_from_platform_onset_s"
 DEFAULT_SEGMENT_FRAMES = 100
+STEP_COLOR = "tab:orange"
+NONSTEP_COLOR = "tab:blue"
 
 
 def parse_args() -> argparse.Namespace:
@@ -118,21 +120,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--x_norm01",
-        action="store_true",
-        help="Normalize displayed x-axis to 0-1 per trial",
-    )
-    parser.add_argument(
-        "--xtick_norm",
-        type=float,
-        default=0.1,
-        help="Tick spacing for normalized x-axis (used with --x_norm01)",
-    )
-    parser.add_argument(
         "--separate_step_nonstep",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Generate separate figures for step/nonstep trials (default: enabled)",
+        default=False,
+        help="Generate separate figures for step/nonstep trials (default: disabled; overlays both in one figure)",
     )
     parser.add_argument(
         "--y_zero_onset",
@@ -323,20 +314,6 @@ def build_common_xticks(x_grid: np.ndarray, xtick_sec: float) -> np.ndarray:
     return np.round(ticks, 6)
 
 
-def normalize_x_values(x_values: np.ndarray, x_min: float, x_max: float) -> np.ndarray:
-    span = x_max - x_min
-    if span <= 0.0:
-        return np.zeros_like(x_values, dtype=float)
-    return (x_values - x_min) / span
-
-
-def normalize_x_scalar(x_value: float, x_min: float, x_max: float) -> float:
-    span = x_max - x_min
-    if span <= 0.0:
-        return 0.0
-    return float((x_value - x_min) / span)
-
-
 def get_trial_time_bounds(trial_df: pl.DataFrame) -> tuple[float, float] | None:
     x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
     valid = np.isfinite(x_raw)
@@ -344,15 +321,6 @@ def get_trial_time_bounds(trial_df: pl.DataFrame) -> tuple[float, float] | None:
         return None
     x = x_raw[valid]
     return float(np.min(x)), float(np.max(x))
-
-
-def build_normalized_xticks(xtick_norm: float) -> np.ndarray:
-    if xtick_norm <= 0:
-        raise ValueError("--xtick_norm must be > 0")
-    ticks = np.arange(0.0, 1.0 + (xtick_norm * 0.5), xtick_norm, dtype=float)
-    ticks = np.clip(ticks, 0.0, 1.0)
-    ticks = np.unique(np.concatenate([ticks, np.array([1.0], dtype=float)]))
-    return np.round(ticks, 6)
 
 
 def estimate_dt_seconds(df: pl.DataFrame) -> float:
@@ -494,12 +462,7 @@ def resample_trial_column(
 
     x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
     y_raw = np.asarray(trial_df.get_column(col_name).to_list(), dtype=float)
-    if x_mode == "norm01":
-        bounds = get_trial_time_bounds(trial_df)
-        if bounds is None:
-            return np.full(x_grid.shape, np.nan, dtype=float)
-        x_raw = normalize_x_values(x_raw, bounds[0], bounds[1])
-    elif x_mode == "piecewise":
+    if x_mode == "piecewise":
         offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
         bounds = get_trial_time_bounds(trial_df)
         if offset_time_s is not None and bounds is not None and piecewise_mid_duration_s is not None:
@@ -550,7 +513,6 @@ def draw_events(
     label_once: bool,
     x_mode: str,
     piecewise_mid_duration_s: float | None,
-    x_norm_bounds: tuple[float, float] | None = None,
     *,
     draw_platform: bool = True,
     draw_step: bool = True,
@@ -563,8 +525,6 @@ def draw_events(
     trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "piecewise" else None
 
     def map_time(t_raw_s: float) -> float:
-        if x_mode == "norm01" and x_norm_bounds is not None:
-            return normalize_x_scalar(t_raw_s, x_norm_bounds[0], x_norm_bounds[1])
         if x_mode == "piecewise" and offset_time_s is not None and segment_window_s > 0.0:
             pre_start_s = -segment_window_s
             post_end_s = float(offset_time_s) + segment_window_s
@@ -644,8 +604,19 @@ def plot_single_col(
             draw_step=False,
         )
 
+    step_labeled = False
+    nonstep_labeled = False
     for idx, trial_df in enumerate(trials):
-        trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
+        has_step = trial_has_step(trial_df)
+        line_color = STEP_COLOR if has_step else NONSTEP_COLOR
+        line_label = None
+        if has_step and not step_labeled:
+            line_label = "step"
+            step_labeled = True
+        elif (not has_step) and not nonstep_labeled:
+            line_label = "nonstep"
+            nonstep_labeled = True
+
         y_vals = resample_trial_column(
             trial_df=trial_df,
             col_name=col_name,
@@ -655,16 +626,14 @@ def plot_single_col(
         )
         if y_zero_onset:
             onset_x = 0.0
-            if x_mode == "norm01" and trial_bounds is not None:
-                onset_x = normalize_x_scalar(0.0, trial_bounds[0], trial_bounds[1])
             y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
         ax.plot(
             x_plot,
             y_vals,
-            color="gray",
+            color=line_color,
             linewidth=line_width,
             alpha=line_alpha,
-            label="trial lines" if idx == 0 else None,
+            label=line_label,
         )
         draw_events(
             ax,
@@ -673,7 +642,6 @@ def plot_single_col(
             label_once=(idx == 0),
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
-            x_norm_bounds=trial_bounds,
             draw_platform=(x_mode != "piecewise"),
             draw_step=True,
         )
@@ -695,7 +663,8 @@ def plot_lr_overlay(
     line_width = 1.2 if sample else 0.6
     line_alpha = 0.90 if sample else 0.30
     event_alpha = 1.0 if sample else 0.20
-    side_color = {"L": "tab:blue", "R": "tab:orange"}
+    step_labeled = False
+    nonstep_labeled = False
 
     if x_mode == "piecewise":
         draw_events(
@@ -710,9 +679,18 @@ def plot_lr_overlay(
         )
 
     for trial_idx, trial_df in enumerate(trials):
-        trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
+        has_step = trial_has_step(trial_df)
+        line_color = STEP_COLOR if has_step else NONSTEP_COLOR
+        group_label = None
+        if has_step and not step_labeled:
+            group_label = "step"
+            step_labeled = True
+        elif (not has_step) and not nonstep_labeled:
+            group_label = "nonstep"
+            nonstep_labeled = True
+
         trial_cols = set(trial_df.columns)
-        for col_name, side, style in col_specs:
+        for ser_idx, (col_name, side, style) in enumerate(col_specs):
             if col_name not in trial_cols:
                 continue
             y_vals = resample_trial_column(
@@ -724,17 +702,15 @@ def plot_lr_overlay(
             )
             if y_zero_onset:
                 onset_x = 0.0
-                if x_mode == "norm01" and trial_bounds is not None:
-                    onset_x = normalize_x_scalar(0.0, trial_bounds[0], trial_bounds[1])
                 y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
             ax.plot(
                 x_plot,
                 y_vals,
-                color=side_color.get(side, "gray"),
-                linestyle=style if sample else "-",
+                color=line_color,
+                linestyle=style,
                 linewidth=line_width,
                 alpha=line_alpha,
-                label=side if trial_idx == 0 else None,
+                label=group_label if ser_idx == 0 else None,
             )
         draw_events(
             ax,
@@ -743,7 +719,6 @@ def plot_lr_overlay(
             label_once=(trial_idx == 0),
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
-            x_norm_bounds=trial_bounds,
             draw_platform=(x_mode != "piecewise"),
             draw_step=True,
         )
@@ -799,10 +774,11 @@ def plot_subject_category(
     fig, axes = plt.subplots(nrows, ncols, figsize=spec["figsize"], squeeze=False)
 
     all_trials = build_trial_list(subject_df)
+    step_trials, nonstep_trials = split_trials_by_step(all_trials)
     if step_group == "all":
-        trials = all_trials
+        # Draw step trials first so vline legends (step_onset) are more likely to appear.
+        trials = step_trials + nonstep_trials
     else:
-        step_trials, nonstep_trials = split_trials_by_step(all_trials)
         trials = step_trials if step_group == "step" else nonstep_trials
     trial_count = len(trials)
     if trial_count == 0:
@@ -862,7 +838,12 @@ def plot_subject_category(
         axes[rr][cc].axis("off")
 
     mode_label = "sample" if sample else "all"
-    group_label = "all trials" if step_group == "all" else f"{step_group} only"
+    step_count = sum(trial_has_step(trial_df) for trial_df in trials)
+    nonstep_count = trial_count - step_count
+    if step_group == "all":
+        group_label = f"step={step_count}, nonstep={nonstep_count}"
+    else:
+        group_label = f"{step_group} only"
     if group_by == "subject":
         suptitle = (
             f"{spec['title']} | {group_label} | subject overlay ({trial_count} subject-velocity-trial lines) | {mode_label}"
@@ -871,20 +852,41 @@ def plot_subject_category(
         velocity_token = "unknown"
         if velocity_value is not None:
             velocity_token = format_velocity(velocity_value)
-        suptitle = f"{spec['title']} | velocity={velocity_token} | {group_label} | trial overlay ({trial_count} trial lines) | {mode_label}"
+        suptitle = (
+            f"{spec['title']} | velocity={velocity_token} | {group_label} | "
+            f"trial overlay ({trial_count} trial lines) | {mode_label}"
+        )
     fig.suptitle(suptitle, fontsize=11, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     suffix = f"__{step_group}" if step_group != "all" else ""
     if group_by == "subject":
-        out_name = f"{spec['tag']}__subject-{safe_name(subject_value)}{suffix}__{mode_label}.png"
+        subject_token = safe_name(subject_value)
+        out_name = f"{spec['tag']}__subject-{subject_token}{suffix}__{mode_label}.png"
+        if step_group == "all":
+            for legacy in ["step", "nonstep"]:
+                legacy_name = f"{spec['tag']}__subject-{subject_token}__{legacy}__{mode_label}.png"
+                legacy_path = out_dir / legacy_name
+                if legacy_path.exists():
+                    legacy_path.unlink()
     else:
         velocity_token = "unknown"
         if velocity_value is not None:
             velocity_token = format_velocity(velocity_value)
+        subject_token = safe_name(subject_value)
+        velocity_token_safe = safe_name(velocity_token)
         out_name = (
-            f"{spec['tag']}__subject-{safe_name(subject_value)}__velocity-{safe_name(velocity_token)}{suffix}__{mode_label}.png"
+            f"{spec['tag']}__subject-{subject_token}__velocity-{velocity_token_safe}{suffix}__{mode_label}.png"
         )
+        if step_group == "all":
+            for legacy in ["step", "nonstep"]:
+                legacy_name = (
+                    f"{spec['tag']}__subject-{subject_token}__velocity-{velocity_token_safe}__"
+                    f"{legacy}__{mode_label}.png"
+                )
+                legacy_path = out_dir / legacy_name
+                if legacy_path.exists():
+                    legacy_path.unlink()
     out_path = out_dir / out_name
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -935,30 +937,23 @@ def main() -> None:
     )
 
     piecewise_mid_duration_s: float | None = None
-    if args.x_norm01:
-        x_mode = "norm01"
-        x_grid = build_common_x_grid(df, args.resample_hz)
-        x_ticks = build_normalized_xticks(args.xtick_norm)
-        x_plot = normalize_x_values(x_grid, float(x_grid[0]), float(x_grid[-1]))
-        x_axis_label = "Normalized time (0-1)"
+    if args.x_piecewise:
+        x_mode = "piecewise"
+        segment_window_s = float(args.segment_frames) * float(dt_s)
+        piecewise_mid_duration_s = segment_window_s
+        step = 1.0 / float(args.resample_hz)
+        x_min = -segment_window_s
+        x_max = piecewise_mid_duration_s + segment_window_s
+        x_grid = np.arange(x_min, x_max + (step * 0.5), step, dtype=float)
+        x_plot = x_grid
+        x_ticks = build_common_xticks(x_grid, args.xtick_sec)
+        x_axis_label = "Piecewise-normalized time (s)"
     else:
-        if args.x_piecewise:
-            x_mode = "piecewise"
-            segment_window_s = float(args.segment_frames) * float(dt_s)
-            piecewise_mid_duration_s = segment_window_s
-            step = 1.0 / float(args.resample_hz)
-            x_min = -segment_window_s
-            x_max = piecewise_mid_duration_s + segment_window_s
-            x_grid = np.arange(x_min, x_max + (step * 0.5), step, dtype=float)
-            x_plot = x_grid
-            x_ticks = build_common_xticks(x_grid, args.xtick_sec)
-            x_axis_label = "Piecewise-normalized time (s)"
-        else:
-            x_mode = "seconds"
-            x_grid = build_common_x_grid(df, args.resample_hz)
-            x_ticks = build_common_xticks(x_grid, args.xtick_sec)
-            x_plot = x_grid
-            x_axis_label = "Time from platform onset (s)"
+        x_mode = "seconds"
+        x_grid = build_common_x_grid(df, args.resample_hz)
+        x_ticks = build_common_xticks(x_grid, args.xtick_sec)
+        x_plot = x_grid
+        x_axis_label = "Time from platform onset (s)"
     trial_count = df.select(TRIAL_KEYS).unique().height
     subjects_all = df.select("subject").unique().sort("subject").get_column("subject").to_list()
     if args.sample:
@@ -975,11 +970,7 @@ def main() -> None:
         f"[{x_grid[0]:.3f}, {x_grid[-1]:.3f}] sec "
         f"({x_grid.size} points @ {args.resample_hz:g} Hz)"
     )
-    if x_mode == "norm01":
-        print(f"Normalized x-axis enabled (per trial): [0.000, 1.000] with {x_ticks.size} ticks")
-        print(f"Normalized x-axis tick spacing: {args.xtick_norm:g}")
-    else:
-        print(f"Common x-axis ticks: every {args.xtick_sec:g} sec ({x_ticks.size} ticks)")
+    print(f"Common x-axis ticks: every {args.xtick_sec:g} sec ({x_ticks.size} ticks)")
     if args.separate_step_nonstep:
         trial_flags = (
             df.select(TRIAL_KEYS + ["step_onset_local"])
