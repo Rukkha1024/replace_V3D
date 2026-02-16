@@ -51,9 +51,6 @@ def _collect_outputs(*, out_dir: Path, c3d_stem: str, steps: set[str]) -> list[P
     out = []
     if "angles" in steps:
         out.append(out_dir / f"{c3d_stem}_JOINT_ANGLES_preStep.csv")
-        out.append(out_dir / f"{c3d_stem}_JOINT_ANGLES_preStep.xlsx")
-        out.append(out_dir / f"{c3d_stem}_JOINT_ANGLES_preStep_anat.csv")
-        out.append(out_dir / f"{c3d_stem}_JOINT_ANGLES_preStep_ana0.csv")
     if "mos" in steps:
         out.append(out_dir / f"{c3d_stem}_MOS_preStep.xlsx")
     if "torque" in steps:

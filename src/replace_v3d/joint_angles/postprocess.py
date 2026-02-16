@@ -14,8 +14,10 @@ conventions that are commonly needed when comparing left vs right:
    Subtract the mean of a quiet-standing baseline window to remove static offsets
    (e.g., small SCS misalignments). This is useful for comparing Δangles.
 
-The repo keeps the raw joint-angle CSV schema unchanged for reproducibility and MD5
-validation. Use these helpers to generate additional outputs (`*_anat`, `*_ana0`).
+The pipeline uses the baseline-normalized convention (ana0) as the standard output:
+
+- LEFT Hip/Knee/Ankle Y/Z sign-unification
+- quiet-standing baseline subtraction (frames 1..11, inclusive)
 """
 
 from __future__ import annotations
@@ -136,4 +138,3 @@ def postprocess_joint_angles(
     )
 
     return out, meta
-

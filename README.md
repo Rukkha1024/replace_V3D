@@ -32,7 +32,7 @@ conda run -n module python main.py \
 
 Outputs:
 - `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
-- `<trial>_JOINT_ANGLES_preStep.xlsx` / `.csv` (+ `_anat`, `_ana0` CSVs)
+- `<trial>_JOINT_ANGLES_preStep.csv` (ana0: sign-unified + quiet-standing baseline-subtracted)
 - `<trial>_ankle_torque.xlsx` (if forceplate/analog is present)
 
 Single-trial options:
@@ -63,6 +63,7 @@ Notes:
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
 - By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
+- Joint angle columns (e.g., `Hip_*_deg`, `Knee_*_deg`, `Ankle_*_deg`, `Trunk_*_deg`, `Neck_*_deg`) use the ana0 convention.
 
 ## Grid plots (subject × velocity × variable category)
 
@@ -131,5 +132,4 @@ conda run -n module python main.py \
 ```
 
 Outputs:
-- `<trial>_JOINT_ANGLES_preStep.xlsx`
-- `<trial>_JOINT_ANGLES_preStep.csv` (for MD5 validation)
+- `<trial>_JOINT_ANGLES_preStep.csv` (ana0: sign-unified + quiet-standing baseline-subtracted)
