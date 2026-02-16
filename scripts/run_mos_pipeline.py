@@ -12,6 +12,7 @@ from dataclasses import replace as dc_replace
 import numpy as np
 import pandas as pd
 import polars as pl
+import yaml
 
 from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
 from replace_v3d.io.c3d_reader import read_c3d_points
@@ -20,6 +21,7 @@ from replace_v3d.com import COMModelParams, compute_whole_body_com, compute_xcom
 from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.io.events_excel import load_trial_events, parse_trial_from_filename
 from replace_v3d.mos import compute_mos_timeseries
+from replace_v3d.signal import butter_lowpass_filter
 
 
 def _corr(a: np.ndarray, b: np.ndarray) -> float:
@@ -97,6 +99,14 @@ def main() -> None:
     if args.head_beta is not None:
         params = dc_replace(params, head_beta=float(args.head_beta))
     COM = compute_whole_body_com(c3d.points, c3d.labels, params=params)
+
+    # Low-pass filter COM before differentiation (config.yaml → signal_processing.com_lowpass)
+    cfg_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    with open(cfg_path, encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    lp_cfg = cfg["signal_processing"]["com_lowpass"]
+    COM = butter_lowpass_filter(COM, cutoff_hz=lp_cfg["cutoff_hz"], fs=rate, order=lp_cfg["order"])
+
     vCOM = derivative(COM, dt=dt)
     leg_length_m = float(args.leg_length_cm) / 100.0
     xCOM = compute_xcom(COM, vCOM, leg_length_m=leg_length_m, g=9.81)
