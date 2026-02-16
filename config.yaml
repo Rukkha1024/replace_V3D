@@ -16,12 +16,12 @@ plot_grid_timeseries:
           col: 1
           ylabel: "MOS AP"
           series:
-            - col: MOS_AP_dir
+            - col: MOS_AP_v3d
         - row: 1
           col: 0
           ylabel: "MOS ML"
           series:
-            - col: MOS_ML_dir
+            - col: MOS_ML_v3d
         - row: 1
           col: 1
           ylabel: "BOS area"
@@ -302,4 +302,3 @@ plot_grid_timeseries:
           ylabel: "COP Z (m)"
           series:
             - col: COP_Z_m
-

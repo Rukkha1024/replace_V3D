@@ -17,6 +17,7 @@ from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
 from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.com import COMModelParams, compute_whole_body_com, compute_xcom, derivative
+from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.io.events_excel import load_trial_events, parse_trial_from_filename
 from replace_v3d.mos import compute_mos_timeseries
 
@@ -240,6 +241,7 @@ def main() -> None:
         validation = {**corr_all, **corr_pre}
 
     # Write Excel
+    df_pl = finalize_export_df(df_pl, export_kind="mos_preStep")
     df = df_pl.to_pandas()
     out_xlsx = out_dir / f"{c3d_path.stem}_MOS_preStep.xlsx"
     with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:

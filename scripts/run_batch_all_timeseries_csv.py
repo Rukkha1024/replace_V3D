@@ -31,6 +31,7 @@ from replace_v3d.io.events_excel import (
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
 )
+from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
@@ -564,6 +565,7 @@ def main() -> None:
                 lower_limb_angles=lower_limb_angles,
                 torque_payload=torque_payload,
             )
+            df_ts = finalize_export_df(df_ts, export_kind="batch_all_timeseries")
 
             header_written = append_rows_to_csv(
                 out_csv,

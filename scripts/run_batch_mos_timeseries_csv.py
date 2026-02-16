@@ -23,6 +23,7 @@ from replace_v3d.io.events_excel import (
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
 )
+from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.mos import compute_mos_timeseries
 
 
@@ -244,6 +245,7 @@ def main() -> None:
                 xCOM=xCOM,
                 mos=mos,
             )
+            df_ts = finalize_export_df(df_ts, export_kind="batch_mos_timeseries")
 
             header_written = append_rows_to_csv(
                 out_csv,
