@@ -23,6 +23,10 @@ description: >-
   - output base dir: `output.base_dir`
 - Do not read `config.yaml: plot_style` in new `vis_*.py` scripts (keep style in the script).
 - Always include a legend inside each subplot (use `ax.legend(...)`, not `fig.legend(...)`).
+- **Line plot visual encoding limit**: Only 2 visual categories are allowed in line plots:
+  1) **line color** — categorical distinction (e.g., step vs nonstep)
+  2) **line style** — style distinction (e.g., solid, dashed, dotted)
+  If the user requests a 3rd visual dimension (e.g., encoding another variable via line width, marker shape, or alpha), ask why it is needed and inform them that this rule prohibits it for readability and interpretability.
 
 ## Grid policy
 
