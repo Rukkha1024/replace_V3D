@@ -588,9 +588,11 @@ def plot_single_col(
         ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
         return
 
-    line_width = 1.2 if sample else 0.6
-    line_alpha = 0.95 if sample else 0.30
-    event_alpha = 1.0 if sample else 0.20
+    # Keep styling consistent between --sample and full renders.
+    # Categories should be expressed only via line color and line style.
+    line_width = 1.2
+    line_alpha = 0.95
+    event_alpha = 1.0
 
     if x_mode == "piecewise":
         draw_events(
@@ -660,9 +662,11 @@ def plot_lr_overlay(
     if not trials:
         return
 
-    line_width = 1.2 if sample else 0.6
-    line_alpha = 0.90 if sample else 0.30
-    event_alpha = 1.0 if sample else 0.20
+    # Keep styling consistent between --sample and full renders.
+    # Categories should be expressed only via line color and line style.
+    line_width = 1.2
+    line_alpha = 0.90
+    event_alpha = 1.0
     step_labeled = False
     nonstep_labeled = False
 

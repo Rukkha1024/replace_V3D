@@ -56,3 +56,10 @@ b287046a4fdaddcea899e0367f14fe96  output/figures/grid_timeseries/joint_angles_lo
 3617f7cecc74d1c613bad2beb16c6568  output/figures/grid_timeseries/mos_bos__subject-강비은__velocity-30__sample.png
 173146c20c222e4d4543311d32913eda  output/figures/grid_timeseries/mos_bos__subject-권유영__velocity-35__sample.png
 
+## 20260216_225102
+### BEFORE
+5e73840c8455551eef092df020d38268  output/figures/grid_timeseries/by_subject/강비은/y0/grf_cop__subject-강비은__velocity-30__all.png
+aae6e74b7c4e5f0f10dcef1fc7353644  output/figures/grid_timeseries/by_subject/강비은/y0/joint_angles_lower__subject-강비은__velocity-30__all.png
+### AFTER
+8e6279c17e48dca99c12e39aa3825dde  output/figures/grid_timeseries/by_subject/강비은/y0/grf_cop__subject-강비은__velocity-30__all.png
+0a61b2a81a071d03e2f90b4eab34705a  output/figures/grid_timeseries/by_subject/강비은/y0/joint_angles_lower__subject-강비은__velocity-30__all.png
