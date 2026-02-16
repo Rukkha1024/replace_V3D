@@ -18,3 +18,12 @@
 - Workaround used:
   - Run per-file scripts with explicit `--subject`/`--velocity`/`--trial` for quick validation, or
   - Rename/copy the `.c3d` so the parsed token matches `platform.subject` (e.g., `..._김우연_...`).
+
+## 2026-02-16
+
+- Context: Regression checks after changing joint angle outputs to ana0-only.
+- Issue: No bundled “reference output” directory was found for MD5 comparisons of generated CSVs.
+- Workaround used:
+  - Compute and log MD5 hashes for the newly generated outputs, and
+  - If strict regression testing is required, create/maintain a dedicated reference snapshot directory
+    and pass it via `main.py --md5_reference_dir ...`.
