@@ -47,6 +47,7 @@ description: >-
 - Save under `Path(config["output"]["base_dir"]) / <plot_type> / <filename>.png`.
 - Always save as `png` with `dpi=300`, `bbox_inches="tight"`, `facecolor="white"`.
 - Use deterministic naming (include the main grouping/facet/hue conditions in filename).
+- Always save outputs under per-subject subfolders (`<subject_name>/`). Exception: `--sample` mode saves directly without subfolders. Override only on explicit user instruction.
 
 ## Refactor validation (MD5)
 
