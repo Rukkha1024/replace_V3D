@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -320,7 +321,7 @@ def main() -> None:
             "Output is a long-format CSV: one row per subject-velocity-trial x MocapFrame.\n"
             "\n"
             "Notes:\n"
-            "- Analysis is preStep: up to just before step onset (end_frame = step_onset_local - 1)\n"
+            "- Default exports the full trimmed C3D range (use --analysis_mode prestep for legacy preStep export).\n"
             "- FORCE_PLATFORM/ANALOG is required (torque); missing forceplate aborts the run.\n"
         )
     )
@@ -377,9 +378,25 @@ def main() -> None:
         help="Skip subject/event matching failures and continue batch processing (torque forceplate failures still abort).",
     )
     parser.add_argument(
+        "--analysis_mode",
+        choices=["full", "prestep"],
+        default="full",
+        help=(
+            "Export range mode. "
+            "'full' exports all frames in the trimmed C3D (default). "
+            "'prestep' exports up to just before step onset (legacy behavior)."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Overwrite output CSV if it already exists.",
+    )
+    parser.add_argument(
+        "--backup_on_overwrite",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If --overwrite and output exists, move it to a .bak_TIMESTAMP file first (default: enabled).",
     )
     parser.add_argument(
         "--encoding",
@@ -406,7 +423,13 @@ def main() -> None:
 
     if out_csv.exists():
         if args.overwrite:
-            out_csv.unlink()
+            if args.backup_on_overwrite:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = out_csv.with_name(f"{out_csv.name}.bak_{timestamp}")
+                out_csv.replace(backup_path)
+                print(f"[INFO] Existing output backed up: {backup_path}")
+            else:
+                out_csv.unlink()
         else:
             raise FileExistsError(f"Output already exists: {out_csv}. Use --overwrite to replace it.")
 
@@ -468,7 +491,7 @@ def main() -> None:
         dt = 1.0 / rate_hz
         total_frames = int(c3d.points.shape[0])
 
-        if events.step_onset_local is not None:
+        if str(args.analysis_mode) == "prestep" and events.step_onset_local is not None:
             end_frame = int(events.step_onset_local) - 1
         else:
             end_frame = total_frames

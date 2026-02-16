@@ -61,6 +61,7 @@ Output:
 Notes:
 - Torque requires `FORCE_PLATFORM` metadata + analog channels in the C3D.
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
+- Batch export range is **full trimmed window** by default (not preStep-cut at step onset).
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
 - By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
 - Joint angle columns (e.g., `Hip_*_deg`, `Knee_*_deg`, `Ankle_*_deg`, `Trunk_*_deg`, `Neck_*_deg`) use the ana0 convention.
