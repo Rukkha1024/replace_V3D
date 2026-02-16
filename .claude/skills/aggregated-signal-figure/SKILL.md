@@ -83,3 +83,8 @@ description: >-
 
 - Summary plot example: `assets/examples/example_onset_summary.png`
 - Channel-grid example: `assets/examples/example_emg_channel_grid.png`
+
+## Piecewise x-axis normalization
+- The plot x-axis is split into three segments, each independently normalized: [onset − pad, onset], [onset, offset], [offset, offset + pad].
+- Output data is never modified; only the display x-axis is warped for visualization.
+- This aligns onset and offset across subjects/trials even when perturbation durations differ.
