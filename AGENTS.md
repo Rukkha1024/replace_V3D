@@ -60,3 +60,9 @@ Always follow this procedure when performing tasks:
 - `subject`, `velocity`, `trial_num` non-null
 - time index monotonic per `subject-velocity-trial`
 - window event values exist and are within the corresponding trial range
+
+---
+## Known non-code issues (2026-02-16)
+
+- `data/all_data/251128_방주원_perturb_200_005.c3d` is missing marker `T10`, so joint-angle computations may fail in batch pipelines that expect the full marker set (e.g. `scripts/run_batch_all_timeseries_csv.py`). Workaround: run with `--skip_unmatched` (skips the file) or fix the marker set / mapping.
+- C3D trim-range QC: some trimmed C3Ds are exactly 1 frame shorter than the nominal `[platform_onset-100, platform_offset+100]` window (`delta_frames=-1`). No files deviate by more than 1 frame; this is not the cause of “mid-cut” plot lines (those were from preStep-only CSV export).
