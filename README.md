@@ -70,6 +70,13 @@ After generating `output/all_trials_timeseries.csv`, you can render grid plots f
 
 - Category definitions (variables + subplot layout) live in `config.yaml > plot_grid_timeseries.categories`.
 - Default output dir is `output/figures/grid_timeseries/` (also configurable via `config.yaml` or `--out_dir`).
+- Default x-axis is **piecewise-normalized** for readability (plot-only; does not change CSV outputs):
+  - `[onset-100, onset]` stays as-is (pre window)
+  - `[onset, offset]` is normalized to a fixed length (= 100 frames)
+  - `[offset, offset+100]` stays as-is (post window)
+  - Disable with `--no-x_piecewise` to plot raw seconds from platform onset.
+  - Window size can be changed via `--segment_frames` (default: `100`).
+- Event vlines: `platform_onset` (red), `platform_offset` (green), `step_onset` (blue dashed).
 
 Sample preview (recommended):
 

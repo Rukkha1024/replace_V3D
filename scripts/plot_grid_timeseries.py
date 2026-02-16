@@ -10,6 +10,9 @@ conda run -n module python scripts/plot_grid_timeseries.py
 
 # Legacy: subject-wise overlay (all velocities together)
 conda run -n module python scripts/plot_grid_timeseries.py --group_by subject
+
+# Raw seconds x-axis (disable piecewise normalization)
+conda run -n module python scripts/plot_grid_timeseries.py --no-x_piecewise
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "grid_timeseries"
 DEFAULT_CONFIG = REPO_ROOT / "config.yaml"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 TIME_COL = "time_from_platform_onset_s"
+DEFAULT_SEGMENT_FRAMES = 100
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,10 +96,26 @@ def parse_args() -> argparse.Namespace:
         help="Common x-axis resampling rate (Hz)",
     )
     parser.add_argument(
+        "--segment_frames",
+        type=int,
+        default=DEFAULT_SEGMENT_FRAMES,
+        help="Plot window frames: [platform_onset-frames, platform_offset+frames] (default: 100).",
+    )
+    parser.add_argument(
         "--xtick_sec",
         type=float,
         default=0.2,
         help="Common x-axis tick spacing (sec)",
+    )
+    parser.add_argument(
+        "--x_piecewise",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Piecewise-normalize the displayed x-axis (default: enabled). "
+            "Segments: [onset-frames, onset] (raw), [onset, offset] (normalized), "
+            "[offset, offset+frames] (raw). Disable with --no-x_piecewise."
+        ),
     )
     parser.add_argument(
         "--x_norm01",
@@ -258,20 +278,17 @@ def load_plot_specs(config_path: Path) -> tuple[Path | None, list[dict]]:
 
 def load_data(csv_path: Path) -> pl.DataFrame:
     df = pl.read_csv(csv_path, encoding="utf8-lossy", infer_schema_length=10000)
-    required = TRIAL_KEYS + ["MocapFrame", "platform_onset_local", "Is_step_onset_frame", TIME_COL]
+    required = TRIAL_KEYS + [
+        "MocapFrame",
+        "platform_onset_local",
+        "platform_offset_local",
+        "step_onset_local",
+        TIME_COL,
+    ]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
-
-    # Requested data range: [platform_onset - 20, end].
-    df = df.filter(pl.col("MocapFrame") >= (pl.col("platform_onset_local") - 20))
-
-    step_times = (
-        df.filter(pl.col("Is_step_onset_frame") == 1)
-        .group_by(TRIAL_KEYS)
-        .agg(pl.col(TIME_COL).first().alias("step_onset_time_s"))
-    )
-    return df.join(step_times, on=TRIAL_KEYS, how="left")
+    return df
 
 
 def build_common_x_grid(df: pl.DataFrame, resample_hz: float) -> np.ndarray:
@@ -329,6 +346,69 @@ def build_normalized_xticks(xtick_norm: float) -> np.ndarray:
     return np.round(ticks, 6)
 
 
+def estimate_dt_seconds(df: pl.DataFrame) -> float:
+    if df.height < 2 or TIME_COL not in df.columns:
+        return 0.01
+    time_series = df.get_column(TIME_COL).drop_nulls().unique().sort()
+    if time_series.len() < 2:
+        return 0.01
+    values = np.asarray(time_series.to_list(), dtype=float)
+    diffs = np.diff(values)
+    diffs = diffs[np.isfinite(diffs) & (diffs > 0)]
+    if diffs.size == 0:
+        return 0.01
+    return float(np.median(diffs))
+
+
+def piecewise_warp_times(
+    t_raw_s: np.ndarray,
+    *,
+    offset_time_s: float,
+    mid_duration_s: float,
+) -> np.ndarray:
+    out = np.asarray(t_raw_s, dtype=float).copy()
+    if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
+        return out
+    if not np.isfinite(mid_duration_s) or mid_duration_s <= 0.0:
+        return out
+    mid_mask = (out >= 0.0) & (out <= offset_time_s)
+    post_mask = out > offset_time_s
+    out[mid_mask] = (out[mid_mask] / offset_time_s) * mid_duration_s
+    out[post_mask] = mid_duration_s + (out[post_mask] - offset_time_s)
+    return out
+
+
+def piecewise_warp_scalar(
+    t_raw_s: float,
+    *,
+    offset_time_s: float,
+    mid_duration_s: float,
+) -> float:
+    if not np.isfinite(t_raw_s):
+        return float("nan")
+    if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
+        return float(t_raw_s)
+    if not np.isfinite(mid_duration_s) or mid_duration_s <= 0.0:
+        return float(t_raw_s)
+    if t_raw_s < 0.0:
+        return float(t_raw_s)
+    if t_raw_s <= offset_time_s:
+        return float((t_raw_s / offset_time_s) * mid_duration_s)
+    return float(mid_duration_s + (t_raw_s - offset_time_s))
+
+
+def get_trial_scalar(trial_df: pl.DataFrame, col_name: str) -> float | None:
+    if col_name not in trial_df.columns:
+        return None
+    values = trial_df.get_column(col_name).drop_nulls().unique()
+    if values.len() == 0:
+        return None
+    try:
+        return float(values[0])
+    except (TypeError, ValueError):
+        return None
+
+
 def resample_xy(x_raw: np.ndarray, y_raw: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
     valid = np.isfinite(x_raw) & np.isfinite(y_raw)
     if np.count_nonzero(valid) == 0:
@@ -355,18 +435,28 @@ def resample_trial_column(
     trial_df: pl.DataFrame,
     col_name: str,
     x_grid: np.ndarray,
-    normalize_per_trial: bool,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
 ) -> np.ndarray:
     if col_name not in trial_df.columns:
         return np.full(x_grid.shape, np.nan, dtype=float)
 
     x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
     y_raw = np.asarray(trial_df.get_column(col_name).to_list(), dtype=float)
-    if normalize_per_trial:
+    if x_mode == "norm01":
         bounds = get_trial_time_bounds(trial_df)
         if bounds is None:
             return np.full(x_grid.shape, np.nan, dtype=float)
         x_raw = normalize_x_values(x_raw, bounds[0], bounds[1])
+    elif x_mode == "piecewise":
+        offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
+        if offset_time_s is not None:
+            mid_s = float(piecewise_mid_duration_s) if piecewise_mid_duration_s is not None else 0.0
+            x_raw = piecewise_warp_times(
+                x_raw,
+                offset_time_s=float(offset_time_s),
+                mid_duration_s=mid_s,
+            )
     return resample_xy(x_raw=x_raw, y_raw=y_raw, x_grid=x_grid)
 
 
@@ -375,11 +465,28 @@ def draw_events(
     trial_df: pl.DataFrame,
     alpha: float,
     label_once: bool,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
     x_norm_bounds: tuple[float, float] | None = None,
 ) -> None:
-    platform_x = 0.0
-    if x_norm_bounds is not None:
-        platform_x = normalize_x_scalar(platform_x, x_norm_bounds[0], x_norm_bounds[1])
+    onset_time_s = 0.0
+    offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
+    step_time_s = get_trial_scalar(trial_df, "step_onset_time_s")
+
+    mid_s = float(piecewise_mid_duration_s) if piecewise_mid_duration_s is not None else 0.0
+
+    def map_time(t_raw_s: float) -> float:
+        if x_mode == "norm01" and x_norm_bounds is not None:
+            return normalize_x_scalar(t_raw_s, x_norm_bounds[0], x_norm_bounds[1])
+        if x_mode == "piecewise" and offset_time_s is not None:
+            return piecewise_warp_scalar(
+                t_raw_s,
+                offset_time_s=float(offset_time_s),
+                mid_duration_s=mid_s,
+            )
+        return float(t_raw_s)
+
+    platform_x = map_time(onset_time_s)
     ax.axvline(
         platform_x,
         color="red",
@@ -388,12 +495,20 @@ def draw_events(
         linestyle="-",
         label="platform_onset" if label_once else None,
     )
-    step_times = trial_df.get_column("step_onset_time_s").drop_nulls().unique()
-    if step_times.len() > 0:
-        step_time = float(step_times[0])
-        step_x = step_time
-        if x_norm_bounds is not None:
-            step_x = normalize_x_scalar(step_time, x_norm_bounds[0], x_norm_bounds[1])
+
+    if offset_time_s is not None:
+        offset_x = map_time(float(offset_time_s))
+        ax.axvline(
+            offset_x,
+            color="green",
+            linewidth=0.9,
+            alpha=alpha,
+            linestyle="-",
+            label="platform_offset" if label_once else None,
+        )
+
+    if step_time_s is not None:
+        step_x = map_time(float(step_time_s))
         ax.axvline(
             step_x,
             color="blue",
@@ -410,7 +525,8 @@ def plot_single_col(
     col_name: str,
     sample: bool,
     x_plot: np.ndarray,
-    normalize_per_trial: bool,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
 ) -> None:
     if not trials or col_name not in trials[0].columns:
         ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
@@ -421,12 +537,13 @@ def plot_single_col(
     event_alpha = 1.0 if sample else 0.20
 
     for idx, trial_df in enumerate(trials):
-        trial_bounds = get_trial_time_bounds(trial_df) if normalize_per_trial else None
+        trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
         y_vals = resample_trial_column(
             trial_df=trial_df,
             col_name=col_name,
             x_grid=x_plot,
-            normalize_per_trial=normalize_per_trial,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
         )
         ax.plot(
             x_plot,
@@ -441,6 +558,8 @@ def plot_single_col(
             trial_df,
             alpha=event_alpha,
             label_once=(idx == 0),
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
             x_norm_bounds=trial_bounds,
         )
 
@@ -451,7 +570,8 @@ def plot_lr_overlay(
     col_specs: list[tuple[str, str, str]],
     sample: bool,
     x_plot: np.ndarray,
-    normalize_per_trial: bool,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
 ) -> None:
     if not trials:
         return
@@ -462,7 +582,7 @@ def plot_lr_overlay(
     side_color = {"L": "tab:blue", "R": "tab:orange"}
 
     for trial_idx, trial_df in enumerate(trials):
-        trial_bounds = get_trial_time_bounds(trial_df) if normalize_per_trial else None
+        trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "norm01" else None
         trial_cols = set(trial_df.columns)
         for col_name, side, style in col_specs:
             if col_name not in trial_cols:
@@ -471,7 +591,8 @@ def plot_lr_overlay(
                 trial_df=trial_df,
                 col_name=col_name,
                 x_grid=x_plot,
-                normalize_per_trial=normalize_per_trial,
+                x_mode=x_mode,
+                piecewise_mid_duration_s=piecewise_mid_duration_s,
             )
             ax.plot(
                 x_plot,
@@ -487,6 +608,8 @@ def plot_lr_overlay(
             trial_df,
             alpha=event_alpha,
             label_once=(trial_idx == 0),
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
             x_norm_bounds=trial_bounds,
         )
 
@@ -532,7 +655,8 @@ def plot_subject_category(
     x_plot: np.ndarray,
     x_ticks: np.ndarray,
     x_axis_label: str,
-    normalize_per_trial: bool,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
     step_group: str = "all",
 ) -> Path | None:
     nrows, ncols = spec["nrows"], spec["ncols"]
@@ -556,9 +680,25 @@ def plot_subject_category(
         ax = axes[r][c]
 
         if isinstance(col_spec, str):
-            plot_single_col(ax, trials, col_spec, sample, x_plot, normalize_per_trial)
+            plot_single_col(
+                ax,
+                trials,
+                col_spec,
+                sample,
+                x_plot,
+                x_mode,
+                piecewise_mid_duration_s,
+            )
         else:
-            plot_lr_overlay(ax, trials, col_spec, sample, x_plot, normalize_per_trial)
+            plot_lr_overlay(
+                ax,
+                trials,
+                col_spec,
+                sample,
+                x_plot,
+                x_mode,
+                piecewise_mid_duration_s,
+            )
 
         ax.set_title(ylabel, fontsize=9)
         ax.grid(True, linewidth=0.35, alpha=0.5)
@@ -624,6 +764,13 @@ def main() -> None:
 
     print(f"Loading data: {args.csv}")
     df = load_data(args.csv)
+    if args.segment_frames <= 0:
+        raise ValueError("--segment_frames must be >= 1")
+
+    # Plot window (local mocap frames): [platform_onset-frames, platform_offset+frames]
+    df = df.filter(pl.col("MocapFrame") >= (pl.col("platform_onset_local") - int(args.segment_frames)))
+    df = df.filter(pl.col("MocapFrame") <= (pl.col("platform_offset_local") + int(args.segment_frames)))
+
     only_subjects = parse_csv_list(args.only_subjects)
     if only_subjects:
         df = df.filter(pl.col("subject").is_in(only_subjects))
@@ -635,17 +782,45 @@ def main() -> None:
 
     if df.height == 0:
         raise ValueError("No rows to plot after applying filters.")
-    x_grid = build_common_x_grid(df, args.resample_hz)
+
+    dt_s = estimate_dt_seconds(df)
+    df = df.with_columns(
+        [
+            ((pl.col("platform_offset_local") - pl.col("platform_onset_local")) * float(dt_s)).alias(
+                "platform_offset_time_s"
+            ),
+            pl.when(pl.col("step_onset_local").is_not_null())
+            .then((pl.col("step_onset_local") - pl.col("platform_onset_local")) * float(dt_s))
+            .otherwise(None)
+            .alias("step_onset_time_s"),
+        ]
+    )
+
+    piecewise_mid_duration_s: float | None = None
     if args.x_norm01:
+        x_mode = "norm01"
+        x_grid = build_common_x_grid(df, args.resample_hz)
         x_ticks = build_normalized_xticks(args.xtick_norm)
         x_plot = normalize_x_values(x_grid, float(x_grid[0]), float(x_grid[-1]))
         x_axis_label = "Normalized time (0-1)"
-        normalize_per_trial = True
     else:
-        x_ticks = build_common_xticks(x_grid, args.xtick_sec)
-        x_plot = x_grid
-        x_axis_label = "Time from platform onset (s)"
-        normalize_per_trial = False
+        if args.x_piecewise:
+            x_mode = "piecewise"
+            segment_window_s = float(args.segment_frames) * float(dt_s)
+            piecewise_mid_duration_s = segment_window_s
+            step = 1.0 / float(args.resample_hz)
+            x_min = -segment_window_s
+            x_max = piecewise_mid_duration_s + segment_window_s
+            x_grid = np.arange(x_min, x_max + (step * 0.5), step, dtype=float)
+            x_plot = x_grid
+            x_ticks = build_common_xticks(x_grid, args.xtick_sec)
+            x_axis_label = "Piecewise-normalized time (s)"
+        else:
+            x_mode = "seconds"
+            x_grid = build_common_x_grid(df, args.resample_hz)
+            x_ticks = build_common_xticks(x_grid, args.xtick_sec)
+            x_plot = x_grid
+            x_axis_label = "Time from platform onset (s)"
     trial_count = df.select(TRIAL_KEYS).unique().height
     subjects_all = df.select("subject").unique().sort("subject").get_column("subject").to_list()
     if args.sample:
@@ -656,12 +831,13 @@ def main() -> None:
     print(f"Rows: {df.height}, Trials: {trial_count}, Subjects to render: {len(subjects)}")
     print(f"Mode: {'sample' if args.sample else 'all'}")
     print(f"Grouping: {args.group_by}")
+    print(f"X-axis mode: {x_mode}")
     print(
         "Common x-axis range: "
         f"[{x_grid[0]:.3f}, {x_grid[-1]:.3f}] sec "
         f"({x_grid.size} points @ {args.resample_hz:g} Hz)"
     )
-    if args.x_norm01:
+    if x_mode == "norm01":
         print(f"Normalized x-axis enabled (per trial): [0.000, 1.000] with {x_ticks.size} ticks")
         print(f"Normalized x-axis tick spacing: {args.xtick_norm:g}")
     else:
@@ -697,7 +873,8 @@ def main() -> None:
                             x_plot=x_plot,
                             x_ticks=x_ticks,
                             x_axis_label=x_axis_label,
-                            normalize_per_trial=normalize_per_trial,
+                            x_mode=x_mode,
+                            piecewise_mid_duration_s=piecewise_mid_duration_s,
                             step_group=step_group,
                         )
                         if out_path is not None:
@@ -715,7 +892,8 @@ def main() -> None:
                         x_plot=x_plot,
                         x_ticks=x_ticks,
                         x_axis_label=x_axis_label,
-                        normalize_per_trial=normalize_per_trial,
+                        x_mode=x_mode,
+                        piecewise_mid_duration_s=piecewise_mid_duration_s,
                         step_group="all",
                     )
                     if out_path is not None:
@@ -749,7 +927,8 @@ def main() -> None:
                                 x_plot=x_plot,
                                 x_ticks=x_ticks,
                                 x_axis_label=x_axis_label,
-                                normalize_per_trial=normalize_per_trial,
+                                x_mode=x_mode,
+                                piecewise_mid_duration_s=piecewise_mid_duration_s,
                                 step_group=step_group,
                             )
                             if out_path is not None:
@@ -767,7 +946,8 @@ def main() -> None:
                             x_plot=x_plot,
                             x_ticks=x_ticks,
                             x_axis_label=x_axis_label,
-                            normalize_per_trial=normalize_per_trial,
+                            x_mode=x_mode,
+                            piecewise_mid_duration_s=piecewise_mid_duration_s,
                             step_group="all",
                         )
                         if out_path is not None:
