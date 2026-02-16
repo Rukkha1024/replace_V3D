@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ..c3d_reader import _parse_parameters
+from ..io.c3d_reader import _parse_parameters
 
 
 @dataclass(frozen=True)
@@ -328,4 +328,3 @@ def extract_platform_wrenches_lab(
     F_lab = F_plate @ fp.R_pl2lab.T
     M_lab = M_plate @ fp.R_pl2lab.T
     return F_lab, M_lab
-
