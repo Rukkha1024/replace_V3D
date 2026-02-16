@@ -5,11 +5,14 @@ Always follow this procedure when performing tasks:
 3. **Modify code**: Make the necessary code changes according to the confirmed plan
 4. **Git Commit**: Commit changes with a Korean commit message specifically.
 5. **Run and Verify**: Execute the code and perform MD5 checksum comparison between new outputs and reference files if pipelines or logic were changed.
-6. **Finalize**: Record any non-code environment issues in `.codex/skills` or `AGENTS.md` and clearly specify which skills were used in the final response.
+6. **Finalize**:
+   - Record **issues/problems** in `issue.md` (문제 자체만; 해결방법 제외).
+   - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
+   - Clearly specify which skills were used in the final response.
 
 ---
 ## Environment rules
-- Use the existing conda env: `module`.
+- Always use WSL2 with the `module` conda environment for all tasks.
 - Always run Python/pip as: `conda run -n module python` / `conda run -n module pip`.
 - In this environment, `conda run -n module python -` may not receive stdin; prefer `-c` or running a `.py` file.
 - If file deletion is needed, prefer `conda run -n module python -c "import shutil; shutil.rmtree(...)"` over `rm -rf` (can be blocked in some runs).
@@ -60,9 +63,3 @@ Always follow this procedure when performing tasks:
 - `subject`, `velocity`, `trial_num` non-null
 - time index monotonic per `subject-velocity-trial`
 - window event values exist and are within the corresponding trial range
-
----
-## Known non-code issues (2026-02-16)
-
-- `data/all_data/251128_방주원_perturb_200_005.c3d` is missing marker `T10`, so joint-angle computations may fail in batch pipelines that expect the full marker set (e.g. `scripts/run_batch_all_timeseries_csv.py`). Workaround: run with `--skip_unmatched` (skips the file) or fix the marker set / mapping.
-- C3D trim-range QC: some trimmed C3Ds are exactly 1 frame shorter than the nominal `[platform_onset-100, platform_offset+100]` window (`delta_frames=-1`). No files deviate by more than 1 frame; this is not the cause of “mid-cut” plot lines (those were from preStep-only CSV export).
