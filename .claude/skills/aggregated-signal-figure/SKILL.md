@@ -28,6 +28,7 @@ description: >-
   2) **line style** — style distinction (e.g., solid, dashed, dotted)
   If the user requests a 3rd visual dimension (e.g., encoding another variable via line width, marker shape, or alpha), ask why it is needed and inform them that this rule prohibits it for readability and interpretability.
 - **Sample-first workflow**: When creating a new visualization or significantly changing an existing one, first generate a sample plot (e.g., single subject or `--sample` mode) and present it to the user for visual confirmation. Proceed to full-scale rendering only after the user approves the sample output.
+- **Direction labeling**: When plotting biomechanical variables (joint angles, torques, etc.), the subplot title (`ylabel` in config.yaml) must include (+)/(-) anatomical direction. Format: `"Variable (unit)\n(+) Direction1 / (-) Direction2"`. Example: `"Hip X (deg)\n(+) Flex / (-) Ext"`.
 
 ## Grid policy
 
