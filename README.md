@@ -75,6 +75,7 @@ After generating `output/all_trials_timeseries.csv`, you can render grid plots f
 
 - Category definitions (variables + subplot layout) live in `config.yaml > plot_grid_timeseries.categories`.
 - Default output dir is `output/figures/grid_timeseries/` (also configurable via `config.yaml` or `--out_dir`).
+- Plot files with the same output filename are always overwritten when re-rendering.
 - Default x-axis is **piecewise-normalized** for readability (plot-only; does not change CSV outputs):
   - `[onset-frames, onset]` is linearly warped to a fixed length (= `frames`)
   - `[onset, offset]` is linearly warped to a fixed length (= `frames`)

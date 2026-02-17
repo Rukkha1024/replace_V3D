@@ -8,6 +8,9 @@ Policy:
 ## 2026-02-17
 
 - [ENV] 비대화형 WSL2 shell에서 `conda`가 PATH에 없어 `conda run -n module ...` 실행이 실패할 수 있음(증상: `conda: command not found`).
+- [ENV] `main.py --overwrite --skip_unmatched` 및 `scripts/run_batch_all_timeseries_csv.py` 실행 시 OpenMP 런타임이 `OMP: Error #179: Function Can't open SHM2 failed`로 abort될 수 있음(배치 CSV 재생성 중단).
+- [ENV] `scripts/plot_grid_timeseries.py` 실행 시 `/home/alice/.config/matplotlib` 및 fontconfig cache 경로가 writable이 아니어서 매 실행마다 임시 캐시 경고가 출력됨.
+- [VIZ] `scripts/plot_grid_timeseries.py`에서 동일 파일명 재생성 시 overwrite 정책이 코드/로그로 명시되지 않아, figure 재생성 후 결과 반영 여부(덮어쓰기 여부)를 실행 로그만으로 판단하기 어려운 혼동 가능성이 있었음.
 
 ## 2026-02-16
 

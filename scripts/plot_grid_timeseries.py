@@ -882,9 +882,16 @@ def plot_subject_category(
                 if legacy_path.exists():
                     legacy_path.unlink()
     out_path = out_dir / out_name
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
+    save_figure_with_overwrite(fig, out_path, dpi=dpi)
     plt.close(fig)
     return out_path
+
+
+def save_figure_with_overwrite(fig: plt.Figure, out_path: Path, dpi: int) -> None:
+    if out_path.exists():
+        out_path.unlink()
+        print(f"Overwrote: {out_path}")
+    fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
 
 
 def main() -> None:
