@@ -71,6 +71,19 @@ class TrialSeries:
     time_from_onset_s: np.ndarray | None
 
 
+@dataclass(frozen=True)
+class DisplaySeries:
+    rotate_ccw_deg: int
+    com_x: np.ndarray
+    com_y: np.ndarray
+    bos_minx: np.ndarray
+    bos_maxx: np.ndarray
+    bos_miny: np.ndarray
+    bos_maxy: np.ndarray
+    x_lim: tuple[float, float]
+    y_lim: tuple[float, float]
+
+
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Render BOS/COM XY sample as static PNG + GIF (inside/outside visible)."
@@ -106,6 +119,12 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Save GIF output (default: enabled; disable with --no-save_gif).",
+    )
+    ap.add_argument(
+        "--rotate_ccw_deg",
+        type=int,
+        default=90,
+        help="Display rotation in degrees CCW. Allowed: 0, 90, 180, 270 (default: 90).",
     )
     return ap.parse_args()
 
@@ -226,23 +245,72 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
     )
 
 
-def compute_axis_limits(series: TrialSeries) -> tuple[tuple[float, float], tuple[float, float]]:
-    valid_idx = np.flatnonzero(series.valid_mask)
+def normalize_rotate_ccw_deg(value: int) -> int:
+    try:
+        deg = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"rotate_ccw_deg must be an integer. Got: {value!r}") from exc
+    if deg not in {0, 90, 180, 270}:
+        raise ValueError(f"Unsupported rotation: {deg}. Allowed values are 0, 90, 180, 270.")
+    return deg
+
+
+def rotate_xy(x: np.ndarray, y: np.ndarray, rotate_ccw_deg: int) -> tuple[np.ndarray, np.ndarray]:
+    deg = normalize_rotate_ccw_deg(rotate_ccw_deg)
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    if deg == 0:
+        return x_arr.copy(), y_arr.copy()
+    if deg == 90:
+        return -y_arr, x_arr
+    if deg == 180:
+        return -x_arr, -y_arr
+    return y_arr, -x_arr
+
+
+def rotate_box_bounds(
+    min_x: np.ndarray,
+    max_x: np.ndarray,
+    min_y: np.ndarray,
+    max_y: np.ndarray,
+    rotate_ccw_deg: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    x_corners = np.stack((min_x, max_x, max_x, min_x), axis=-1)
+    y_corners = np.stack((min_y, min_y, max_y, max_y), axis=-1)
+    x_rot, y_rot = rotate_xy(x_corners, y_corners, rotate_ccw_deg=rotate_ccw_deg)
+    out_min_x = np.nanmin(x_rot, axis=-1)
+    out_max_x = np.nanmax(x_rot, axis=-1)
+    out_min_y = np.nanmin(y_rot, axis=-1)
+    out_max_y = np.nanmax(y_rot, axis=-1)
+    return out_min_x, out_max_x, out_min_y, out_max_y
+
+
+def compute_axis_limits_from_arrays(
+    *,
+    com_x: np.ndarray,
+    com_y: np.ndarray,
+    bos_minx: np.ndarray,
+    bos_maxx: np.ndarray,
+    bos_miny: np.ndarray,
+    bos_maxy: np.ndarray,
+    valid_mask: np.ndarray,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    valid_idx = np.flatnonzero(valid_mask)
     if valid_idx.size == 0:
         raise ValueError("No valid frame remains after filtering NaN/invalid BOS bounds.")
 
     x_values = np.concatenate(
         (
-            series.com_x[valid_idx],
-            series.bos_minx[valid_idx],
-            series.bos_maxx[valid_idx],
+            com_x[valid_idx],
+            bos_minx[valid_idx],
+            bos_maxx[valid_idx],
         )
     )
     y_values = np.concatenate(
         (
-            series.com_y[valid_idx],
-            series.bos_miny[valid_idx],
-            series.bos_maxy[valid_idx],
+            com_y[valid_idx],
+            bos_miny[valid_idx],
+            bos_maxy[valid_idx],
         )
     )
 
@@ -264,6 +332,38 @@ def compute_axis_limits(series: TrialSeries) -> tuple[tuple[float, float], tuple
     return (x_min - x_margin, x_max + x_margin), (y_min - y_margin, y_max + y_margin)
 
 
+def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySeries:
+    deg = normalize_rotate_ccw_deg(rotate_ccw_deg)
+    com_x, com_y = rotate_xy(series.com_x, series.com_y, rotate_ccw_deg=deg)
+    bos_minx, bos_maxx, bos_miny, bos_maxy = rotate_box_bounds(
+        series.bos_minx,
+        series.bos_maxx,
+        series.bos_miny,
+        series.bos_maxy,
+        rotate_ccw_deg=deg,
+    )
+    x_lim, y_lim = compute_axis_limits_from_arrays(
+        com_x=com_x,
+        com_y=com_y,
+        bos_minx=bos_minx,
+        bos_maxx=bos_maxx,
+        bos_miny=bos_miny,
+        bos_maxy=bos_maxy,
+        valid_mask=series.valid_mask,
+    )
+    return DisplaySeries(
+        rotate_ccw_deg=deg,
+        com_x=com_x,
+        com_y=com_y,
+        bos_minx=bos_minx,
+        bos_maxx=bos_maxx,
+        bos_miny=bos_miny,
+        bos_maxy=bos_maxy,
+        x_lim=x_lim,
+        y_lim=y_lim,
+    )
+
+
 def draw_bos_outline(
     ax: plt.Axes,
     min_x: float,
@@ -280,14 +380,18 @@ def draw_bos_outline(
     ax.plot(x, y, color=color, alpha=alpha, linewidth=linewidth)
 
 
-def get_com_point_for_frame(series: TrialSeries, event_frame: int | None) -> tuple[float, float] | None:
+def get_com_point_for_frame(
+    series: TrialSeries,
+    display: DisplaySeries,
+    event_frame: int | None,
+) -> tuple[float, float] | None:
     if event_frame is None:
         return None
     idx = np.flatnonzero((series.mocap_frame == int(event_frame)) & series.valid_mask)
     if idx.size == 0:
         return None
     i = int(idx[0])
-    return float(series.com_x[i]), float(series.com_y[i])
+    return float(display.com_x[i]), float(display.com_y[i])
 
 
 def save_figure(fig: plt.Figure, out_path: Path, dpi: int) -> None:
@@ -299,10 +403,9 @@ def save_figure(fig: plt.Figure, out_path: Path, dpi: int) -> None:
 
 def render_static_png(
     series: TrialSeries,
+    display: DisplaySeries,
     out_path: Path,
     dpi: int,
-    x_lim: tuple[float, float],
-    y_lim: tuple[float, float],
 ) -> None:
     fig, ax = plt.subplots(figsize=(8.2, 8.0))
     valid_idx = np.flatnonzero(series.valid_mask)
@@ -310,15 +413,15 @@ def render_static_png(
     for i in valid_idx:
         draw_bos_outline(
             ax,
-            float(series.bos_minx[i]),
-            float(series.bos_maxx[i]),
-            float(series.bos_miny[i]),
-            float(series.bos_maxy[i]),
+            float(display.bos_minx[i]),
+            float(display.bos_maxx[i]),
+            float(display.bos_miny[i]),
+            float(display.bos_maxy[i]),
         )
 
     ax.plot(
-        series.com_x[valid_idx],
-        series.com_y[valid_idx],
+        display.com_x[valid_idx],
+        display.com_y[valid_idx],
         color="tab:blue",
         linewidth=1.9,
         alpha=0.95,
@@ -329,8 +432,8 @@ def render_static_png(
     outside_idx = np.flatnonzero(series.valid_mask & (~series.inside_mask))
     if inside_idx.size:
         ax.scatter(
-            series.com_x[inside_idx],
-            series.com_y[inside_idx],
+            display.com_x[inside_idx],
+            display.com_y[inside_idx],
             s=14,
             c="tab:green",
             alpha=0.75,
@@ -339,8 +442,8 @@ def render_static_png(
         )
     if outside_idx.size:
         ax.scatter(
-            series.com_x[outside_idx],
-            series.com_y[outside_idx],
+            display.com_x[outside_idx],
+            display.com_y[outside_idx],
             s=18,
             c="tab:red",
             alpha=0.85,
@@ -354,7 +457,7 @@ def render_static_png(
         ("step_onset", series.step_onset_local, "^", "tab:purple"),
     ]
     for label, event_frame, marker, color in event_specs:
-        event_point = get_com_point_for_frame(series, event_frame)
+        event_point = get_com_point_for_frame(series, display, event_frame)
         if event_point is None:
             continue
         ax.scatter(
@@ -389,13 +492,17 @@ def render_static_png(
         bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
     )
 
-    ax.set_xlim(*x_lim)
-    ax.set_ylim(*y_lim)
+    ax.set_xlim(*display.x_lim)
+    ax.set_ylim(*display.y_lim)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [AP: Front/Back]")
-    ax.set_ylabel("Y (m) [ML: Left/Right]")
-    ax.set_title(f"BOS + COM XY (static) | velocity={format_velocity(series.velocity)}, trial={series.trial}")
+    ax.set_xlabel("X (m) [ML: Right/Left]")
+    ax.set_ylabel("Y (m) [AP: Anterior/Posterior]")
+    ax.set_title(
+        "BOS + COM XY (static) | "
+        f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
+        f"view=CCW{display.rotate_ccw_deg}"
+    )
     ax.legend(loc="best", fontsize=8, frameon=True)
     fig.tight_layout()
     save_figure(fig, out_path, dpi=dpi)
@@ -404,12 +511,11 @@ def render_static_png(
 
 def render_gif(
     series: TrialSeries,
+    display: DisplaySeries,
     out_path: Path,
     fps: int,
     frame_step: int,
     dpi: int,
-    x_lim: tuple[float, float],
-    y_lim: tuple[float, float],
 ) -> int:
     if fps <= 0:
         raise ValueError("--fps must be >= 1")
@@ -492,13 +598,17 @@ def render_gif(
     ]
     ax.legend(handles=legend_handles, loc="best", fontsize=8, frameon=True)
 
-    ax.set_xlim(*x_lim)
-    ax.set_ylim(*y_lim)
+    ax.set_xlim(*display.x_lim)
+    ax.set_ylim(*display.y_lim)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [AP: Front/Back]")
-    ax.set_ylabel("Y (m) [ML: Left/Right]")
-    ax.set_title(f"BOS + COM XY animation | velocity={format_velocity(series.velocity)}, trial={series.trial}")
+    ax.set_xlabel("X (m) [ML: Right/Left]")
+    ax.set_ylabel("Y (m) [AP: Anterior/Posterior]")
+    ax.set_title(
+        "BOS + COM XY animation | "
+        f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
+        f"view=CCW{display.rotate_ccw_deg}"
+    )
     fig.tight_layout()
 
     valid_count = int(valid_indices.size)
@@ -521,9 +631,9 @@ def render_gif(
         frame_value = int(series.mocap_frame[idx])
         history = valid_indices[valid_indices <= idx]
 
-        trail_line.set_data(series.com_x[history], series.com_y[history])
-        cx = float(series.com_x[idx])
-        cy = float(series.com_y[idx])
+        trail_line.set_data(display.com_x[history], display.com_y[history])
+        cx = float(display.com_x[idx])
+        cy = float(display.com_y[idx])
         current_point.set_data([cx], [cy])
 
         is_inside = bool(series.inside_mask[idx])
@@ -531,10 +641,10 @@ def render_gif(
         current_point.set_markerfacecolor(color)
         current_point.set_markeredgecolor("black")
 
-        min_x = float(series.bos_minx[idx])
-        max_x = float(series.bos_maxx[idx])
-        min_y = float(series.bos_miny[idx])
-        max_y = float(series.bos_maxy[idx])
+        min_x = float(display.bos_minx[idx])
+        max_x = float(display.bos_maxx[idx])
+        min_y = float(display.bos_miny[idx])
+        max_y = float(display.bos_maxy[idx])
         bos_rect.set_xy((min_x, min_y))
         bos_rect.set_width(max_x - min_x)
         bos_rect.set_height(max_y - min_y)
@@ -577,6 +687,7 @@ def main() -> None:
     args = parse_args()
     if (not bool(args.save_png)) and (not bool(args.save_gif)):
         raise ValueError("At least one output must be enabled: --save_png and/or --save_gif.")
+    rotate_ccw_deg = normalize_rotate_ccw_deg(int(args.rotate_ccw_deg))
 
     args.csv = resolve_repo_path(Path(args.csv))
     args.out_dir = resolve_repo_path(Path(args.out_dir))
@@ -594,7 +705,7 @@ def main() -> None:
         )
 
     series = build_trial_series(trial_df=trial_df, subject=subject, velocity=velocity, trial=trial)
-    x_lim, y_lim = compute_axis_limits(series)
+    display = build_display_series(series, rotate_ccw_deg=rotate_ccw_deg)
 
     base_name = (
         f"{safe_name(subject)}__velocity-{safe_name(format_velocity(velocity))}"
@@ -618,25 +729,24 @@ def main() -> None:
         f"platform_offset_local={series.platform_offset_local}, "
         f"step_onset_local={series.step_onset_local}"
     )
+    print(f"Display rotation: CCW {rotate_ccw_deg} deg")
 
     gif_frames: int | None = None
     if bool(args.save_png):
         render_static_png(
             series=series,
+            display=display,
             out_path=png_out,
             dpi=int(args.dpi),
-            x_lim=x_lim,
-            y_lim=y_lim,
         )
     if bool(args.save_gif):
         gif_frames = render_gif(
             series=series,
+            display=display,
             out_path=gif_out,
             fps=int(args.fps),
             frame_step=int(args.frame_step),
             dpi=int(args.dpi),
-            x_lim=x_lim,
-            y_lim=y_lim,
         )
 
     valid_count = int(np.count_nonzero(series.valid_mask))
