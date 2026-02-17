@@ -4,6 +4,7 @@ Always follow this procedure when performing tasks:
 2. **Get user confirmation**: Present the plan to the user and wait for explicit confirmation before proceeding
 3. **Modify code**: Make the necessary code changes according to the confirmed plan
 4. **Git Commit**: Commit changes with a Korean commit message specifically.
+   - Commit messages must reflect the user's intent and be at least **3 lines** long.
 5. **Run and Verify**: Execute the code and perform MD5 checksum comparison between new outputs and reference files if pipelines or logic were changed.
 6. **Finalize**:
    - Record **issues/problems** in `issue.md` (문제 자체만; 해결방법 제외).
