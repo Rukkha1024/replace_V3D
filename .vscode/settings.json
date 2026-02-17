@@ -1,3 +1,5 @@
 {
-    "git.openRepositoryInParentFolders": "never"
+    "git.openRepositoryInParentFolders": "never",
+    "git.path": "C:\\Windows\\System32\\wsl.exe",
+    "git.useIntegratedAskPass": false
 }
