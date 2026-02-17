@@ -21,6 +21,7 @@ from replace_v3d.cli.trial_resolve import resolve_velocity_trial
 from replace_v3d.io.events_excel import load_trial_events, parse_trial_from_filename
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
+from replace_v3d.signal.zeroing import subtract_baseline_at_index
 
 
 def main() -> None:
@@ -103,13 +104,28 @@ def main() -> None:
 
     # Standard output = ana0 (analysis-friendly):
     # - unify L/R sign meaning (LEFT Hip/Knee/Ankle Y/Z negated)
-    # - subtract quiet-standing baseline mean (frames 1..11, inclusive)
+    # - onset-zeroed at platform onset (t=0) for cross-trial comparisons
     df_ana0, _meta_pp = postprocess_joint_angles(
         df_raw,
         frame_col="Frame",
         unify_lr_sign=True,
-        baseline_frames=(1, 11),
+        baseline_frames=None,
     )
+
+    onset_idx0 = int(events.platform_onset_local) - 1
+    if onset_idx0 < 0 or onset_idx0 >= df_ana0.height:
+        raise ValueError(
+            "platform_onset_local out of range for this trial export window: "
+            f"platform_onset_local={events.platform_onset_local}, rows={df_ana0.height}."
+        )
+
+    angle_cols = [c for c in df_ana0.columns if c.endswith("_deg")]
+    repl: list[pl.Series] = []
+    for c in angle_cols:
+        x = df_ana0.get_column(c).to_numpy()
+        repl.append(pl.Series(c, subtract_baseline_at_index(x, onset_idx0)))
+    if repl:
+        df_ana0 = df_ana0.with_columns(repl)
 
     out_csv = out_dir / f"{c3d_path.stem}_JOINT_ANGLES_preStep.csv"
     df_ana0.write_csv(out_csv)

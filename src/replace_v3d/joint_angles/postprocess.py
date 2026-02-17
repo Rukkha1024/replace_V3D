@@ -16,15 +16,16 @@ conventions that are commonly needed when comparing left vs right:
    360°) at the point of discontinuity. We implement the same idea here, but keep
    the scope limited to the columns that matter for this project (Ankle Z).
 
-3) Baseline-normalized convention:
-   Subtract the mean of a quiet-standing baseline window to remove static offsets
-   (e.g., small SCS misalignments). This is useful for comparing Δangles.
+3) Baseline-normalized convention (optional):
+   Subtract a baseline window mean to remove static offsets (e.g., small SCS
+   misalignments). This is useful when you want Δangles relative to a chosen
+   baseline segment.
 
-The pipeline uses the baseline-normalized convention (ana0) as the standard output:
+Current exports in this repo typically:
 
-- LEFT Hip/Knee/Ankle Y/Z sign-unification
-- Resolve_Discontinuity-style unwrapping for Ankle_*_Z_deg (range=360°; if needed)
-- quiet-standing baseline subtraction (frames 1..11, inclusive)
+- apply LEFT Hip/Knee/Ankle Y/Z sign-unification
+- apply Resolve_Discontinuity-style unwrapping for Ankle_*_Z_deg (range=360°; if needed)
+- perform onset-zeroing at platform onset in the calling pipeline (so baseline subtraction here is disabled)
 """
 
 from __future__ import annotations

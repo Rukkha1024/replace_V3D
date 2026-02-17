@@ -42,6 +42,7 @@ from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
+from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_lab
 from replace_v3d.torque.forceplate import (
@@ -73,6 +74,12 @@ def _make_timeseries_dataframe(
     torque_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     mocap_frames = np.arange(1, end_frame + 1, dtype=int)
+    onset_idx0 = int(platform_onset_local) - 1
+    if onset_idx0 < 0 or onset_idx0 >= int(end_frame):
+        raise ValueError(
+            "platform_onset_local out of range for this trial export window: "
+            f"platform_onset_local={platform_onset_local}, end_frame={end_frame}."
+        )
 
     is_platform_onset = mocap_frames == int(platform_onset_local)
     if step_onset_local is None:
@@ -91,6 +98,12 @@ def _make_timeseries_dataframe(
         knee_flex_R_deg = lower_limb_angles.knee_flex_R_deg
         ankle_dorsi_L_deg = lower_limb_angles.ankle_dorsi_L_deg
         ankle_dorsi_R_deg = lower_limb_angles.ankle_dorsi_R_deg
+
+    # Onset-zero (platform onset) for analysis-friendly comparisons.
+    knee_flex_L_deg = subtract_baseline_at_index(knee_flex_L_deg, onset_idx0)
+    knee_flex_R_deg = subtract_baseline_at_index(knee_flex_R_deg, onset_idx0)
+    ankle_dorsi_L_deg = subtract_baseline_at_index(ankle_dorsi_L_deg, onset_idx0)
+    ankle_dorsi_R_deg = subtract_baseline_at_index(ankle_dorsi_R_deg, onset_idx0)
 
     payload: dict[str, Any] = {
         "subject": [subject] * frame_count,
@@ -132,7 +145,7 @@ def _make_timeseries_dataframe(
 
     # Joint angles (standard = ana0):
     # - unify L/R sign meaning (LEFT Hip/Knee/Ankle Y/Z negated)
-    # - subtract quiet-standing baseline mean (frames 1..11, inclusive)
+    # - no quiet-standing baseline subtraction; outputs are onset-zeroed (platform onset)
     df_angles = pl.DataFrame(
         {
             "MocapFrame": mocap_frames,
@@ -166,11 +179,11 @@ def _make_timeseries_dataframe(
         df_angles,
         frame_col="MocapFrame",
         unify_lr_sign=True,
-        baseline_frames=(1, 11),
+        baseline_frames=None,
     )
     angle_cols = [c for c in df_pp.columns if c.endswith("_deg")]
     for c in angle_cols:
-        payload[c] = df_pp[c].to_numpy()
+        payload[c] = subtract_baseline_at_index(df_pp[c].to_numpy(), onset_idx0)
 
     for key, values in torque_payload.items():
         payload[key] = values
@@ -271,6 +284,11 @@ def _compute_ankle_torque_payload(
     time_from_onset = (frames0 - onset0) / float(rate_hz)
 
     end = int(end_frame)
+    if onset0 < 0 or onset0 >= end:
+        raise ValueError(
+            "platform_onset_local out of range for torque payload window: "
+            f"platform_onset_local={platform_onset_local}, onset0={onset0}, end_frame={end_frame}."
+        )
     payload = {
         "time_from_platform_onset_s": time_from_onset[:end],
         "GRF_X_N": res.F_lab[:end, 0],
@@ -318,6 +336,17 @@ def _compute_ankle_torque_payload(
         "AnkleTorqueR_int_Y_Nm": res.torque_R_int[:end, 1],
         "AnkleTorqueR_int_Z_Nm": res.torque_R_int[:end, 2],
     }
+
+    # Onset-zero force / moment / torque outputs (replace existing values).
+    for key in list(payload.keys()):
+        if key.startswith(("GRF_", "GRM_", "AnkleTorque")):
+            payload[key] = subtract_baseline_at_index(payload[key], onset0)
+
+    # Keep absolute COP_*_m, but add onset-zeroed COP columns for displacement use-cases.
+    for key in ("COP_X_m", "COP_Y_m", "COP_Z_m"):
+        if key in payload:
+            payload[f"{key}_onset0"] = subtract_baseline_at_index(payload[key], onset0)
+
     return int(fp.index_1based), payload
 
 

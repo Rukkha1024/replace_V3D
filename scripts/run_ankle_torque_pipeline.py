@@ -38,6 +38,7 @@ from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
     load_forceplate_inertial_templates,
 )
+from replace_v3d.signal.zeroing import subtract_baseline_at_index
 
 
 def main() -> None:
@@ -266,6 +267,24 @@ def main() -> None:
         "AnkleTorqueR_int_Y_Nm": res.torque_R_int[:, 1],
         "AnkleTorqueR_int_Z_Nm": res.torque_R_int[:, 2],
     }
+
+    # Onset-zero force / moment / torque outputs (replace existing values).
+    onset_idx0 = int(onset0)
+    if onset_idx0 < 0 or onset_idx0 >= int(n_frames):
+        raise ValueError(f"platform onset index out of range: onset0={onset_idx0}, n_frames={n_frames}")
+
+    for key in list(df_dict.keys()):
+        if not key.startswith(("GRF_", "GRM_", "AnkleTorque")):
+            continue
+        values = df_dict[key]
+        if isinstance(values, np.ndarray):
+            df_dict[key] = subtract_baseline_at_index(values, onset_idx0)
+
+    # Keep absolute COP_*_m, but add onset-zeroed COP columns for displacement use-cases.
+    for key in ("COP_X_m", "COP_Y_m", "COP_Z_m"):
+        values = df_dict.get(key)
+        if isinstance(values, np.ndarray):
+            df_dict[f"{key}_onset0"] = subtract_baseline_at_index(values, onset_idx0)
 
     if pl is not None:
         df_ts_pd = pl.DataFrame(df_dict).to_pandas()

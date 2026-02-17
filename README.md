@@ -32,7 +32,7 @@ conda run -n module python main.py \
 
 Outputs:
 - `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
-- `<trial>_JOINT_ANGLES_preStep.csv` (ana0: sign-unified + quiet-standing baseline-subtracted)
+- `<trial>_JOINT_ANGLES_preStep.csv` (sign-unified + platform-onset zeroed; Δ from platform onset)
 - `<trial>_ankle_torque.xlsx` (if forceplate/analog is present)
 
 Single-trial options:
@@ -65,7 +65,9 @@ Notes:
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
 - Legacy MOS alias columns are not saved: use `MOS_AP_v3d` / `MOS_ML_v3d` (not `MOS_AP_dir` / `MOS_ML_dir`).
 - By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
-- Joint angle columns (e.g., `Hip_*_deg`, `Knee_*_deg`, `Ankle_*_deg`, `Trunk_*_deg`, `Neck_*_deg`) use the ana0 convention.
+- Joint angle columns (e.g., `Hip_*_deg`, `Knee_*_deg`, `Ankle_*_deg`, `Trunk_*_deg`, `Neck_*_deg`) are sign-unified and platform-onset zeroed (Δ from onset).
+- Force/torque columns are also exported as Δ from platform onset: `GRF_*`, `GRM_*`, `AnkleTorque*`.
+- COP is exported as both absolute (`COP_*_m`) and onset-zeroed displacement (`COP_*_m_onset0`).
 
 ## Grid plots (subject × velocity × variable category)
 
@@ -81,6 +83,7 @@ After generating `output/all_trials_timeseries.csv`, you can render grid plots f
   - Window size can be changed via `--segment_frames` (default: `100`).
 - Default y-axis is **onset-zeroed** for readability (plot-only):
   - Each trial line subtracts its value at platform onset (`t=0`) so all variables start at 0.
+  - Note: some columns are already onset-zeroed in the saved CSV (e.g., `*_deg`, `GRF_*`, `GRM_*`, `AnkleTorque*`).
   - Disable with `--no-y_zero_onset`.
 - Event vlines: `platform_onset` (red), `platform_offset` (green), `step_onset` (blue dashed).
 
@@ -137,4 +140,4 @@ conda run -n module python main.py \
 ```
 
 Outputs:
-- `<trial>_JOINT_ANGLES_preStep.csv` (ana0: sign-unified + quiet-standing baseline-subtracted)
+- `<trial>_JOINT_ANGLES_preStep.csv` (sign-unified + platform-onset zeroed; Δ from platform onset)

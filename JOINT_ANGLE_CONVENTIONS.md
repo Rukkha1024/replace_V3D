@@ -6,7 +6,7 @@
 **표준 출력은 `ana0` 하나만** 사용합니다.
 
 - 저장 파일: `*_JOINT_ANGLES_preStep.csv`
-- 의미: **ana0 = (좌우 부호 통일) + (Resolve_Discontinuity: Ankle Z) + (quiet standing 기저선 차감)**
+- 의미: **ana0 = (좌우 부호 통일) + (Resolve_Discontinuity: Ankle Z) + (platform onset 기저선 차감)**
 
 ---
 
@@ -112,25 +112,25 @@ Euler/Cardan 관절각은 ±180° 경계에서 값이 갑자기 -180↔+180으�
 
 **적용 대상:** `Ankle_L_Z_deg`, `Ankle_R_Z_deg` (발목 Z축만)
 
-**목적:** Ankle Z에서 wrap로 인해 baseline mean이 깨지거나, ana0 결과에 큰 스파이크가 생기는 현상을 방지합니다.
+**목적:** Ankle Z에서 wrap로 인해 onset-zeroing(Δ 계산)이 깨지거나, ana0 결과에 큰 스파이크가 생기는 현상을 방지합니다.
 
 > 비고: 다른 축(X/Y)이나 다른 관절(Z 포함)은 값이 변하지 않도록 본 단계 적용 대상에서 제외합니다.
 
-### 3.3 quiet standing 기저선 차감 (Step 3)
+### 3.3 platform onset 기저선 차감 (Step 3)
 
-정적 기립(quiet standing) 구간의 평균값을 빼서 정적 오프셋을 제거합니다.
+platform onset 시점의 값을 빼서, platform onset(`t=0`)에서 관절각이 0이 되도록 맞춥니다.
 
-**기저선 구간:** Frame 1 ~ 11 (양 끝 포함, 총 11프레임)
+**기저선 시점:** `Frame = platform_onset_local` (1프레임)
 
 **적용 수식:** 모든 `*_deg` 열에 대해:
 
 ```
-angle[i] = angle[i] - mean(angle[Frame 1..11])
+angle[i] = angle[i] - angle[Frame = platform_onset_local]
 ```
 
 **목적:**
-- 세그먼트 좌표계 정렬 오차로 인한 작은 정적 오프셋 제거
-- 결과값은 quiet standing 대비 **Δ각도(변화량)** 로 해석
+- 시행 간 절대 각도 오프셋(정적 offset)을 제거하여 비교 용이
+- 결과값은 platform onset 대비 **Δ각도(변화량)** 로 해석
 
 ---
 
@@ -167,14 +167,14 @@ Neck_X_deg,   Neck_Y_deg,   Neck_Z_deg
 - 파일명: `{c3d_stem}_JOINT_ANGLES_preStep.csv`
 - 프레임 열: `Frame` (1-indexed), `Time_s`
 - 분석 구간: C3D 시작 ~ `step_onset_local - 1` (step onset 이전까지)
-- 관절각 열: 위 24개 열 (ana0 적용 완료)
+- 관절각 열: 위 24개 열 (ana0 적용 완료; onset=0, Δ각도)
 
 ### 배치 통합 (`run_batch_all_timeseries_csv.py`)
 
 - 모든 시행을 하나의 CSV로 통합
 - 프레임 열: `MocapFrame` (100Hz 기준)
 - 메타데이터 열: `subject`, `velocity`, `trial` 등
-- 관절각은 동일한 ana0 값 사용 (24개 열)
+- 관절각은 동일한 ana0 값 사용 (24개 열; onset=0, Δ각도)
 - COM, MOS, Torque, GRF 등 다른 변수와 함께 출력
 
 ---
@@ -186,7 +186,7 @@ Neck_X_deg,   Neck_Y_deg,   Neck_Z_deg
 | 세그먼트 좌표계 구성 | `src/replace_v3d/joint_angles/v3d_joint_angles.py` |
 | 관절중심 계산 (Harrington 등) | `src/replace_v3d/com/joint_centers.py` |
 | 오일러 분해 | `src/replace_v3d/joint_angles/v3d_joint_angles.py` |
-| ana0 후처리 (부호 통일 + 기저선 차감) | `src/replace_v3d/joint_angles/postprocess.py` |
+| ana0 후처리 (부호 통일 + Resolve_Discontinuity) | `src/replace_v3d/joint_angles/postprocess.py` |
 | 단일 시행 파이프라인 | `scripts/run_joint_angles_pipeline.py` |
 | 배치 통합 CSV | `scripts/run_batch_all_timeseries_csv.py` |
 | 시상면 각도 (KneeFlex, AnkleDorsi) | `src/replace_v3d/joint_angles/sagittal.py` |
