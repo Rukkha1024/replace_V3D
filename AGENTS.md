@@ -6,7 +6,7 @@ Always follow this procedure when performing tasks:
 4. **Git Commit**: Commit changes with a Korean commit message that reflects the user's intent, at least **3 lines** long.
 5. **Run and Verify**: Execute the code and perform MD5 checksum comparison between new outputs and reference files if pipelines or logic were changed.
 6. **Finalize**:
-   - Record **issues/problems** in `issue.md` (문제 자체만; 해결방법 제외).
+   - Record **issues/problems** in `.codex\issue.md` (issue only).
    - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
    - Clearly specify which skills were used in the final response.
    - Remove unnecessary files and folders.
@@ -19,7 +19,20 @@ Always follow this procedure when performing tasks:
 - If file deletion is needed, prefer `conda run -n module python -c "import shutil; shutil.rmtree(...)"` over `rm -rf` (can be blocked in some runs).
 
 ---
-## **Codebase Rule: Configuration Management**
+# ExecPlans
+All tasks in this repo use ExecPlans. use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
+
+## Phase 1: Requirements Discovery
+Use `.codex/REQUIREMENTS_TEMPLATE.md` to guide a discovery session with the user. Ask questions in batches of 3-5. If answers are vague, push back. Do NOT proceed until the user confirms the completed brief.
+
+## Phase 2: Plan Authoring
+Write an ExecPlan per `.codex/PLANS.md`. Present it to the user. Do NOT implement until the user approves.
+
+## Phase 3: Implementation
+Follow the approved ExecPlan. Proceed through milestones autonomously without prompting the user. Keep all living document sections up to date. Commit frequently. If blocked, stop and ask.
+
+---
+# **Codebase Rule: Configuration Management**
 
 - Do not restore or roll back files/code that you did not modify yourself. Never attempt to "fix" or revert changes in files unrelated to your current task, including using `git checkout`.
 - Use `polars` then `pandas` library.
