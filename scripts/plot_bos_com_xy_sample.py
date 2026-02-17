@@ -20,6 +20,7 @@ _bootstrap.ensure_src_on_path()
 
 import matplotlib
 import numpy as np
+import pandas as pd
 import polars as pl
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -31,6 +32,7 @@ matplotlib.use("Agg")
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
+DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 REQUIRED_COLUMNS = [
     "subject",
@@ -84,11 +86,20 @@ class DisplaySeries:
     y_lim: tuple[float, float]
 
 
+_PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
+
+
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Render BOS/COM XY sample as static PNG + GIF (inside/outside visible)."
     )
     ap.add_argument("--csv", type=Path, default=DEFAULT_CSV, help="Input long CSV path")
+    ap.add_argument(
+        "--event_xlsm",
+        type=Path,
+        default=DEFAULT_EVENT_XLSM,
+        help="Event workbook path (used for trial state subtitle; default: data/perturb_inform.xlsm).",
+    )
     ap.add_argument("--out_dir", type=Path, default=DEFAULT_OUT, help="Output directory")
     ap.add_argument("--subject", type=str, default=None, help="Subject selector (must pair with velocity/trial)")
     ap.add_argument("--velocity", type=float, default=None, help="Velocity selector (must pair with subject/trial)")
@@ -126,6 +137,12 @@ def parse_args() -> argparse.Namespace:
         default=90,
         help="Display rotation in degrees CCW. Allowed: 0, 90, 180, 270 (default: 90).",
     )
+    ap.add_argument(
+        "--show_trial_state",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show step/nonstep and stepping-foot info in title subtitle (default: enabled).",
+    )
     return ap.parse_args()
 
 
@@ -161,6 +178,90 @@ def load_data(csv_path: Path) -> pl.DataFrame:
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
     return df
+
+
+def load_platform_sheet(event_xlsm: Path) -> pd.DataFrame:
+    resolved = event_xlsm.resolve()
+    cached = _PLATFORM_SHEET_CACHE.get(resolved)
+    if cached is not None:
+        return cached
+
+    if not resolved.exists():
+        raise FileNotFoundError(f"Event workbook not found: {resolved}")
+
+    df = pd.read_excel(resolved, sheet_name="platform")
+    required = {"subject", "velocity", "trial", "state"}
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"platform sheet missing required columns: {', '.join(missing)}")
+
+    out = df[["subject", "velocity", "trial", "state"]].copy()
+    out["subject"] = out["subject"].astype(str).str.strip()
+    out["velocity"] = pd.to_numeric(out["velocity"], errors="coerce")
+    out["trial"] = pd.to_numeric(out["trial"], errors="coerce")
+    out["state"] = out["state"].astype(str).str.strip()
+    _PLATFORM_SHEET_CACHE[resolved] = out
+    return out
+
+
+def canonicalize_trial_state(raw_state: str | None) -> str:
+    if raw_state is None:
+        return "unknown"
+    text = str(raw_state).strip()
+    if not text:
+        return "unknown"
+    low = text.lower()
+    if low == "step_l":
+        return "step_L"
+    if low == "step_r":
+        return "step_R"
+    if low == "nonstep":
+        return "nonstep"
+    if low == "footlift":
+        return "footlift"
+    return text
+
+
+def resolve_trial_state(
+    event_xlsm: Path,
+    *,
+    subject: str,
+    velocity: float,
+    trial: int,
+) -> str:
+    try:
+        platform = load_platform_sheet(event_xlsm)
+    except Exception as exc:
+        print(f"Warning: trial state lookup failed ({exc}). Using unknown.")
+        return "unknown"
+
+    subset = platform[platform["subject"] == str(subject).strip()]
+    subset = subset[np.isclose(subset["velocity"].to_numpy(dtype=float), float(velocity), rtol=0.0, atol=1e-9)]
+    subset = subset[subset["trial"] == float(int(trial))]
+    if subset.empty:
+        print(
+            "Warning: no platform.state row for "
+            f"subject={subject}, velocity={format_velocity(velocity)}, trial={trial}. Using unknown."
+        )
+        return "unknown"
+    if len(subset) > 1:
+        print(
+            "Warning: multiple platform.state rows for "
+            f"subject={subject}, velocity={format_velocity(velocity)}, trial={trial}. Using first row."
+        )
+    return canonicalize_trial_state(subset.iloc[0]["state"])
+
+
+def format_trial_state_label(state: str) -> str:
+    if state == "step_R":
+        return "trial_type=step (R foot)"
+    if state == "step_L":
+        return "trial_type=step (L foot)"
+    if state == "nonstep":
+        return "trial_type=nonstep"
+    if state == "footlift":
+        return "trial_type=footlift (nonstep)"
+    return f"trial_type=unknown ({state})" if state != "unknown" else "trial_type=unknown"
 
 
 def resolve_trial_selection(args: argparse.Namespace, df: pl.DataFrame) -> tuple[str, float, int, bool]:
@@ -401,9 +502,23 @@ def save_figure(fig: plt.Figure, out_path: Path, dpi: int) -> None:
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
 
 
+def set_title_and_subtitle(
+    ax: plt.Axes,
+    *,
+    title: str,
+    subtitle: str | None,
+) -> None:
+    if subtitle:
+        ax.set_title(title, fontsize=11, fontweight="bold", pad=20)
+        ax.text(0.5, 1.01, subtitle, transform=ax.transAxes, ha="center", va="bottom", fontsize=9)
+    else:
+        ax.set_title(title, fontsize=11, fontweight="bold")
+
+
 def render_static_png(
     series: TrialSeries,
     display: DisplaySeries,
+    trial_state_label: str | None,
     out_path: Path,
     dpi: int,
 ) -> None:
@@ -498,13 +613,17 @@ def render_static_png(
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
-    ax.set_title(
-        "BOS + COM XY (static) | "
-        f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
-        f"view=CCW{display.rotate_ccw_deg}"
+    set_title_and_subtitle(
+        ax,
+        title=(
+            "BOS + COM XY (static) | "
+            f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
+            f"view=CCW{display.rotate_ccw_deg}"
+        ),
+        subtitle=trial_state_label,
     )
     ax.legend(loc="best", fontsize=8, frameon=True)
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 1, 0.96] if trial_state_label else None)
     save_figure(fig, out_path, dpi=dpi)
     plt.close(fig)
 
@@ -512,6 +631,7 @@ def render_static_png(
 def render_gif(
     series: TrialSeries,
     display: DisplaySeries,
+    trial_state_label: str | None,
     out_path: Path,
     fps: int,
     frame_step: int,
@@ -623,12 +743,16 @@ def render_gif(
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
-    ax.set_title(
-        "BOS + COM XY animation | "
-        f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
-        f"view=CCW{display.rotate_ccw_deg}"
+    set_title_and_subtitle(
+        ax,
+        title=(
+            "BOS + COM XY animation | "
+            f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
+            f"view=CCW{display.rotate_ccw_deg}"
+        ),
+        subtitle=trial_state_label,
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 1, 0.96] if trial_state_label else None)
 
     valid_count = int(valid_indices.size)
     inside_count = int(np.count_nonzero(series.inside_mask[valid_indices]))
@@ -716,6 +840,7 @@ def main() -> None:
     rotate_ccw_deg = normalize_rotate_ccw_deg(int(args.rotate_ccw_deg))
 
     args.csv = resolve_repo_path(Path(args.csv))
+    args.event_xlsm = resolve_repo_path(Path(args.event_xlsm))
     args.out_dir = resolve_repo_path(Path(args.out_dir))
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -732,6 +857,13 @@ def main() -> None:
 
     series = build_trial_series(trial_df=trial_df, subject=subject, velocity=velocity, trial=trial)
     display = build_display_series(series, rotate_ccw_deg=rotate_ccw_deg)
+    trial_state = resolve_trial_state(
+        event_xlsm=args.event_xlsm,
+        subject=subject,
+        velocity=float(velocity),
+        trial=int(trial),
+    )
+    trial_state_label = format_trial_state_label(trial_state) if bool(args.show_trial_state) else None
 
     base_name = (
         f"{safe_name(subject)}__velocity-{safe_name(format_velocity(velocity))}"
@@ -756,12 +888,14 @@ def main() -> None:
         f"step_onset_local={series.step_onset_local}"
     )
     print(f"Display rotation: CCW {rotate_ccw_deg} deg")
+    print(f"Trial state: {trial_state}")
 
     gif_frames: int | None = None
     if bool(args.save_png):
         render_static_png(
             series=series,
             display=display,
+            trial_state_label=trial_state_label,
             out_path=png_out,
             dpi=int(args.dpi),
         )
@@ -769,6 +903,7 @@ def main() -> None:
         gif_frames = render_gif(
             series=series,
             display=display,
+            trial_state_label=trial_state_label,
             out_path=gif_out,
             fps=int(args.fps),
             frame_step=int(args.frame_step),
