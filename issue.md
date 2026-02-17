@@ -5,6 +5,10 @@ Policy:
 - Record **해결방법/워크어라운드** in the global skill: `$replace-v3d-troubleshooting`.
 
 ---
+## 2026-02-17
+
+- [ENV] 비대화형 WSL2 shell에서 `conda`가 PATH에 없어 `conda run -n module ...` 실행이 실패할 수 있음(증상: `conda: command not found`).
+
 ## 2026-02-16
 
 - [DATA] `data/all_data/251128_방주원_perturb_200_005.c3d`: marker `T10` missing → joint-angle computations may fail in batch pipelines that expect the full marker set.
