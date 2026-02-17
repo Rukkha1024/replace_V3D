@@ -1,3 +1,9 @@
+"""Batch pipeline for MOS (Margin of Stability) only.
+
+Computes COM, xCOM, and MOS time-series from multiple C3D files and exports to CSV.
+Lightweight alternative to run_batch_all when only MOS is needed.
+"""
+
 from __future__ import annotations
 
 import argparse

@@ -1,3 +1,9 @@
+"""Single-trial MOS (Margin of Stability) pipeline.
+
+Computes whole-body COM, xCOM, and MOS time-series from a C3D file.
+Includes optional validation against Visual3D COM (bias, RMSE).
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

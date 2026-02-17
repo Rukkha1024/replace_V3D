@@ -1,3 +1,8 @@
+"""Single-trial joint angle pipeline.
+
+Computes 3D hip, knee, and ankle joint angles from C3D point data using the V3D method.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

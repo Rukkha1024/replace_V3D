@@ -1,3 +1,9 @@
+"""QA script: verify forceplate inertial subtraction against reference files.
+
+Loads NPZ templates and compares velocity selection, interpolation weights,
+and corrected values against shared reference data.
+"""
+
 from __future__ import annotations
 
 import argparse

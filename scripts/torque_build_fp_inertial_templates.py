@@ -1,37 +1,11 @@
-from __future__ import annotations
+"""Build per-velocity forceplate inertial-subtraction templates (100 Hz) and save to NPZ.
 
-"""Build per-velocity forceplate inertial-subtract templates (100 Hz) and save to NPZ.
-
-Why this exists
----------------
-`shared_files/stages/01_build_dataset.py` contains logic to subtract treadmill/plate inertia
-using unloaded trials (forceplate_3.csv). The `replace_V3D` repo consumes C3D files that
-**do not** have this inertial subtraction applied.
-
-Instead of importing Stage01 wholesale, this script extracts the *correction values*
-(templates) once and stores them in a compact `.npz`. The ankle torque pipeline can then
-load and apply these templates at runtime.
-
-This is a direct port of Stage01's logic:
-  - Read `FP_platform_on-offset.xlsx` (velocity/trial/onset/offset)
-  - For each velocity, compute unload_range_frames = median(offset-onset)
-  - For each unloaded trial csv, downsample 1000 Hz -> 100 Hz (DeviceFrame // frame_ratio)
-  - Align segment to onset, average across trials, interpolate missing frames
-  - Baseline shift so template[0] == 0 for each channel
-
-Default axis transform
-----------------------
-Stage01 applies an axis transform to convert "Lab(action)" -> "ISB/GRF(reaction)":
-  Fx<-Fy, Fy<-Fx, Fz<- -Fz, Mx<-My, My<-Mx, Mz<- -Mz
-This script applies the same mapping by default.
-
-Run
----
-conda run -n module python scripts/torque_build_fp_inertial_templates.py \
-  --unload_data_dir /path/to/Archive/unload_data \
-  --timing_xlsx /path/to/Archive/unload_data/FP_platform_on-offset.xlsx \
-  --out_npz src/replace_v3d/torque/assets/fp_inertial_templates.npz
+Reads unloaded trial CSVs, downsamples 1000→100 Hz, averages across trials,
+interpolates gaps, and applies Lab→ISB/GRF axis transform.
+Consumed at runtime by the ankle torque pipeline.
 """
+
+from __future__ import annotations
 
 import argparse
 import json

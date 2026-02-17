@@ -1,3 +1,9 @@
+"""Single-trial ankle torque pipeline.
+
+Computes joint centers, whole-body COM, and COP from a C3D + event file,
+applies forceplate inertial correction, and calculates net-wrench ankle torque.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

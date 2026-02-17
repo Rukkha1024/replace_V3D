@@ -1,3 +1,10 @@
+"""Batch pipeline for all biomechanical variables.
+
+Processes multiple C3D files to compute COM, xCOM, joint angles
+(hip/knee/ankle/trunk/neck), ankle torque, and MOS, then exports
+a single CSV (all_trials_timeseries.csv).
+"""
+
 from __future__ import annotations
 
 import argparse

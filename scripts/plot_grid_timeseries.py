@@ -1,18 +1,8 @@
-"""Grid-plot visualisation of biomechanical time-series.
+"""Grid-plot visualization of biomechanical time-series.
 
-Usage
------
-# Sample mode (subject×velocity-wise preview; recommended for sanity checks)
-conda run -n module python scripts/plot_grid_timeseries.py --sample
-
-# All subject×velocity groups (default)
-conda run -n module python scripts/plot_grid_timeseries.py
-
-# Legacy: subject-wise overlay (all velocities together)
-conda run -n module python scripts/plot_grid_timeseries.py --group_by subject
-
-# Raw seconds x-axis (disable piecewise normalization)
-conda run -n module python scripts/plot_grid_timeseries.py --no-x_piecewise
+Reads all_trials_timeseries.csv and generates per subject×velocity grid figures.
+Supports --sample preview, --group_by mode, and --no-x_piecewise for raw time axis.
+Output: output/figures/grid_timeseries/
 """
 
 from __future__ import annotations

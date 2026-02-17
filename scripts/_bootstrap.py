@@ -1,3 +1,5 @@
+"""Bootstrap utility that adds src/ to sys.path for running repo scripts without installation."""
+
 from __future__ import annotations
 
 import sys
