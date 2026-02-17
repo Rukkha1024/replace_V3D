@@ -93,7 +93,7 @@ plot_grid_timeseries:
       subplots:
         - row: 0
           col: 0
-          ylabel: "Hip X (deg)"
+          ylabel: "Hip X (deg)\n(+) Flex / (-) Ext"
           series:
             - col: Hip_L_X_deg
               side: L
@@ -103,7 +103,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 0
           col: 1
-          ylabel: "Hip Y (deg)"
+          ylabel: "Hip Y (deg)\n(+) Add / (-) Abd"
           series:
             - col: Hip_L_Y_deg
               side: L
@@ -113,7 +113,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 0
           col: 2
-          ylabel: "Hip Z (deg)"
+          ylabel: "Hip Z (deg)\n(+) IR / (-) ER"
           series:
             - col: Hip_L_Z_deg
               side: L
@@ -123,7 +123,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 1
           col: 0
-          ylabel: "Knee X (deg)"
+          ylabel: "Knee X (deg)\n(+) Flex / (-) Ext"
           series:
             - col: Knee_L_X_deg
               side: L
@@ -133,7 +133,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 1
           col: 1
-          ylabel: "Knee Y (deg)"
+          ylabel: "Knee Y (deg)\n(+) Add / (-) Abd"
           series:
             - col: Knee_L_Y_deg
               side: L
@@ -143,7 +143,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 1
           col: 2
-          ylabel: "Knee Z (deg)"
+          ylabel: "Knee Z (deg)\n(+) IR / (-) ER"
           series:
             - col: Knee_L_Z_deg
               side: L
@@ -153,7 +153,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 2
           col: 0
-          ylabel: "Ankle X (deg)"
+          ylabel: "Ankle X (deg)\n(+) Dorsi / (-) Plantar"
           series:
             - col: Ankle_L_X_deg
               side: L
@@ -163,7 +163,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 2
           col: 1
-          ylabel: "Ankle Y (deg)"
+          ylabel: "Ankle Y (deg)\n(+) Add / (-) Abd"
           series:
             - col: Ankle_L_Y_deg
               side: L
@@ -173,7 +173,7 @@ plot_grid_timeseries:
               linestyle: "--"
         - row: 2
           col: 2
-          ylabel: "Ankle Z (deg)"
+          ylabel: "Ankle Z (deg)\n(+) IR / (-) ER"
           series:
             - col: Ankle_L_Z_deg
               side: L
@@ -190,32 +190,32 @@ plot_grid_timeseries:
       subplots:
         - row: 0
           col: 0
-          ylabel: "Trunk X (deg)"
+          ylabel: "Trunk X (deg)\n(+) Flex / (-) Ext"
           series:
             - col: Trunk_X_deg
         - row: 0
           col: 1
-          ylabel: "Trunk Y (deg)"
+          ylabel: "Trunk Y (deg)\n(+) Add / (-) Abd"
           series:
             - col: Trunk_Y_deg
         - row: 0
           col: 2
-          ylabel: "Trunk Z (deg)"
+          ylabel: "Trunk Z (deg)\n(+) IR / (-) ER"
           series:
             - col: Trunk_Z_deg
         - row: 1
           col: 0
-          ylabel: "Neck X (deg)"
+          ylabel: "Neck X (deg)\n(+) Flex / (-) Ext"
           series:
             - col: Neck_X_deg
         - row: 1
           col: 1
-          ylabel: "Neck Y (deg)"
+          ylabel: "Neck Y (deg)\n(+) Add / (-) Abd"
           series:
             - col: Neck_Y_deg
         - row: 1
           col: 2
-          ylabel: "Neck Z (deg)"
+          ylabel: "Neck Z (deg)\n(+) IR / (-) ER"
           series:
             - col: Neck_Z_deg
 
