@@ -530,6 +530,25 @@ def render_gif(
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
 
+    # For step trials, freeze BOS at step onset while COM keeps updating.
+    bos_freeze_idx: int | None = None
+    if series.step_onset_local is not None:
+        step_frame = int(series.step_onset_local)
+        step_exact = np.flatnonzero((series.mocap_frame == step_frame) & series.valid_mask)
+        if step_exact.size > 0:
+            bos_freeze_idx = int(step_exact[0])
+        else:
+            # Fallback: first valid frame at/after step onset.
+            step_after = np.flatnonzero(series.valid_mask & (series.mocap_frame >= step_frame))
+            if step_after.size > 0:
+                bos_freeze_idx = int(step_after[0])
+                print(
+                    "Warning: step_onset frame not found in valid rows. "
+                    f"Using first valid frame >= step_onset: {series.mocap_frame[bos_freeze_idx]}"
+                )
+            else:
+                print("Warning: no valid frames at/after step onset. BOS freeze disabled for this trial.")
+
     fig, ax = plt.subplots(figsize=(8.2, 8.0))
 
     bos_rect = Rectangle(
@@ -641,10 +660,16 @@ def render_gif(
         current_point.set_markerfacecolor(color)
         current_point.set_markeredgecolor("black")
 
-        min_x = float(display.bos_minx[idx])
-        max_x = float(display.bos_maxx[idx])
-        min_y = float(display.bos_miny[idx])
-        max_y = float(display.bos_maxy[idx])
+        bos_idx = idx
+        bos_state = "live"
+        if bos_freeze_idx is not None and idx >= bos_freeze_idx:
+            bos_idx = int(bos_freeze_idx)
+            bos_state = "frozen@step_onset"
+
+        min_x = float(display.bos_minx[bos_idx])
+        max_x = float(display.bos_maxx[bos_idx])
+        min_y = float(display.bos_miny[bos_idx])
+        max_y = float(display.bos_maxy[bos_idx])
         bos_rect.set_xy((min_x, min_y))
         bos_rect.set_width(max_x - min_x)
         bos_rect.set_height(max_y - min_y)
@@ -658,6 +683,7 @@ def render_gif(
             f"{time_info}\n"
             f"status={'inside' if is_inside else 'outside'}\n"
             f"event={event_state(frame_value)}\n"
+            f"bos={bos_state}\n"
             f"inside ratio={inside_ratio:.1f}% ({inside_count}/{valid_count})\n"
             f"outside={outside_count}"
         )
