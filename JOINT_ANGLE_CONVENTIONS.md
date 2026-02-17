@@ -6,7 +6,7 @@
 **표준 출력은 `ana0` 하나만** 사용합니다.
 
 - 저장 파일: `*_JOINT_ANGLES_preStep.csv`
-- 의미: **ana0 = (좌우 부호 통일) + (quiet standing 기저선 차감)**
+- 의미: **ana0 = (좌우 부호 통일) + (Resolve_Discontinuity: Ankle Z) + (quiet standing 기저선 차감)**
 
 ---
 
@@ -71,9 +71,9 @@
 
 ---
 
-## 3. ana0 후처리 (2단계)
+## 3. ana0 후처리 (3단계)
 
-`ana0`는 raw 관절각에 아래 2단계를 **순서대로** 적용한 결과입니다.
+`ana0`는 raw 관절각에 아래 3단계를 **순서대로** 적용한 결과입니다.
 
 ### 3.1 좌우 부호 통일 (Step 1)
 
@@ -104,7 +104,19 @@
 | Y  | 내전(adduction) | 좌우 동일 |
 | Z  | 내회전(internal rotation) | 좌우 동일 |
 
-### 3.2 quiet standing 기저선 차감 (Step 2)
+### 3.2 Resolve_Discontinuity (Ankle Z only) (Step 2)
+
+Euler/Cardan 관절각은 ±180° 경계에서 값이 갑자기 -180↔+180으로 “점프(wrap)”할 수 있습니다.
+이 저장소에서는 Visual3D의 `Resolve_Discontinuity(signal, range, ...)`와 같은 아이디어로,
+불연속 지점에서 **range(기본 360°)** 를 더/빼서 신호를 연속화합니다.
+
+**적용 대상:** `Ankle_L_Z_deg`, `Ankle_R_Z_deg` (발목 Z축만)
+
+**목적:** Ankle Z에서 wrap로 인해 baseline mean이 깨지거나, ana0 결과에 큰 스파이크가 생기는 현상을 방지합니다.
+
+> 비고: 다른 축(X/Y)이나 다른 관절(Z 포함)은 값이 변하지 않도록 본 단계 적용 대상에서 제외합니다.
+
+### 3.3 quiet standing 기저선 차감 (Step 3)
 
 정적 기립(quiet standing) 구간의 평균값을 빼서 정적 오프셋을 제거합니다.
 
