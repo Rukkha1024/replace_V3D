@@ -9,6 +9,7 @@ Always follow this procedure when performing tasks:
    - Record **issues/problems** in `issue.md` (문제 자체만; 해결방법 제외).
    - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
    - Clearly specify which skills were used in the final response.
+   - Remove unnecessary files and folders.
 
 ---
 ## Environment rules
