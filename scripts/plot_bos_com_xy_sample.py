@@ -95,6 +95,18 @@ def parse_args() -> argparse.Namespace:
         default="bos_com_xy_static",
         help="Output PNG filename suffix",
     )
+    ap.add_argument(
+        "--save_png",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save static PNG output (default: enabled; disable with --no-save_png).",
+    )
+    ap.add_argument(
+        "--save_gif",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save GIF output (default: enabled; disable with --no-save_gif).",
+    )
     return ap.parse_args()
 
 
@@ -563,6 +575,9 @@ def render_gif(
 
 def main() -> None:
     args = parse_args()
+    if (not bool(args.save_png)) and (not bool(args.save_gif)):
+        raise ValueError("At least one output must be enabled: --save_png and/or --save_gif.")
+
     args.csv = resolve_repo_path(Path(args.csv))
     args.out_dir = resolve_repo_path(Path(args.out_dir))
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -604,22 +619,25 @@ def main() -> None:
         f"step_onset_local={series.step_onset_local}"
     )
 
-    render_static_png(
-        series=series,
-        out_path=png_out,
-        dpi=int(args.dpi),
-        x_lim=x_lim,
-        y_lim=y_lim,
-    )
-    gif_frames = render_gif(
-        series=series,
-        out_path=gif_out,
-        fps=int(args.fps),
-        frame_step=int(args.frame_step),
-        dpi=int(args.dpi),
-        x_lim=x_lim,
-        y_lim=y_lim,
-    )
+    gif_frames: int | None = None
+    if bool(args.save_png):
+        render_static_png(
+            series=series,
+            out_path=png_out,
+            dpi=int(args.dpi),
+            x_lim=x_lim,
+            y_lim=y_lim,
+        )
+    if bool(args.save_gif):
+        gif_frames = render_gif(
+            series=series,
+            out_path=gif_out,
+            fps=int(args.fps),
+            frame_step=int(args.frame_step),
+            dpi=int(args.dpi),
+            x_lim=x_lim,
+            y_lim=y_lim,
+        )
 
     valid_count = int(np.count_nonzero(series.valid_mask))
     inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
@@ -629,8 +647,10 @@ def main() -> None:
         "Inside/outside summary: "
         f"inside={inside_count}, outside={outside_count}, inside_ratio={inside_ratio:.2f}%"
     )
-    print(f"Saved PNG: {png_out}")
-    print(f"Saved GIF: {gif_out} (frames={gif_frames}, fps={args.fps}, frame_step={args.frame_step})")
+    if bool(args.save_png):
+        print(f"Saved PNG: {png_out}")
+    if bool(args.save_gif):
+        print(f"Saved GIF: {gif_out} (frames={gif_frames}, fps={args.fps}, frame_step={args.frame_step})")
 
 
 if __name__ == "__main__":
