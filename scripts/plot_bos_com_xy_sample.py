@@ -496,8 +496,8 @@ def render_static_png(
     ax.set_ylim(*display.y_lim)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [ML: Right/Left]")
-    ax.set_ylabel("Y (m) [AP: Anterior/Posterior]")
+    ax.set_xlabel("X (m) [- Left / + Right]")
+    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
     ax.set_title(
         "BOS + COM XY (static) | "
         f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
@@ -602,8 +602,8 @@ def render_gif(
     ax.set_ylim(*display.y_lim)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [ML: Right/Left]")
-    ax.set_ylabel("Y (m) [AP: Anterior/Posterior]")
+    ax.set_xlabel("X (m) [- Left / + Right]")
+    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
     ax.set_title(
         "BOS + COM XY animation | "
         f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
