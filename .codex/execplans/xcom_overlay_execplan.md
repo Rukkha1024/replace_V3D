@@ -19,6 +19,8 @@ KO: 사용자는 COM 기존 동작을 유지한 채 COM/xCOM을 동일 XY 프레
 - [x] (2026-02-18 15:52Z) xCOM 컬럼 누락 CSV로 경고+COM-only 폴백 검증.
 - [x] (2026-02-18 15:52Z) reference/new MD5 비교 파일 생성 (`output/qc/xcom_overlay/md5_ref_vs_new.tsv`).
 - [x] (2026-02-18 15:58Z) Git commit (Korean 3-line message).
+- [x] (2026-02-18 16:06Z) `render_static_png()`에도 xCOM 구분 디자인(점선/삼각형/step X ghost)을 반영하고 정적 PNG 1장 생성 검증.
+- [x] (2026-02-18 16:09Z) 요청에 따라 `output/qc/xcom_overlay` QC 산출 폴더 삭제.
 
 ## Surprises & Discoveries
 
@@ -44,9 +46,9 @@ KO: 사용자는 COM 기존 동작을 유지한 채 COM/xCOM을 동일 XY 프레
 
 ## Outcomes & Retrospective
 
-EN: Implementation and runtime verification are complete for the target scope (GIF only). COM rendering behavior is preserved, xCOM is clearly distinguishable, fallback behavior is validated when xCOM columns are removed, and procedural closure (issue/skill updates + commit) is complete.
+EN: Implementation and runtime verification are complete for both GIF and static-render design parity. COM rendering behavior is preserved, xCOM is clearly distinguishable, fallback behavior is validated when xCOM columns are removed, and temporary QC artifacts were removed per user request.
 
-KO: 목표 범위(GIF 전용)에 대한 구현과 실행 검증이 완료되었다. COM 동작은 유지되며, xCOM은 명확히 구분되고, xCOM 컬럼 제거 시 폴백도 검증되었다. 절차 마무리(issue/skill 업데이트, 커밋)까지 완료되었다.
+KO: GIF와 static 렌더 디자인 정합 범위에 대한 구현과 실행 검증이 완료되었다. COM 동작은 유지되며, xCOM은 명확히 구분되고, xCOM 컬럼 제거 시 폴백도 검증되었다. 사용자 요청에 따라 임시 QC 산출 폴더도 정리했다.
 
 ## Context and Orientation
 

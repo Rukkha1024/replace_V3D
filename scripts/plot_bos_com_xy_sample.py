@@ -581,6 +581,9 @@ def compute_axis_limits_from_arrays(
     bos_miny: np.ndarray,
     bos_maxy: np.ndarray,
     valid_mask: np.ndarray,
+    xcom_x: np.ndarray | None = None,
+    xcom_y: np.ndarray | None = None,
+    xcom_valid_mask: np.ndarray | None = None,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     valid_idx = np.flatnonzero(valid_mask)
     if valid_idx.size == 0:
@@ -600,6 +603,11 @@ def compute_axis_limits_from_arrays(
             bos_maxy[valid_idx],
         )
     )
+    if xcom_x is not None and xcom_y is not None and xcom_valid_mask is not None:
+        xcom_valid_idx = np.flatnonzero(xcom_valid_mask)
+        if xcom_valid_idx.size > 0:
+            x_values = np.concatenate((x_values, xcom_x[xcom_valid_idx]))
+            y_values = np.concatenate((y_values, xcom_y[xcom_valid_idx]))
 
     x_min = float(np.nanmin(x_values))
     x_max = float(np.nanmax(x_values))
@@ -641,6 +649,9 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
         bos_miny=bos_miny,
         bos_maxy=bos_maxy,
         valid_mask=series.valid_mask,
+        xcom_x=xcom_x,
+        xcom_y=xcom_y,
+        xcom_valid_mask=series.xcom_valid_mask,
     )
     return DisplaySeries(
         rotate_ccw_deg=deg,
@@ -1072,6 +1083,25 @@ def get_com_point_for_frame(
     return float(display.com_x[i]), float(display.com_y[i])
 
 
+def get_xcom_point_for_frame(
+    series: TrialSeries,
+    display: DisplaySeries,
+    event_frame: int | None,
+) -> tuple[float, float] | None:
+    if (
+        event_frame is None
+        or series.xcom_valid_mask is None
+        or display.xcom_x is None
+        or display.xcom_y is None
+    ):
+        return None
+    idx = np.flatnonzero((series.mocap_frame == int(event_frame)) & series.xcom_valid_mask)
+    if idx.size == 0:
+        return None
+    i = int(idx[0])
+    return float(display.xcom_x[i]), float(display.xcom_y[i])
+
+
 def save_figure(fig: plt.Figure, out_path: Path, dpi: int) -> None:
     if out_path.exists():
         out_path.unlink()
@@ -1101,6 +1131,17 @@ def render_static_png(
 ) -> None:
     fig, ax = plt.subplots(figsize=(8.2, 8.0))
     valid_idx = np.flatnonzero(series.valid_mask)
+    has_xcom = (
+        series.xcom_valid_mask is not None
+        and series.xcom_inside_mask is not None
+        and display.xcom_x is not None
+        and display.xcom_y is not None
+    )
+    xcom_valid_idx = np.asarray([], dtype=int)
+    if has_xcom:
+        xcom_valid_idx = np.flatnonzero(series.xcom_valid_mask)
+        if xcom_valid_idx.size == 0:
+            has_xcom = False
 
     for i in valid_idx:
         draw_bos_outline(
@@ -1119,6 +1160,16 @@ def render_static_png(
         alpha=0.95,
         label="COM trajectory",
     )
+    if has_xcom:
+        ax.plot(
+            display.xcom_x[xcom_valid_idx],
+            display.xcom_y[xcom_valid_idx],
+            color=XCOM_TRAIL_COLOR,
+            linewidth=1.9,
+            alpha=0.90,
+            linestyle=":",
+            label="xCOM trajectory",
+        )
 
     inside_idx = np.flatnonzero(series.valid_mask & series.inside_mask)
     outside_idx = np.flatnonzero(series.valid_mask & (~series.inside_mask))
@@ -1142,6 +1193,31 @@ def render_static_png(
             label="COM outside BOS",
             zorder=4,
         )
+    if has_xcom:
+        xcom_inside_idx = np.flatnonzero(series.xcom_valid_mask & series.xcom_inside_mask)
+        xcom_outside_idx = np.flatnonzero(series.xcom_valid_mask & (~series.xcom_inside_mask))
+        if xcom_inside_idx.size:
+            ax.scatter(
+                display.xcom_x[xcom_inside_idx],
+                display.xcom_y[xcom_inside_idx],
+                s=20,
+                marker="^",
+                c=XCOM_INSIDE_COLOR,
+                alpha=0.80,
+                label="xCOM inside BOS",
+                zorder=5,
+            )
+        if xcom_outside_idx.size:
+            ax.scatter(
+                display.xcom_x[xcom_outside_idx],
+                display.xcom_y[xcom_outside_idx],
+                s=22,
+                marker="^",
+                c=XCOM_OUTSIDE_COLOR,
+                alpha=0.90,
+                label="xCOM outside BOS",
+                zorder=5,
+            )
 
     event_specs = [
         ("platform_onset", series.platform_onset_local, "o", "black"),
@@ -1162,6 +1238,19 @@ def render_static_png(
             linewidths=0.7,
             label=label,
             zorder=6,
+        )
+    xcom_step_point = get_xcom_point_for_frame(series, display, series.step_onset_local)
+    if xcom_step_point is not None:
+        ax.scatter(
+            [xcom_step_point[0]],
+            [xcom_step_point[1]],
+            s=98,
+            marker="X",
+            c=XCOM_GHOST_COLOR,
+            edgecolors="white",
+            linewidths=0.8,
+            label="xCOM step_onset ghost",
+            zorder=7,
         )
 
     valid_count = int(valid_idx.size)
@@ -1190,10 +1279,11 @@ def render_static_png(
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
+    static_title = "BOS + COM/xCOM XY (static)" if has_xcom else "BOS + COM XY (static)"
     set_title_and_subtitle(
         ax,
         title=(
-            "BOS + COM XY (static) | "
+            f"{static_title} | "
             f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
             f"view=CCW{display.rotate_ccw_deg}"
         ),
