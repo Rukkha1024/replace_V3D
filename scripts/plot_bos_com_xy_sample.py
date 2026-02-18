@@ -48,6 +48,7 @@ DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
 GIF_BOS_MODES = ("freeze", "live")
 RIGHT1COL_SUFFIX = "right1col"
+STEP_VIS_TEMPLATES = ("phase_trail", "bos_phase", "star_only", "phase_bos")
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 GIF_FIGSIZE = (8.2, 8.0)
 GIF_LAYOUT_WIDTH_RATIOS = (3.45, 1.15)
@@ -146,6 +147,7 @@ class RenderConfig:
     gif_name_suffix: str
     rotate_ccw_deg: int
     show_trial_state: bool
+    step_vis: str = "none"
 
 
 @dataclass(frozen=True)
@@ -216,6 +218,19 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Show step/nonstep and stepping-foot info in title subtitle (default: enabled).",
+    )
+    ap.add_argument(
+        "--step_vis",
+        default="none",
+        choices=["none", "phase_trail", "bos_phase", "star_only", "phase_bos", "all"],
+        help=(
+            "Step-onset visualization style. 'none' = current behavior (unchanged). "
+            "'phase_trail' = color-split COM trail + gold star at step onset. "
+            "'bos_phase' = BOS rect color changes at step onset + gold star. "
+            "'star_only' = gold star at step onset position only. "
+            "'phase_bos' = trail split + BOS color + star (full combo). "
+            "'all' = render all 4 template styles for comparison (8 GIFs total)."
+        ),
     )
     return ap.parse_args()
 
@@ -805,6 +820,41 @@ def apply_gif_right_panel(ax_side: plt.Axes) -> object:
     return info_text
 
 
+def add_timeline_inset(
+    ax_side: plt.Axes,
+    series: TrialSeries,
+) -> Line2D:
+    """Add a horizontal timeline strip at the bottom of ax_side.
+
+    Marks platform_onset, step_onset, platform_offset as vertical lines.
+    Returns the animated cursor Line2D that must be updated each frame via
+    cursor_line.set_xdata([frame_value, frame_value]).
+    """
+    ax_tl = ax_side.inset_axes([0.04, 0.37, 0.92, 0.12])
+    first_frame = int(series.mocap_frame[0])
+    last_frame = int(series.mocap_frame[-1])
+    ax_tl.set_xlim(first_frame, last_frame)
+    ax_tl.set_ylim(0.0, 1.0)
+    ax_tl.axis("off")
+    # Base bar
+    ax_tl.axhline(0.5, color="0.55", linewidth=2.5, solid_capstyle="round")
+    # Platform onset/offset
+    ax_tl.axvline(series.platform_onset_local, color="0.40", linewidth=1.3, linestyle="--")
+    ax_tl.axvline(series.platform_offset_local, color="0.40", linewidth=1.3, linestyle="--")
+    ax_tl.text(series.platform_onset_local, 0.12, "on", fontsize=5,
+               ha="center", va="bottom", color="0.40")
+    ax_tl.text(series.platform_offset_local, 0.12, "off", fontsize=5,
+               ha="center", va="bottom", color="0.40")
+    # Step onset (orange)
+    if series.step_onset_local is not None:
+        ax_tl.axvline(int(series.step_onset_local), color="tab:orange", linewidth=2.5)
+        ax_tl.text(int(series.step_onset_local), 0.85, "step", fontsize=5,
+                   ha="center", va="top", color="tab:orange", fontweight="bold")
+    # Animated cursor (blue vertical line)
+    cursor_line = ax_tl.axvline(first_frame, color="tab:blue", linewidth=1.8, alpha=0.85)
+    return cursor_line
+
+
 def _collect_finite_polyline_values(polylines: list[np.ndarray], valid_mask: np.ndarray) -> np.ndarray:
     chunks: list[np.ndarray] = []
     for i, arr in enumerate(polylines):
@@ -1033,6 +1083,7 @@ def render_gif(
     y_lim: tuple[float, float],
     bos_polylines: BOSPolylines | None = None,
     bos_mode: str = "freeze",
+    step_vis: str = "none",
 ) -> int:
     if fps <= 0:
         raise ValueError("--fps must be >= 1")
@@ -1123,6 +1174,37 @@ def render_gif(
         )
     info_text = apply_gif_right_panel(ax_side)
 
+    # ---- step_vis template setup ----
+    step_onset_idx: int | None = bos_freeze_idx  # same valid-array index, reused for templates
+
+    timeline_cursor: Line2D | None = None
+    if step_vis != "none":
+        timeline_cursor = add_timeline_inset(ax_side, series)
+
+    step_star_artist: object | None = None
+    if step_vis != "none" and step_onset_idx is not None:
+        xs = float(display.com_x[step_onset_idx])
+        ys = float(display.com_y[step_onset_idx])
+        (step_star_artist,) = ax.plot(
+            [xs],
+            [ys],
+            marker="*",
+            linestyle="None",
+            markersize=14,
+            markerfacecolor="gold",
+            markeredgecolor="darkorange",
+            markeredgewidth=0.9,
+            zorder=7,
+        )
+
+    trail_pre: object | None = None
+    trail_post: object | None = None
+    if step_vis in ("phase_trail", "phase_bos"):
+        trail_line.set_visible(False)
+        (trail_pre,) = ax.plot([], [], color="tab:blue", linewidth=2.0, alpha=0.95, zorder=3)
+        (trail_post,) = ax.plot([], [], color="tab:orange", linewidth=2.0, alpha=0.95, zorder=3)
+    # ---- end step_vis setup ----
+
     ax.set_xlim(*x_lim)
     ax.set_ylim(*y_lim)
     ax.set_aspect("equal", adjustable="box")
@@ -1209,9 +1291,35 @@ def render_gif(
             f"inside ratio={inside_ratio:.1f}% ({inside_count}/{valid_count})\n"
             f"outside={outside_count}"
         )
+
+        # ---- step_vis per-frame updates ----
+        if timeline_cursor is not None:
+            timeline_cursor.set_xdata([frame_value, frame_value])
+
+        if trail_pre is not None and trail_post is not None:
+            pre_hist = history[history <= step_onset_idx] if step_onset_idx is not None else history
+            post_hist = history[history > step_onset_idx] if step_onset_idx is not None else np.array([], dtype=int)
+            trail_pre.set_data(display.com_x[pre_hist], display.com_y[pre_hist])
+            trail_post.set_data(display.com_x[post_hist], display.com_y[post_hist])
+
+        if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
+            if idx >= step_onset_idx:
+                bos_rect.set_facecolor("lightyellow")
+                bos_rect.set_edgecolor("tab:orange")
+            else:
+                bos_rect.set_facecolor("lightskyblue")
+                bos_rect.set_edgecolor("tab:blue")
+        # ---- end step_vis per-frame ----
+
         artists: list[object] = [trail_line, current_point, bos_rect, info_text]
         if bos_union_line is not None and bos_hull_line is not None:
             artists.extend([bos_union_line, bos_hull_line])
+        if trail_pre is not None:
+            artists.append(trail_pre)
+        if trail_post is not None:
+            artists.append(trail_post)
+        if timeline_cursor is not None:
+            artists.append(timeline_cursor)
         return tuple(artists)
 
     def init():
@@ -1260,6 +1368,7 @@ def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> Render
         gif_name_suffix=str(args.gif_name_suffix),
         rotate_ccw_deg=int(rotate_ccw_deg),
         show_trial_state=bool(args.show_trial_state),
+        step_vis=str(args.step_vis),
     )
 
 
@@ -1355,25 +1464,33 @@ def render_one_trial(
             f"y=({fixed_y_lim[0]:.4f}, {fixed_y_lim[1]:.4f})"
         )
 
+    step_vis = config.step_vis
+    vis_list: list[str] = list(STEP_VIS_TEMPLATES) if step_vis == "all" else [step_vis]
+
     gif_outputs: list[tuple[str, int, str]] = []
     if verbose:
-        print("GIF outputs: right1col with bos_mode=freeze/live")
-    for bos_mode in GIF_BOS_MODES:
-        gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
-        frames = render_gif(
-            series=series,
-            display=display,
-            trial_state_label=trial_state_label,
-            out_path=gif_out,
-            fps=int(config.fps),
-            frame_step=int(config.frame_step),
-            dpi=int(config.dpi),
-            x_lim=fixed_x_lim,
-            y_lim=fixed_y_lim,
-            bos_polylines=bos_polylines,
-            bos_mode=bos_mode,
-        )
-        gif_outputs.append((str(gif_out), int(frames), bos_mode))
+        print(f"GIF outputs: step_vis={step_vis}, bos_mode=freeze/live")
+    for sv in vis_list:
+        for bos_mode in GIF_BOS_MODES:
+            if sv == "none":
+                gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
+            else:
+                gif_out = gif_base.parent / f"{gif_base.name}__step_vis-{sv}__{bos_mode}.gif"
+            frames = render_gif(
+                series=series,
+                display=display,
+                trial_state_label=trial_state_label,
+                out_path=gif_out,
+                fps=int(config.fps),
+                frame_step=int(config.frame_step),
+                dpi=int(config.dpi),
+                x_lim=fixed_x_lim,
+                y_lim=fixed_y_lim,
+                bos_polylines=bos_polylines,
+                bos_mode=bos_mode,
+                step_vis=sv,
+            )
+            gif_outputs.append((str(gif_out), int(frames), bos_mode))
 
     valid_count = int(np.count_nonzero(series.valid_mask))
     inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
