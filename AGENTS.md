@@ -12,13 +12,6 @@ Always follow this procedure when performing tasks:
    - Remove unnecessary files and folders.
 
 ---
-## Environment rules
-- Always use WSL2 with the `module` conda environment for all tasks.
-- Always run Python/pip as: `conda run -n module python` / `conda run -n module pip`.
-- In this environment, `conda run -n module python -` may not receive stdin; prefer `-c` or running a `.py` file.
-- If file deletion is needed, prefer `conda run -n module python -c "import shutil; shutil.rmtree(...)"` over `rm -rf` (can be blocked in some runs).
-
----
 # ExecPlans
 All tasks in this repo use ExecPlans. use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
 
@@ -36,14 +29,9 @@ Follow the approved ExecPlan. Proceed through milestones autonomously without pr
 
 - Do not restore or roll back files/code that you did not modify yourself. Never attempt to "fix" or revert changes in files unrelated to your current task, including using `git checkout`.
 - Use `polars` then `pandas` library.
-- **Leverage Parallel Agent Execution**: In WSL2, multiple agents can run in parallel. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
-- Organize and separate each scripts by biomechanical variable categories:
-  - **COM-related variables**: xCOM, COM, MOS, BOS, ...
-  - **Torque variables**: Ankle torque, Knee torque, Hip torque, ...
-  - **Joint angle variables**: Ankle, Knee, Hip, Trunk, Neck, ...
+- Leverage Parallel Agent Execution: you can use multiple agents to handle different parts of the task concurrently. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
+- Organize and separate each scripts by biomechanical variable categories: EMG, COM, torque, joint, GRF&COP
 - Do not create subfolders under `scripts`; keep runnable entry scripts directly under `scripts/`.
-- When exporting CSV files that may include Korean text, use UTF-8 with BOM (`utf-8-sig`) by default.
-- Unless the user instructs otherwise: **Bug fixes / corrections** to existing logic must **replace** the old logic and its outputs entirely (do not keep both). For **new logic additions**, ask the user whether the existing logic should be kept or removed before proceeding.
 
 ---
 
