@@ -2,12 +2,14 @@
 
 Answers: "Is it correct that COM must leave BOS for stepping to occur?"
 
+Key finding: Stepping is proactive/anticipatory — MoS < 0 is NOT a trigger.
+
 Produces:
-  - Excel workbook with trial summary, contingency tables, stats
-  - 6 publication-quality figures
+  - 6 publication-quality figures (saved alongside this script)
+  - stdout summary statistics
 
 Usage:
-    conda run -n module python scripts/analyze_com_vs_xcom_stepping.py
+    conda run -n module python analysis/com_vs_xcom_stepping/analyze_com_vs_xcom_stepping.py
 """
 
 from __future__ import annotations
@@ -17,9 +19,12 @@ import sys
 import warnings
 from pathlib import Path
 
-import _bootstrap
-
-_bootstrap.ensure_src_on_path()
+# ---------------------------------------------------------------------------
+# path bootstrap (replaces _bootstrap dependency)
+# ---------------------------------------------------------------------------
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import matplotlib
 import numpy as np
@@ -44,11 +49,10 @@ for _fname in _KO_FONTS:
         break
 plt.rcParams["axes.unicode_minus"] = False
 
-REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_PLATFORM_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
-DEFAULT_OUT_DIR = REPO_ROOT / "output" / "analysis" / "com_vs_xcom_stepping"
+DEFAULT_OUT_DIR = SCRIPT_DIR  # figures saved alongside script
 
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 
@@ -88,7 +92,7 @@ def _resolve_c3d_for_trial(
     velocity: float,
     trial: int,
 ) -> Path | None:
-    """Locate matching C3D via the existing plot_bos_com_xy_sample pattern."""
+    """Locate matching C3D via the existing batch_utils pattern."""
     from replace_v3d.cli.batch_utils import iter_c3d_files
     from replace_v3d.io.events_excel import (
         parse_subject_velocity_trial_from_filename,
@@ -288,6 +292,107 @@ def build_trial_summary(
           f"step={sum(trials['step_TF'] == 'step')}, nonstep={sum(trials['step_TF'] == 'nonstep')}")
 
     return trials
+
+
+# ---------------------------------------------------------------------------
+# Milestone 1b: MoS < 0 timing analysis
+# ---------------------------------------------------------------------------
+
+def analyze_mos_negative_timing(
+    df: pl.DataFrame,
+    trials: pd.DataFrame,
+) -> pd.DataFrame:
+    """For stepping trials, analyze when MoS < 0 occurs relative to step onset.
+
+    Returns a DataFrame with per-stepping-trial timing info.
+    """
+    step_trials = trials[
+        (trials["step_TF"] == "step") & trials["step_onset_local"].notna()
+    ].copy()
+
+    if step_trials.empty:
+        return pd.DataFrame()
+
+    df_pd = df.select(
+        TRIAL_KEYS + ["MocapFrame", "MOS_minDist_signed", "time_from_platform_onset_s"]
+    ).to_pandas()
+
+    records = []
+    for _, row in step_trials.iterrows():
+        subj = row["subject"]
+        vel = row["velocity"]
+        tri = int(row["trial"])
+        step_onset = int(row["step_onset_local"])
+
+        trial_mask = (
+            (df_pd["subject"].astype(str).str.strip() == subj)
+            & (np.isclose(df_pd["velocity"], vel, atol=1e-9))
+            & (df_pd["trial"] == tri)
+        )
+        tdata = df_pd.loc[trial_mask].sort_values("MocapFrame")
+        if tdata.empty:
+            continue
+
+        mos_at_onset = tdata.loc[
+            (tdata["MocapFrame"] - step_onset).abs().idxmin(), "MOS_minDist_signed"
+        ]
+
+        # MoS values after step onset
+        after_onset = tdata[tdata["MocapFrame"] >= step_onset]
+        mos_min_after = after_onset["MOS_minDist_signed"].min() if not after_onset.empty else np.nan
+        mos_ever_negative_after = bool(mos_min_after < 0) if np.isfinite(mos_min_after) else False
+
+        # Frame where MoS reaches minimum after step onset
+        if not after_onset.empty and np.isfinite(mos_min_after):
+            min_idx = after_onset["MOS_minDist_signed"].idxmin()
+            min_frame = after_onset.loc[min_idx, "MocapFrame"]
+            # Time difference in ms (mocap 100 Hz → 10 ms per frame)
+            mos_min_delay_ms = (min_frame - step_onset) * 10.0
+        else:
+            mos_min_delay_ms = np.nan
+
+        records.append({
+            "subject": subj,
+            "velocity": vel,
+            "trial": tri,
+            "step_onset_local": step_onset,
+            "mos_at_onset": mos_at_onset,
+            "mos_negative_at_onset": bool(mos_at_onset < 0) if np.isfinite(mos_at_onset) else False,
+            "mos_ever_negative_after": mos_ever_negative_after,
+            "mos_min_after_onset": mos_min_after,
+            "mos_min_delay_ms": mos_min_delay_ms,
+        })
+
+    return pd.DataFrame(records)
+
+
+def print_mos_timing_summary(timing_df: pd.DataFrame) -> None:
+    """Print MoS < 0 timing analysis to stdout."""
+    if timing_df.empty:
+        print("  No stepping trials with step_onset for MoS timing analysis.")
+        return
+
+    n = len(timing_df)
+    n_neg_onset = timing_df["mos_negative_at_onset"].sum()
+    n_neg_ever = timing_df["mos_ever_negative_after"].sum()
+    median_delay = timing_df.loc[timing_df["mos_ever_negative_after"], "mos_min_delay_ms"].median()
+
+    print(f"  Stepping trials analyzed: {n}")
+    print(f"  MoS < 0 at step onset:   {n_neg_onset}/{n} ({100*n_neg_onset/n:.1f}%)")
+    print(f"  MoS < 0 ever after onset: {n_neg_ever}/{n} ({100*n_neg_ever/n:.1f}%)")
+    if np.isfinite(median_delay):
+        print(f"  Median MoS-min delay:     {median_delay:.0f} ms after step onset")
+
+    # Per-velocity breakdown
+    print("\n  Per-velocity breakdown:")
+    print(f"  {'vel':>5s} | {'n_step':>6s} | {'step_rate':>9s} | {'MoS<0@onset':>12s} | {'MoS<0_ever':>10s}")
+    print(f"  {'-'*5}-+-{'-'*6}-+-{'-'*9}-+-{'-'*12}-+-{'-'*10}")
+    for vel in sorted(timing_df["velocity"].unique()):
+        vdf = timing_df[timing_df["velocity"] == vel]
+        nv = len(vdf)
+        neg_onset = vdf["mos_negative_at_onset"].sum()
+        neg_ever = vdf["mos_ever_negative_after"].sum()
+        print(f"  {vel:5.0f} | {nv:6d} | {'—':>9s} | {neg_onset:3d}/{nv:3d} ({100*neg_onset/nv:4.1f}%) | {neg_ever:3d}/{nv:3d} ({100*neg_ever/nv:4.1f}%)")
 
 
 # ---------------------------------------------------------------------------
@@ -648,99 +753,6 @@ def fig6_example_timeseries(
 
 
 # ---------------------------------------------------------------------------
-# Milestone 4: Excel output
-# ---------------------------------------------------------------------------
-
-def write_excel(
-    trials: pd.DataFrame,
-    cont_com: dict,
-    cont_xcom: dict,
-    mw_mos: dict,
-    mw_com: dict,
-    roc_mos: dict,
-    roc_com: dict,
-    out_path: Path,
-) -> None:
-    """Write analysis results to Excel workbook."""
-    with pd.ExcelWriter(str(out_path), engine="openpyxl") as writer:
-        # Sheet 1: trial_summary
-        trials.to_excel(writer, sheet_name="trial_summary", index=False)
-
-        # Sheet 2: contingency_COM
-        cont_com["table"].to_excel(writer, sheet_name="contingency_COM", startrow=0)
-        stats_com = pd.DataFrame([{
-            "chi2": cont_com["chi2"],
-            "chi2_p": cont_com["chi2_p"],
-            "fisher_p": cont_com["fisher_p"],
-            "n": cont_com["n"],
-        }])
-        stats_com.to_excel(writer, sheet_name="contingency_COM", startrow=5, index=False)
-
-        # Sheet 3: contingency_xCOM
-        cont_xcom["table"].to_excel(writer, sheet_name="contingency_xCOM", startrow=0)
-        stats_xcom = pd.DataFrame([{
-            "chi2": cont_xcom["chi2"],
-            "chi2_p": cont_xcom["chi2_p"],
-            "fisher_p": cont_xcom["fisher_p"],
-            "n": cont_xcom["n"],
-        }])
-        stats_xcom.to_excel(writer, sheet_name="contingency_xCOM", startrow=5, index=False)
-
-        # Sheet 4: mann_whitney
-        mw_df = pd.DataFrame([mw_mos, mw_com])
-        mw_df.to_excel(writer, sheet_name="mann_whitney", index=False)
-
-        # Sheet 5: roc_auc
-        roc_df = pd.DataFrame([
-            {
-                "metric": "xCOM MoS (MOS_minDist_signed)",
-                "AUC": roc_mos["auc"],
-                "optimal_threshold": roc_mos.get("opt_threshold", np.nan),
-                "sensitivity": roc_mos.get("opt_sensitivity", np.nan),
-                "specificity": roc_mos.get("opt_specificity", np.nan),
-                "n": roc_mos["n"],
-            },
-            {
-                "metric": "COM distance (COM_signed_dist)",
-                "AUC": roc_com["auc"],
-                "optimal_threshold": roc_com.get("opt_threshold", np.nan),
-                "sensitivity": roc_com.get("opt_sensitivity", np.nan),
-                "specificity": roc_com.get("opt_specificity", np.nan),
-                "n": roc_com["n"],
-            },
-        ])
-        roc_df.to_excel(writer, sheet_name="roc_auc", index=False)
-
-        # Sheet 6: table_guide
-        guide = pd.DataFrame([
-            {"sheet": "trial_summary", "description": "Per-trial snapshot at reference timepoint with COM/xCOM positions, distances, and stepping classification"},
-            {"sheet": "contingency_COM", "description": "2x2 contingency table: COM inside BOS hull vs step/nonstep. Chi-square and Fisher exact test results."},
-            {"sheet": "contingency_xCOM", "description": "2x2 contingency table: xCOM inside BOS hull vs step/nonstep. Chi-square and Fisher exact test results."},
-            {"sheet": "mann_whitney", "description": "Mann-Whitney U test comparing MOS_minDist_signed and COM_signed_dist between step vs nonstep groups."},
-            {"sheet": "roc_auc", "description": "ROC AUC analysis for MOS and COM distance as stepping predictors. Includes optimal threshold (Youden J)."},
-            {"sheet": "table_guide", "description": "This sheet. Describes all sheets and their contents."},
-        ])
-        col_guide = pd.DataFrame([
-            {"column": "subject", "description": "Subject name"},
-            {"column": "velocity", "description": "Perturbation velocity"},
-            {"column": "trial", "description": "Trial number"},
-            {"column": "step_TF", "description": "Stepping outcome: step or nonstep"},
-            {"column": "state", "description": "Detailed state: step_L, step_R, nonstep, footlift"},
-            {"column": "step_onset_local", "description": "Step onset MocapFrame (from CSV)"},
-            {"column": "ref_frame", "description": "Reference MocapFrame for analysis snapshot"},
-            {"column": "COM_X/Y", "description": "COM position (m) at ref_frame"},
-            {"column": "xCOM_X/Y", "description": "Extrapolated COM position (m) at ref_frame"},
-            {"column": "MOS_minDist_signed", "description": "xCOM-to-BOS-hull signed distance (m). +inside, -outside."},
-            {"column": "COM_signed_dist", "description": "COM-to-BOS-hull signed distance (m). +inside, -outside. Computed from C3D."},
-            {"column": "COM_inside_BOS_hull", "description": "Boolean: COM inside convex hull (True/False)"},
-            {"column": "xCOM_inside_BOS_hull", "description": "Boolean: xCOM inside convex hull (MoS > 0)"},
-            {"column": "COM_inside_BOS_AABB", "description": "Boolean: COM inside axis-aligned bounding box"},
-        ])
-        guide.to_excel(writer, sheet_name="table_guide", startrow=0, index=False)
-        col_guide.to_excel(writer, sheet_name="table_guide", startrow=len(guide) + 3, index=False)
-
-
-# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -759,6 +771,11 @@ def main() -> None:
     df = load_csv(args.csv)
     platform = load_platform_sheet(args.platform_xlsm)
     trials = build_trial_summary(df, platform, Path(args.c3d_dir), Path(args.platform_xlsm))
+
+    # --- Milestone 1b: MoS < 0 timing ---
+    print("\n[Milestone 1b] MoS < 0 timing analysis (stepping trials)...")
+    timing_df = analyze_mos_negative_timing(df, trials)
+    print_mos_timing_summary(timing_df)
 
     # --- Milestone 2 ---
     print("\n[Milestone 2] Statistical tests...")
@@ -799,12 +816,6 @@ def main() -> None:
 
     fig6_example_timeseries(df, trials, out_dir, dpi)
     print("  fig6_example_timeseries.png")
-
-    # --- Milestone 4 ---
-    print("\n[Milestone 4] Writing Excel workbook...")
-    excel_path = out_dir / "com_vs_xcom_stepping.xlsx"
-    write_excel(trials, cont_com, cont_xcom, mw_mos, mw_com, roc_mos, roc_com, excel_path)
-    print(f"  {excel_path}")
 
     print("\n" + "=" * 60)
     print("Analysis complete.")
