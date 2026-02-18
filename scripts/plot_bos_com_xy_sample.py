@@ -9,7 +9,12 @@ Default behavior picks the first trial by sorted (subject, velocity, trial).
 from __future__ import annotations
 
 import argparse
+import concurrent.futures as cf
+import multiprocessing as mp
+import os
 import re
+import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -122,7 +127,40 @@ class BOSPolylines:
     union_y: list[np.ndarray]
 
 
+@dataclass(frozen=True)
+class TrialKey:
+    subject: str
+    velocity: float
+    trial: int
+
+
+@dataclass(frozen=True)
+class RenderConfig:
+    csv_path: Path
+    event_xlsm: Path
+    out_dir: Path
+    c3d_dir: Path
+    fps: int
+    frame_step: int
+    dpi: int
+    gif_name_suffix: str
+    rotate_ccw_deg: int
+    show_trial_state: bool
+
+
+@dataclass(frozen=True)
+class TrialRenderResult:
+    key: TrialKey
+    gif_outputs: tuple[tuple[str, int, str], ...]
+    valid_count: int
+    inside_count: int
+    outside_count: int
+    inside_ratio: float
+    elapsed_sec: float
+
+
 _PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
+_WORKER_CSV_CACHE: dict[Path, pl.DataFrame] = {}
 
 
 def parse_args() -> argparse.Namespace:
@@ -140,6 +178,18 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--subject", type=str, default=None, help="Subject selector (must pair with velocity/trial)")
     ap.add_argument("--velocity", type=float, default=None, help="Velocity selector (must pair with subject/trial)")
     ap.add_argument("--trial", type=int, default=None, help="Trial selector (must pair with subject/velocity)")
+    ap.add_argument(
+        "--all",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Render all unique (subject, velocity, trial) keys from CSV (default: disabled).",
+    )
+    ap.add_argument(
+        "--jobs",
+        type=int,
+        default=None,
+        help="Worker count for --all mode (default: CPU count).",
+    )
     ap.add_argument("--fps", type=int, default=20, help="GIF FPS")
     ap.add_argument("--frame_step", type=int, default=1, help="Use every Nth valid frame for GIF")
     ap.add_argument("--dpi", type=int, default=180, help="Output DPI")
@@ -201,6 +251,16 @@ def load_data(csv_path: Path) -> pl.DataFrame:
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
+    return df
+
+
+def load_data_for_worker(csv_path: Path) -> pl.DataFrame:
+    resolved = csv_path.resolve()
+    cached = _WORKER_CSV_CACHE.get(resolved)
+    if cached is not None:
+        return cached
+    df = load_data(resolved)
+    _WORKER_CSV_CACHE[resolved] = df
     return df
 
 
@@ -288,16 +348,46 @@ def format_trial_state_label(state: str) -> str:
     return f"trial_type=unknown ({state})" if state != "unknown" else "trial_type=unknown"
 
 
-def resolve_trial_selection(args: argparse.Namespace, df: pl.DataFrame) -> tuple[str, float, int, bool]:
+def resolve_trial_selection(args: argparse.Namespace, df: pl.DataFrame) -> tuple[TrialKey, bool]:
     flags = [args.subject is not None, args.velocity is not None, args.trial is not None]
     if any(flags) and not all(flags):
         raise ValueError("Ambiguous selection: provide all of --subject, --velocity, --trial together.")
 
     if all(flags):
-        return str(args.subject), float(args.velocity), int(args.trial), False
+        return TrialKey(subject=str(args.subject), velocity=float(args.velocity), trial=int(args.trial)), False
 
     first = df.select(TRIAL_KEYS).unique().sort(TRIAL_KEYS).row(0, named=True)
-    return str(first["subject"]), float(first["velocity"]), int(first["trial"]), True
+    return (
+        TrialKey(
+            subject=str(first["subject"]),
+            velocity=float(first["velocity"]),
+            trial=int(first["trial"]),
+        ),
+        True,
+    )
+
+
+def collect_trial_keys(df: pl.DataFrame) -> list[TrialKey]:
+    rows = df.select(TRIAL_KEYS).unique().sort(TRIAL_KEYS).iter_rows(named=True)
+    out: list[TrialKey] = []
+    for row in rows:
+        out.append(
+            TrialKey(
+                subject=str(row["subject"]),
+                velocity=float(row["velocity"]),
+                trial=int(row["trial"]),
+            )
+        )
+    return out
+
+
+def resolve_jobs(requested_jobs: int | None) -> int:
+    if requested_jobs is None:
+        return max(1, int(os.cpu_count() or 1))
+    jobs = int(requested_jobs)
+    if jobs < 1:
+        raise ValueError("--jobs must be >= 1.")
+    return jobs
 
 
 def get_optional_int_scalar(trial_df: pl.DataFrame, col_name: str) -> int | None:
@@ -1144,6 +1234,251 @@ def render_gif(
     return int(frame_indices.size)
 
 
+def select_trial_df(df: pl.DataFrame, key: TrialKey) -> pl.DataFrame:
+    trial_df = df.filter(
+        (pl.col("subject") == key.subject)
+        & (pl.col("velocity") == float(key.velocity))
+        & (pl.col("trial") == int(key.trial))
+    )
+    if trial_df.height == 0:
+        raise ValueError(
+            "Selected trial has no rows: "
+            f"subject={key.subject}, velocity={format_velocity(key.velocity)}, trial={key.trial}"
+        )
+    return trial_df
+
+
+def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> RenderConfig:
+    return RenderConfig(
+        csv_path=Path(args.csv),
+        event_xlsm=Path(args.event_xlsm),
+        out_dir=Path(args.out_dir),
+        c3d_dir=resolve_repo_path(DEFAULT_C3D_DIR),
+        fps=int(args.fps),
+        frame_step=int(args.frame_step),
+        dpi=int(args.dpi),
+        gif_name_suffix=str(args.gif_name_suffix),
+        rotate_ccw_deg=int(rotate_ccw_deg),
+        show_trial_state=bool(args.show_trial_state),
+    )
+
+
+def render_one_trial(
+    *,
+    df: pl.DataFrame,
+    config: RenderConfig,
+    key: TrialKey,
+    auto_selected: bool,
+    verbose: bool,
+) -> TrialRenderResult:
+    started_at = time.perf_counter()
+    trial_df = select_trial_df(df, key)
+
+    series = build_trial_series(
+        trial_df=trial_df,
+        subject=key.subject,
+        velocity=key.velocity,
+        trial=key.trial,
+    )
+    display = build_display_series(series, rotate_ccw_deg=config.rotate_ccw_deg)
+    trial_state = resolve_trial_state(
+        event_xlsm=config.event_xlsm,
+        subject=key.subject,
+        velocity=float(key.velocity),
+        trial=int(key.trial),
+    )
+    trial_state_label = format_trial_state_label(trial_state) if bool(config.show_trial_state) else None
+
+    base_name = (
+        f"{safe_name(key.subject)}__velocity-{safe_name(format_velocity(key.velocity))}"
+        f"__trial-{int(key.trial)}"
+    )
+    subject_out_dir = config.out_dir / str(key.subject)
+    subject_out_dir.mkdir(parents=True, exist_ok=True)
+    gif_base = subject_out_dir / f"{base_name}__{safe_name(config.gif_name_suffix)}"
+
+    if verbose:
+        print(
+            "Trial selection: "
+            f"subject={key.subject}, velocity={format_velocity(key.velocity)}, "
+            f"trial={key.trial}, auto_selected={auto_selected}"
+        )
+        print(
+            "Validity summary: "
+            f"total_frames={series.mocap_frame.size}, valid_frames={int(np.count_nonzero(series.valid_mask))}, "
+            f"nan_invalid={series.nan_invalid_count}, bos_invalid={series.bos_invalid_count}"
+        )
+        print(
+            "Events: "
+            f"platform_onset_local={series.platform_onset_local}, "
+            f"platform_offset_local={series.platform_offset_local}, "
+            f"step_onset_local={series.step_onset_local}"
+        )
+        print(f"Display rotation: CCW {config.rotate_ccw_deg} deg")
+        print(f"Trial state: {trial_state}")
+        print(f"Output root: {config.out_dir}")
+        print(f"Subject output directory: {subject_out_dir}")
+
+    bos_polylines: BOSPolylines | None = None
+    try:
+        c3d_path = resolve_c3d_for_trial(
+            c3d_dir=config.c3d_dir,
+            event_xlsm=config.event_xlsm,
+            subject=key.subject,
+            velocity=float(key.velocity),
+            trial=int(key.trial),
+        )
+        if c3d_path is None:
+            if verbose:
+                print("[BOS overlay] matching C3D not found; hull/union overlay disabled.")
+        else:
+            bos_polylines = compute_bos_polylines_from_c3d(
+                c3d_path=c3d_path,
+                n_frames=series.mocap_frame.size,
+                rotate_ccw_deg=display.rotate_ccw_deg,
+            )
+            if verbose:
+                print(f"[BOS overlay] using C3D: {c3d_path}")
+    except Exception as exc:
+        print(f"[BOS overlay] disabled due to error: {exc}")
+        bos_polylines = None
+
+    fixed_x_lim, fixed_y_lim = compute_fixed_gif_axis_limits(
+        series=series,
+        display=display,
+        bos_polylines=bos_polylines,
+    )
+    if verbose:
+        print(
+            "Fixed axis limits: "
+            f"x=({fixed_x_lim[0]:.4f}, {fixed_x_lim[1]:.4f}), "
+            f"y=({fixed_y_lim[0]:.4f}, {fixed_y_lim[1]:.4f})"
+        )
+
+    gif_outputs: list[tuple[str, int, str]] = []
+    if verbose:
+        print("GIF outputs: right1col with bos_mode=freeze/live")
+    for bos_mode in GIF_BOS_MODES:
+        gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
+        frames = render_gif(
+            series=series,
+            display=display,
+            trial_state_label=trial_state_label,
+            out_path=gif_out,
+            fps=int(config.fps),
+            frame_step=int(config.frame_step),
+            dpi=int(config.dpi),
+            x_lim=fixed_x_lim,
+            y_lim=fixed_y_lim,
+            bos_polylines=bos_polylines,
+            bos_mode=bos_mode,
+        )
+        gif_outputs.append((str(gif_out), int(frames), bos_mode))
+
+    valid_count = int(np.count_nonzero(series.valid_mask))
+    inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
+    outside_count = valid_count - inside_count
+    inside_ratio = (100.0 * inside_count / valid_count) if valid_count > 0 else float("nan")
+    if verbose:
+        print(
+            "Inside/outside summary: "
+            f"inside={inside_count}, outside={outside_count}, inside_ratio={inside_ratio:.2f}%"
+        )
+        for out_path, frames, bos_mode in gif_outputs:
+            print(
+                f"Saved GIF[{bos_mode}]: {out_path} "
+                f"(frames={frames}, fps={config.fps}, frame_step={config.frame_step})"
+            )
+
+    return TrialRenderResult(
+        key=key,
+        gif_outputs=tuple(gif_outputs),
+        valid_count=valid_count,
+        inside_count=inside_count,
+        outside_count=outside_count,
+        inside_ratio=float(inside_ratio),
+        elapsed_sec=float(time.perf_counter() - started_at),
+    )
+
+
+def render_one_trial_worker(config: RenderConfig, key: TrialKey) -> TrialRenderResult:
+    df = load_data_for_worker(config.csv_path)
+    return render_one_trial(
+        df=df,
+        config=config,
+        key=key,
+        auto_selected=False,
+        verbose=False,
+    )
+
+
+def run_all_trials(
+    *,
+    config: RenderConfig,
+    trial_keys: list[TrialKey],
+    jobs: int | None,
+) -> tuple[list[TrialRenderResult], float]:
+    total_trials = len(trial_keys)
+    if total_trials == 0:
+        raise ValueError("No trials found in CSV.")
+
+    max_workers = resolve_jobs(jobs)
+    print(
+        "Batch mode enabled: "
+        f"trials={total_trials}, workers={max_workers}, bos_modes={','.join(GIF_BOS_MODES)}"
+    )
+    started_at = time.perf_counter()
+    pending = deque(trial_keys)
+    inflight: dict[cf.Future[TrialRenderResult], TrialKey] = {}
+    results: list[TrialRenderResult] = []
+
+    executor = cf.ProcessPoolExecutor(
+        max_workers=max_workers,
+        mp_context=mp.get_context("spawn"),
+    )
+    aborted = False
+    try:
+        while pending and len(inflight) < max_workers:
+            key = pending.popleft()
+            future = executor.submit(render_one_trial_worker, config, key)
+            inflight[future] = key
+
+        while inflight:
+            done_set, _ = cf.wait(tuple(inflight.keys()), return_when=cf.FIRST_COMPLETED)
+            for done in done_set:
+                key = inflight.pop(done)
+                try:
+                    result = done.result()
+                except Exception as exc:
+                    aborted = True
+                    for future in inflight:
+                        future.cancel()
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    raise RuntimeError(
+                        "Batch aborted on first error at "
+                        f"subject={key.subject}, velocity={format_velocity(key.velocity)}, trial={key.trial}"
+                    ) from exc
+
+                results.append(result)
+                print(
+                    f"[{len(results)}/{total_trials}] "
+                    f"subject={result.key.subject}, velocity={format_velocity(result.key.velocity)}, "
+                    f"trial={result.key.trial}, gifs={len(result.gif_outputs)}, "
+                    f"elapsed={result.elapsed_sec:.2f}s"
+                )
+                if pending:
+                    next_key = pending.popleft()
+                    next_future = executor.submit(render_one_trial_worker, config, next_key)
+                    inflight[next_future] = next_key
+    finally:
+        if not aborted:
+            executor.shutdown(wait=True, cancel_futures=False)
+
+    total_elapsed = float(time.perf_counter() - started_at)
+    results.sort(key=lambda item: (item.key.subject, item.key.velocity, item.key.trial))
+    return results, total_elapsed
+
+
 def main() -> None:
     args = parse_args()
     if not bool(args.save_gif):
@@ -1156,119 +1491,36 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     df = load_data(args.csv)
-    subject, velocity, trial, auto_selected = resolve_trial_selection(args, df)
+    config = build_render_config(args, rotate_ccw_deg=rotate_ccw_deg)
 
-    trial_df = df.filter(
-        (pl.col("subject") == subject) & (pl.col("velocity") == float(velocity)) & (pl.col("trial") == int(trial))
-    )
-    if trial_df.height == 0:
-        raise ValueError(
-            f"Selected trial has no rows: subject={subject}, velocity={format_velocity(velocity)}, trial={trial}"
+    selection_flags = [args.subject is not None, args.velocity is not None, args.trial is not None]
+    if bool(args.all) and any(selection_flags):
+        raise ValueError("--all cannot be combined with --subject/--velocity/--trial.")
+
+    if bool(args.all):
+        trial_keys = collect_trial_keys(df)
+        results, total_elapsed = run_all_trials(
+            config=config,
+            trial_keys=trial_keys,
+            jobs=args.jobs,
         )
-
-    series = build_trial_series(trial_df=trial_df, subject=subject, velocity=velocity, trial=trial)
-    display = build_display_series(series, rotate_ccw_deg=rotate_ccw_deg)
-    trial_state = resolve_trial_state(
-        event_xlsm=args.event_xlsm,
-        subject=subject,
-        velocity=float(velocity),
-        trial=int(trial),
-    )
-    trial_state_label = format_trial_state_label(trial_state) if bool(args.show_trial_state) else None
-
-    base_name = (
-        f"{safe_name(subject)}__velocity-{safe_name(format_velocity(velocity))}"
-        f"__trial-{int(trial)}"
-    )
-    subject_out_dir = args.out_dir / str(subject)
-    subject_out_dir.mkdir(parents=True, exist_ok=True)
-    gif_base = subject_out_dir / f"{base_name}__{safe_name(args.gif_name_suffix)}"
-
-    print(
-        "Trial selection: "
-        f"subject={subject}, velocity={format_velocity(velocity)}, trial={trial}, auto_selected={auto_selected}"
-    )
-    print(
-        "Validity summary: "
-        f"total_frames={series.mocap_frame.size}, valid_frames={int(np.count_nonzero(series.valid_mask))}, "
-        f"nan_invalid={series.nan_invalid_count}, bos_invalid={series.bos_invalid_count}"
-    )
-    print(
-        "Events: "
-        f"platform_onset_local={series.platform_onset_local}, "
-        f"platform_offset_local={series.platform_offset_local}, "
-        f"step_onset_local={series.step_onset_local}"
-    )
-    print(f"Display rotation: CCW {rotate_ccw_deg} deg")
-    print(f"Trial state: {trial_state}")
-    print(f"Output root: {args.out_dir}")
-    print(f"Subject output directory: {subject_out_dir}")
-
-    bos_polylines: BOSPolylines | None = None
-    try:
-        c3d_path = resolve_c3d_for_trial(
-            c3d_dir=DEFAULT_C3D_DIR,
-            event_xlsm=args.event_xlsm,
-            subject=subject,
-            velocity=float(velocity),
-            trial=int(trial),
-        )
-        if c3d_path is None:
-            print("[BOS overlay] matching C3D not found; hull/union overlay disabled.")
-        else:
-            bos_polylines = compute_bos_polylines_from_c3d(
-                c3d_path=c3d_path,
-                n_frames=series.mocap_frame.size,
-                rotate_ccw_deg=display.rotate_ccw_deg,
-            )
-            print(f"[BOS overlay] using C3D: {c3d_path}")
-    except Exception as exc:
-        print(f"[BOS overlay] disabled due to error: {exc}")
-        bos_polylines = None
-
-    fixed_x_lim, fixed_y_lim = compute_fixed_gif_axis_limits(
-        series=series,
-        display=display,
-        bos_polylines=bos_polylines,
-    )
-    print(
-        "Fixed axis limits: "
-        f"x=({fixed_x_lim[0]:.4f}, {fixed_x_lim[1]:.4f}), "
-        f"y=({fixed_y_lim[0]:.4f}, {fixed_y_lim[1]:.4f})"
-    )
-
-    gif_outputs: list[tuple[Path, int, str]] = []
-    print("GIF outputs: right1col with bos_mode=freeze/live")
-    for bos_mode in GIF_BOS_MODES:
-        gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
-        frames = render_gif(
-            series=series,
-            display=display,
-            trial_state_label=trial_state_label,
-            out_path=gif_out,
-            fps=int(args.fps),
-            frame_step=int(args.frame_step),
-            dpi=int(args.dpi),
-            x_lim=fixed_x_lim,
-            y_lim=fixed_y_lim,
-            bos_polylines=bos_polylines,
-            bos_mode=bos_mode,
-        )
-        gif_outputs.append((gif_out, int(frames), bos_mode))
-
-    valid_count = int(np.count_nonzero(series.valid_mask))
-    inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
-    outside_count = valid_count - inside_count
-    inside_ratio = (100.0 * inside_count / valid_count) if valid_count > 0 else float("nan")
-    print(
-        "Inside/outside summary: "
-        f"inside={inside_count}, outside={outside_count}, inside_ratio={inside_ratio:.2f}%"
-    )
-    for out_path, frames, bos_mode in gif_outputs:
+        total_gifs = sum(len(item.gif_outputs) for item in results)
+        avg_elapsed = (total_elapsed / len(results)) if results else float("nan")
         print(
-            f"Saved GIF[{bos_mode}]: {out_path} "
-            f"(frames={frames}, fps={args.fps}, frame_step={args.frame_step})"
+            "Batch summary: "
+            f"trials={len(results)}, total_gifs={total_gifs}, total_elapsed_sec={total_elapsed:.2f}, "
+            f"avg_elapsed_per_trial_sec={avg_elapsed:.2f}"
         )
+        return
+
+    trial_key, auto_selected = resolve_trial_selection(args, df)
+    render_one_trial(
+        df=df,
+        config=config,
+        key=trial_key,
+        auto_selected=auto_selected,
+        verbose=True,
+    )
 
 
 if __name__ == "__main__":
