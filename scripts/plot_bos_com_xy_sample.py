@@ -41,6 +41,42 @@ from replace_v3d.io.events_excel import (
 
 matplotlib.use("Agg")
 
+_KO_FONT_CANDIDATES = (
+    "Malgun Gothic",
+    "NanumGothic",
+    "NanumBarunGothic",
+    "AppleGothic",
+    "Noto Sans CJK KR",
+    "Noto Sans KR",
+)
+
+
+def configure_korean_font_for_matplotlib() -> None:
+    """Configure Hangul-capable matplotlib font with graceful fallback."""
+    plt.rcParams["axes.unicode_minus"] = False
+    tried = ", ".join(_KO_FONT_CANDIDATES)
+    try:
+        available = {font.name for font in matplotlib.font_manager.fontManager.ttflist}
+    except Exception as exc:
+        print(
+            "Warning: failed to inspect matplotlib fonts. "
+            f"Tried: {tried}. Error={exc}. Hangul text may render incorrectly."
+        )
+        return
+
+    for font_name in _KO_FONT_CANDIDATES:
+        if font_name in available:
+            plt.rcParams["font.family"] = font_name
+            return
+
+    print(
+        "Warning: no Hangul-capable matplotlib font found. "
+        f"Tried: {tried}. Hangul text may render incorrectly."
+    )
+
+
+configure_korean_font_for_matplotlib()
+
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
