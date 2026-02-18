@@ -3,32 +3,35 @@ Always follow this procedure when performing tasks:
 1. **Plan the changes**: Before making any code modifications, create a detailed plan outlining what will be changed and why
 2. **Get user confirmation**: Present the plan to the user and wait for explicit confirmation before proceeding
 3. **Modify code**: Make the necessary code changes according to the confirmed plan
-4. **Git Commit**: Commit changes with a Korean commit message specifically.
+4. **Git Commit**: Commit changes with a Korean commit message that reflects the user's intent, at least **3 lines** long.
 5. **Run and Verify**: Execute the code and perform MD5 checksum comparison between new outputs and reference files if pipelines or logic were changed.
 6. **Finalize**:
-   - Record **issues/problems** in `issue.md` (문제 자체만; 해결방법 제외).
+   - Record **issues/problems** in `.claude\issue.md` (issue only).
    - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
    - Clearly specify which skills were used in the final response.
+   - Remove unnecessary files and folders.
 
 ---
-## Environment rules
-- Always use WSL2 with the `module` conda environment for all tasks.
-- Always run Python/pip as: `conda run -n module python` / `conda run -n module pip`.
-- In this environment, `conda run -n module python -` may not receive stdin; prefer `-c` or running a `.py` file.
-- If file deletion is needed, prefer `conda run -n module python -c "import shutil; shutil.rmtree(...)"` over `rm -rf` (can be blocked in some runs).
+# ExecPlans
+When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
+
+## Phase 1: Requirements Discovery
+Use `.claude/REQUIREMENTS_TEMPLATE.md` to guide a discovery session with the user. Ask questions in batches of 3-5. If answers are vague, push back. Do NOT proceed until the user confirms the completed brief.
+
+## Phase 2: Plan Authoring
+Write an ExecPlan(`.claude\execplans`, korean & english ver.) per `.claude/PLANS.md`. Present it to the user. Do NOT implement until the user approves.
+
+## Phase 3: Implementation
+Follow the approved ExecPlan. Proceed through milestones autonomously without prompting the user. Keep all living document sections up to date. Commit frequently. If blocked, stop and ask.
 
 ---
-## **Codebase Rule: Configuration Management**
+# **Codebase Rule: Configuration Management**
 
 - Do not restore or roll back files/code that you did not modify yourself. Never attempt to "fix" or revert changes in files unrelated to your current task, including using `git checkout`.
 - Use `polars` then `pandas` library.
-- **Leverage Parallel Agent Execution**: In WSL2, multiple agents can run in parallel. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
-- Organize and separate each scripts by biomechanical variable categories:
-  - **COM-related variables**: xCOM, COM, MOS, BOS, ...
-  - **Torque variables**: Ankle torque, Knee torque, Hip torque, ...
-  - **Joint angle variables**: Ankle, Knee, Hip, Trunk, Neck, ...
+- Leverage Parallel Agent Execution: you can use multiple agents to handle different parts of the task concurrently. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
+- Organize and separate each scripts by biomechanical variable categories: EMG, COM, torque, joint, GRF&COP
 - Do not create subfolders under `scripts`; keep runnable entry scripts directly under `scripts/`.
-- When exporting CSV files that may include Korean text, use UTF-8 with BOM (`utf-8-sig`) by default.
 
 ---
 
