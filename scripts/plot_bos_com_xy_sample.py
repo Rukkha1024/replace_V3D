@@ -44,6 +44,9 @@ DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
 GIF_BOS_MODES = ("freeze", "live")
 RIGHT1COL_SUFFIX = "right1col"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
+GIF_FIGSIZE = (8.2, 8.0)
+GIF_LAYOUT_WIDTH_RATIOS = (3.45, 1.15)
+GIF_LAYOUT_WSPACE = 0.05
 BOS_MARKERS_ALL = [
     "LHEE",
     "LTOE",
@@ -670,17 +673,38 @@ def build_gif_legend_handles() -> list[object]:
     ]
 
 
-def apply_gif_legend_layout(
-    fig: plt.Figure,
-    ax: plt.Axes,
-    *,
-    trial_state_label: str | None,
-) -> None:
-    right_rect = [0, 0, 0.76, 0.94] if trial_state_label else [0, 0, 0.76, 0.98]
-    ax.legend(
+def resolve_gif_trial_state_line(trial_state_label: str | None) -> str:
+    if trial_state_label is None:
+        return "trial_type=unknown"
+    text = str(trial_state_label).strip()
+    return text if text else "trial_type=unknown"
+
+
+def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes]:
+    fig = plt.figure(figsize=GIF_FIGSIZE)
+    grid = fig.add_gridspec(1, 2, width_ratios=GIF_LAYOUT_WIDTH_RATIOS, wspace=GIF_LAYOUT_WSPACE)
+    ax_main = fig.add_subplot(grid[0, 0])
+    ax_side = fig.add_subplot(grid[0, 1])
+    ax_side.axis("off")
+    fig.subplots_adjust(left=0.08, right=0.985, bottom=0.085, top=0.88)
+    return fig, ax_main, ax_side
+
+
+def apply_gif_right_panel(ax_side: plt.Axes) -> object:
+    info_text = ax_side.text(
+        0.02,
+        0.98,
+        "",
+        transform=ax_side.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
+    )
+    ax_side.legend(
         handles=build_gif_legend_handles(),
-        loc="center left",
-        bbox_to_anchor=(1.02, 0.5),
+        loc="lower left",
+        bbox_to_anchor=(0.02, 0.02),
         ncol=1,
         fontsize=8,
         frameon=True,
@@ -688,7 +712,7 @@ def apply_gif_legend_layout(
         handlelength=2.0,
         columnspacing=0.9,
     )
-    fig.tight_layout(rect=right_rect)
+    return info_text
 
 
 def _collect_finite_polyline_values(polylines: list[np.ndarray], valid_mask: np.ndarray) -> np.ndarray:
@@ -954,7 +978,7 @@ def render_gif(
             else:
                 print("Warning: no valid frames at/after step onset. BOS freeze disabled for this trial.")
 
-    fig, ax = plt.subplots(figsize=(8.2, 8.0))
+    fig, ax, ax_side = create_gif_canvas()
 
     bos_rect = Rectangle(
         (0.0, 0.0),
@@ -1007,16 +1031,7 @@ def render_gif(
             linestyle="--",
             zorder=4,
         )
-    info_text = ax.text(
-        0.02,
-        0.98,
-        "",
-        transform=ax.transAxes,
-        ha="left",
-        va="top",
-        fontsize=9,
-        bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
-    )
+    info_text = apply_gif_right_panel(ax_side)
 
     ax.set_xlim(*x_lim)
     ax.set_ylim(*y_lim)
@@ -1024,25 +1039,23 @@ def render_gif(
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
+    gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
     set_title_and_subtitle(
         ax,
-        title=(
-            "BOS + COM XY animation | "
-            f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
-            f"view=CCW{display.rotate_ccw_deg}, bos_mode={mode}"
-        ),
-        subtitle=trial_state_label,
-    )
-    apply_gif_legend_layout(
-        fig,
-        ax,
-        trial_state_label=trial_state_label,
+        title="BOS + COM XY animation",
+        subtitle=gif_trial_state_line,
     )
 
     valid_count = int(valid_indices.size)
     inside_count = int(np.count_nonzero(series.inside_mask[valid_indices]))
     outside_count = valid_count - inside_count
     inside_ratio = 100.0 * inside_count / valid_count
+    panel_header = (
+        f"subject={series.subject}\n"
+        f"velocity={format_velocity(series.velocity)}, trial={series.trial}\n"
+        f"view=CCW{display.rotate_ccw_deg}\n"
+        f"bos_mode={mode}"
+    )
 
     def event_state(frame_value: int) -> str:
         labels: list[str] = []
@@ -1097,6 +1110,7 @@ def render_gif(
             time_info = f"t={series.time_from_onset_s[idx]:.3f} s"
 
         info_text.set_text(
+            f"{panel_header}\n\n"
             f"frame={frame_value} ({frame_no + 1}/{frame_indices.size})\n"
             f"{time_info}\n"
             f"status={'inside' if is_inside else 'outside'}\n"
