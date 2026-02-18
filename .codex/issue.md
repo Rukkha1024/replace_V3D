@@ -13,6 +13,7 @@ Policy:
 - [VIZ] For freeze/live BOS comparison in GIF, if axis limits are not fixed from COM + BOS (bbox/hull/union) full-range, one mode can appear clipped or visually rescaled, reducing interpretability across modes.
 - [VIZ] GIF export can emit matplotlib warnings for Korean glyphs (`Glyph xxxx missing from font(s) DejaVu Sans`), and Hangul text (e.g., subject names) may render as tofu/missing characters in titles or side-panel metadata.
 - [IO] In `scripts/plot_bos_com_xy_sample.py`, when output folders are created with the raw `subject` value, a subject string containing OS-reserved path characters can fail directory creation/saving.
+- [DATA] Trial keys present in `data/perturb_inform.xlsm` (`platform` sheet) are not guaranteed to exist in `output/all_trials_timeseries.csv`; direct visualization commands can fail with `ValueError: Selected trial has no rows` when workbook-only trials are used.
 
 ## 2026-02-17
 

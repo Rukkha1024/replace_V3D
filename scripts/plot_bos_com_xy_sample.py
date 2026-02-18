@@ -58,6 +58,15 @@ XCOM_TRAIL_COLOR = "teal"
 XCOM_INSIDE_COLOR = "teal"
 XCOM_OUTSIDE_COLOR = "mediumvioletred"
 XCOM_GHOST_COLOR = "purple"
+COP_SOURCE_CHOICES = ("absolute", "onset0")
+COP_COLUMNS_BY_SOURCE: dict[str, tuple[str, str]] = {
+    "absolute": ("COP_X_m", "COP_Y_m"),
+    "onset0": ("COP_X_m_onset0", "COP_Y_m_onset0"),
+}
+COP_TRAIL_COLOR = "tab:brown"
+COP_INSIDE_COLOR = "peru"
+COP_OUTSIDE_COLOR = "firebrick"
+COP_GHOST_COLOR = "saddlebrown"
 BOS_MARKERS_ALL = [
     "LHEE",
     "LTOE",
@@ -107,6 +116,14 @@ class TrialSeries:
     xcom_y: np.ndarray | None
     xcom_valid_mask: np.ndarray | None
     xcom_inside_mask: np.ndarray | None
+    cop_source: str
+    cop_enabled: bool
+    cop_disabled_reason: str | None
+    cop_x: np.ndarray | None
+    cop_y: np.ndarray | None
+    cop_valid_mask: np.ndarray | None
+    cop_inside_mask: np.ndarray | None
+    xy_shift_for_onset0: tuple[float, float]
     platform_onset_local: int
     platform_offset_local: int
     step_onset_local: int | None
@@ -120,6 +137,14 @@ class DisplaySeries:
     com_y: np.ndarray
     xcom_x: np.ndarray | None
     xcom_y: np.ndarray | None
+    cop_source: str
+    cop_enabled: bool
+    cop_disabled_reason: str | None
+    cop_x: np.ndarray | None
+    cop_y: np.ndarray | None
+    cop_valid_mask: np.ndarray | None
+    cop_inside_mask: np.ndarray | None
+    xy_shift_for_onset0: tuple[float, float]
     bos_minx: np.ndarray
     bos_maxx: np.ndarray
     bos_miny: np.ndarray
@@ -156,6 +181,7 @@ class RenderConfig:
     frame_step: int
     dpi: int
     gif_name_suffix: str
+    cop_source: str
     rotate_ccw_deg: int
     show_trial_state: bool
     start_from_platform_onset_offset: int | None = None
@@ -176,6 +202,7 @@ class TrialRenderResult:
 _PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
 _WORKER_CSV_CACHE: dict[Path, pl.DataFrame] = {}
 _XCOM_MISSING_WARNED = False
+_COP_WARNED_KEYS: set[str] = set()
 
 
 def parse_args() -> argparse.Namespace:
@@ -253,6 +280,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Optional per-trial start frame offset from platform_onset_local. "
             "Example: -20 trims to [platform_onset_local-20, end]."
+        ),
+    )
+    ap.add_argument(
+        "--cop_source",
+        type=str,
+        choices=list(COP_SOURCE_CHOICES),
+        default="absolute",
+        help=(
+            "Corrected COP source for overlay. "
+            "'absolute' uses COP_X/Y_m; 'onset0' uses COP_X/Y_m_onset0."
         ),
     )
     return ap.parse_args()
@@ -428,6 +465,13 @@ def resolve_jobs(requested_jobs: int | None) -> int:
     return jobs
 
 
+def normalize_cop_source(value: str) -> str:
+    text = str(value).strip().lower()
+    if text not in COP_SOURCE_CHOICES:
+        raise ValueError(f"Unsupported cop_source={value!r}. Allowed: {', '.join(COP_SOURCE_CHOICES)}")
+    return text
+
+
 def warn_missing_xcom_columns_once(columns: list[str]) -> None:
     global _XCOM_MISSING_WARNED
     if _XCOM_MISSING_WARNED:
@@ -438,6 +482,34 @@ def warn_missing_xcom_columns_once(columns: list[str]) -> None:
         _XCOM_MISSING_WARNED = True
 
 
+def warn_cop_once(*, key: str, message: str) -> None:
+    if key in _COP_WARNED_KEYS:
+        return
+    print(message)
+    _COP_WARNED_KEYS.add(key)
+
+
+def warn_missing_cop_columns_once(*, columns: list[str], cop_source: str) -> list[str]:
+    cols = COP_COLUMNS_BY_SOURCE[cop_source]
+    missing = [col for col in cols if col not in columns]
+    if missing:
+        warn_cop_once(
+            key=f"missing:{cop_source}:{','.join(missing)}",
+            message=(
+                f"Warning: COP overlay disabled for cop_source={cop_source}. "
+                f"Missing columns: {', '.join(missing)}"
+            ),
+        )
+    return missing
+
+
+def warn_disabled_cop_overlay_once(*, cop_source: str, reason: str) -> None:
+    warn_cop_once(
+        key=f"disabled:{cop_source}:{reason}",
+        message=f"Warning: COP overlay disabled for cop_source={cop_source}. Reason: {reason}",
+    )
+
+
 def get_optional_int_scalar(trial_df: pl.DataFrame, col_name: str) -> int | None:
     values = trial_df.get_column(col_name).drop_nulls().unique()
     if values.len() == 0:
@@ -445,8 +517,16 @@ def get_optional_int_scalar(trial_df: pl.DataFrame, col_name: str) -> int | None
     return int(values[0])
 
 
-def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, trial: int) -> TrialSeries:
+def build_trial_series(
+    trial_df: pl.DataFrame,
+    subject: str,
+    velocity: float,
+    trial: int,
+    *,
+    cop_source: str,
+) -> TrialSeries:
     trial_df = trial_df.sort("MocapFrame")
+    cop_source_norm = normalize_cop_source(cop_source)
 
     mocap = np.asarray(trial_df.get_column("MocapFrame").to_list(), dtype=int)
     com_x = np.asarray(trial_df.get_column("COM_X").to_list(), dtype=float)
@@ -455,6 +535,11 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
     bos_maxx = np.asarray(trial_df.get_column("BOS_maxX").to_list(), dtype=float)
     bos_miny = np.asarray(trial_df.get_column("BOS_minY").to_list(), dtype=float)
     bos_maxy = np.asarray(trial_df.get_column("BOS_maxY").to_list(), dtype=float)
+    platform_onset = get_optional_int_scalar(trial_df, "platform_onset_local")
+    platform_offset = get_optional_int_scalar(trial_df, "platform_offset_local")
+    if platform_onset is None or platform_offset is None:
+        raise ValueError("platform_onset_local/platform_offset_local are required per trial.")
+    step_onset = get_optional_int_scalar(trial_df, "step_onset_local")
     time_from_onset = None
     if "time_from_platform_onset_s" in trial_df.columns:
         time_from_onset = np.asarray(trial_df.get_column("time_from_platform_onset_s").to_list(), dtype=float)
@@ -500,11 +585,69 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
     else:
         warn_missing_xcom_columns_once(trial_df.columns)
 
-    platform_onset = get_optional_int_scalar(trial_df, "platform_onset_local")
-    platform_offset = get_optional_int_scalar(trial_df, "platform_offset_local")
-    if platform_onset is None or platform_offset is None:
-        raise ValueError("platform_onset_local/platform_offset_local are required per trial.")
-    step_onset = get_optional_int_scalar(trial_df, "step_onset_local")
+    cop_enabled = False
+    cop_disabled_reason: str | None = None
+    cop_x: np.ndarray | None = None
+    cop_y: np.ndarray | None = None
+    cop_valid_mask: np.ndarray | None = None
+    cop_inside_mask: np.ndarray | None = None
+    xy_shift_for_onset0 = (0.0, 0.0)
+    missing_cop = warn_missing_cop_columns_once(columns=trial_df.columns, cop_source=cop_source_norm)
+    if missing_cop:
+        cop_disabled_reason = f"missing columns: {', '.join(missing_cop)}"
+    else:
+        cop_col_x, cop_col_y = COP_COLUMNS_BY_SOURCE[cop_source_norm]
+        cop_x_arr = np.asarray(trial_df.get_column(cop_col_x).to_list(), dtype=float)
+        cop_y_arr = np.asarray(trial_df.get_column(cop_col_y).to_list(), dtype=float)
+        cop_finite_mask = np.isfinite(cop_x_arr) & np.isfinite(cop_y_arr)
+        cop_compare_x = cop_x_arr
+        cop_compare_y = cop_y_arr
+
+        if cop_source_norm == "onset0":
+            abs_col_x, abs_col_y = COP_COLUMNS_BY_SOURCE["absolute"]
+            missing_abs = [col for col in (abs_col_x, abs_col_y) if col not in trial_df.columns]
+            if missing_abs:
+                cop_disabled_reason = (
+                    "onset0 alignment requires absolute COP columns: "
+                    + ", ".join(missing_abs)
+                )
+            else:
+                cop_abs_x = np.asarray(trial_df.get_column(abs_col_x).to_list(), dtype=float)
+                cop_abs_y = np.asarray(trial_df.get_column(abs_col_y).to_list(), dtype=float)
+                onset_idx = np.flatnonzero(mocap == int(platform_onset))
+                if onset_idx.size == 0:
+                    cop_disabled_reason = (
+                        "platform_onset_local frame not found in MocapFrame; "
+                        "cannot align onset0 COP to global XY."
+                    )
+                else:
+                    onset_i = int(onset_idx[0])
+                    shift_x = float(cop_abs_x[onset_i])
+                    shift_y = float(cop_abs_y[onset_i])
+                    if not (np.isfinite(shift_x) and np.isfinite(shift_y)):
+                        cop_disabled_reason = (
+                            "absolute COP at platform_onset_local is non-finite; "
+                            "cannot align onset0 COP."
+                        )
+                    else:
+                        xy_shift_for_onset0 = (shift_x, shift_y)
+                        cop_compare_x = cop_x_arr + shift_x
+                        cop_compare_y = cop_y_arr + shift_y
+
+        if cop_disabled_reason is None:
+            cop_enabled = True
+            cop_x = cop_x_arr
+            cop_y = cop_y_arr
+            cop_valid_mask = valid_mask & cop_finite_mask
+            cop_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
+            cop_inside_mask[cop_valid_mask] = (
+                (cop_compare_x[cop_valid_mask] >= bos_minx[cop_valid_mask])
+                & (cop_compare_x[cop_valid_mask] <= bos_maxx[cop_valid_mask])
+                & (cop_compare_y[cop_valid_mask] >= bos_miny[cop_valid_mask])
+                & (cop_compare_y[cop_valid_mask] <= bos_maxy[cop_valid_mask])
+            )
+        else:
+            warn_disabled_cop_overlay_once(cop_source=cop_source_norm, reason=cop_disabled_reason)
 
     return TrialSeries(
         subject=subject,
@@ -525,6 +668,14 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
         xcom_y=xcom_y,
         xcom_valid_mask=xcom_valid_mask,
         xcom_inside_mask=xcom_inside_mask,
+        cop_source=cop_source_norm,
+        cop_enabled=cop_enabled,
+        cop_disabled_reason=cop_disabled_reason,
+        cop_x=cop_x,
+        cop_y=cop_y,
+        cop_valid_mask=cop_valid_mask,
+        cop_inside_mask=cop_inside_mask,
+        xy_shift_for_onset0=xy_shift_for_onset0,
         platform_onset_local=platform_onset,
         platform_offset_local=platform_offset,
         step_onset_local=step_onset,
@@ -584,6 +735,9 @@ def compute_axis_limits_from_arrays(
     xcom_x: np.ndarray | None = None,
     xcom_y: np.ndarray | None = None,
     xcom_valid_mask: np.ndarray | None = None,
+    cop_x: np.ndarray | None = None,
+    cop_y: np.ndarray | None = None,
+    cop_valid_mask: np.ndarray | None = None,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     valid_idx = np.flatnonzero(valid_mask)
     if valid_idx.size == 0:
@@ -608,6 +762,11 @@ def compute_axis_limits_from_arrays(
         if xcom_valid_idx.size > 0:
             x_values = np.concatenate((x_values, xcom_x[xcom_valid_idx]))
             y_values = np.concatenate((y_values, xcom_y[xcom_valid_idx]))
+    if cop_x is not None and cop_y is not None and cop_valid_mask is not None:
+        cop_valid_idx = np.flatnonzero(cop_valid_mask)
+        if cop_valid_idx.size > 0:
+            x_values = np.concatenate((x_values, cop_x[cop_valid_idx]))
+            y_values = np.concatenate((y_values, cop_y[cop_valid_idx]))
 
     x_min = float(np.nanmin(x_values))
     x_max = float(np.nanmax(x_values))
@@ -632,8 +791,12 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
     com_x, com_y = rotate_xy(series.com_x, series.com_y, rotate_ccw_deg=deg)
     xcom_x: np.ndarray | None = None
     xcom_y: np.ndarray | None = None
+    cop_x: np.ndarray | None = None
+    cop_y: np.ndarray | None = None
     if series.xcom_x is not None and series.xcom_y is not None:
         xcom_x, xcom_y = rotate_xy(series.xcom_x, series.xcom_y, rotate_ccw_deg=deg)
+    if series.cop_x is not None and series.cop_y is not None:
+        cop_x, cop_y = rotate_xy(series.cop_x, series.cop_y, rotate_ccw_deg=deg)
     bos_minx, bos_maxx, bos_miny, bos_maxy = rotate_box_bounds(
         series.bos_minx,
         series.bos_maxx,
@@ -641,6 +804,26 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
         series.bos_maxy,
         rotate_ccw_deg=deg,
     )
+    shift_disp_x = 0.0
+    shift_disp_y = 0.0
+    if series.cop_enabled and series.cop_source == "onset0":
+        shift_abs_x, shift_abs_y = series.xy_shift_for_onset0
+        shift_x_arr, shift_y_arr = rotate_xy(
+            np.asarray([shift_abs_x], dtype=float),
+            np.asarray([shift_abs_y], dtype=float),
+            rotate_ccw_deg=deg,
+        )
+        shift_disp_x = float(shift_x_arr[0])
+        shift_disp_y = float(shift_y_arr[0])
+        com_x = com_x - shift_disp_x
+        com_y = com_y - shift_disp_y
+        bos_minx = bos_minx - shift_disp_x
+        bos_maxx = bos_maxx - shift_disp_x
+        bos_miny = bos_miny - shift_disp_y
+        bos_maxy = bos_maxy - shift_disp_y
+        if xcom_x is not None and xcom_y is not None:
+            xcom_x = xcom_x - shift_disp_x
+            xcom_y = xcom_y - shift_disp_y
     x_lim, y_lim = compute_axis_limits_from_arrays(
         com_x=com_x,
         com_y=com_y,
@@ -652,6 +835,9 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
         xcom_x=xcom_x,
         xcom_y=xcom_y,
         xcom_valid_mask=series.xcom_valid_mask,
+        cop_x=cop_x,
+        cop_y=cop_y,
+        cop_valid_mask=series.cop_valid_mask,
     )
     return DisplaySeries(
         rotate_ccw_deg=deg,
@@ -659,6 +845,14 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
         com_y=com_y,
         xcom_x=xcom_x,
         xcom_y=xcom_y,
+        cop_source=series.cop_source,
+        cop_enabled=series.cop_enabled,
+        cop_disabled_reason=series.cop_disabled_reason,
+        cop_x=cop_x,
+        cop_y=cop_y,
+        cop_valid_mask=series.cop_valid_mask,
+        cop_inside_mask=series.cop_inside_mask,
+        xy_shift_for_onset0=(shift_disp_x, shift_disp_y),
         bos_minx=bos_minx,
         bos_maxx=bos_maxx,
         bos_miny=bos_miny,
@@ -831,7 +1025,7 @@ def draw_bos_outline(
     ax.plot(x, y, color=color, alpha=alpha, linewidth=linewidth)
 
 
-def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[object]:
+def build_gif_legend_handles(*, has_xcom: bool, has_cop: bool, show_step_ghost: bool) -> list[object]:
     handles: list[object] = [
         Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
         Line2D([0], [0], color="0.25", lw=1.4, linestyle="--", label="BOS hull (all-foot convex)"),
@@ -911,6 +1105,49 @@ def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[o
                     label="Step-onset xCOM ghost",
                 )
             )
+    if has_cop:
+        handles.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    color=COP_TRAIL_COLOR,
+                    lw=2,
+                    linestyle=":",
+                    label="COP cumulative trajectory",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker="s",
+                    linestyle="None",
+                    markerfacecolor=COP_INSIDE_COLOR,
+                    markeredgecolor="black",
+                    label="Current COP (inside)",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker="s",
+                    linestyle="None",
+                    markerfacecolor=COP_OUTSIDE_COLOR,
+                    markeredgecolor="black",
+                    label="Current COP (outside)",
+                ),
+            ]
+        )
+        if show_step_ghost:
+            handles.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker="X",
+                    linestyle="None",
+                    markerfacecolor=COP_GHOST_COLOR,
+                    markeredgecolor="black",
+                    label="Step-onset COP ghost",
+                )
+            )
     return handles
 
 
@@ -931,7 +1168,13 @@ def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes]:
     return fig, ax_main, ax_side
 
 
-def apply_gif_right_panel(ax_side: plt.Axes, *, has_xcom: bool, show_step_ghost: bool) -> object:
+def apply_gif_right_panel(
+    ax_side: plt.Axes,
+    *,
+    has_xcom: bool,
+    has_cop: bool,
+    show_step_ghost: bool,
+) -> object:
     info_text = ax_side.text(
         0.02,
         0.98,
@@ -943,7 +1186,7 @@ def apply_gif_right_panel(ax_side: plt.Axes, *, has_xcom: bool, show_step_ghost:
         bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
     )
     ax_side.legend(
-        handles=build_gif_legend_handles(has_xcom=has_xcom, show_step_ghost=show_step_ghost),
+        handles=build_gif_legend_handles(has_xcom=has_xcom, has_cop=has_cop, show_step_ghost=show_step_ghost),
         loc="lower left",
         bbox_to_anchor=(0.02, 0.02),
         ncol=1,
@@ -1036,19 +1279,29 @@ def compute_fixed_gif_axis_limits(
         if xcom_valid_idx.size > 0:
             x_parts.append(display.xcom_x[xcom_valid_idx])
             y_parts.append(display.xcom_y[xcom_valid_idx])
+    if (
+        display.cop_valid_mask is not None
+        and display.cop_x is not None
+        and display.cop_y is not None
+    ):
+        cop_valid_idx = np.flatnonzero(display.cop_valid_mask)
+        if cop_valid_idx.size > 0:
+            x_parts.append(display.cop_x[cop_valid_idx])
+            y_parts.append(display.cop_y[cop_valid_idx])
     if bos_polylines is not None:
+        shift_x, shift_y = display.xy_shift_for_onset0
         hull_x = _collect_finite_polyline_values(bos_polylines.hull_x, series.valid_mask)
         hull_y = _collect_finite_polyline_values(bos_polylines.hull_y, series.valid_mask)
         union_x = _collect_finite_polyline_values(bos_polylines.union_x, series.valid_mask)
         union_y = _collect_finite_polyline_values(bos_polylines.union_y, series.valid_mask)
         if hull_x.size > 0:
-            x_parts.append(hull_x)
+            x_parts.append(hull_x - shift_x)
         if hull_y.size > 0:
-            y_parts.append(hull_y)
+            y_parts.append(hull_y - shift_y)
         if union_x.size > 0:
-            x_parts.append(union_x)
+            x_parts.append(union_x - shift_x)
         if union_y.size > 0:
-            y_parts.append(union_y)
+            y_parts.append(union_y - shift_y)
 
     x_values = np.concatenate(x_parts)
     y_values = np.concatenate(y_parts)
@@ -1333,6 +1586,19 @@ def render_gif(
         if xcom_valid_indices.size == 0:
             has_xcom = False
 
+    has_cop = (
+        series.cop_enabled
+        and series.cop_valid_mask is not None
+        and series.cop_inside_mask is not None
+        and display.cop_x is not None
+        and display.cop_y is not None
+    )
+    cop_valid_indices = np.asarray([], dtype=int)
+    if has_cop:
+        cop_valid_indices = np.flatnonzero(series.cop_valid_mask)
+        if cop_valid_indices.size == 0:
+            has_cop = False
+
     frame_indices = valid_indices[::frame_step]
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
@@ -1411,6 +1677,29 @@ def render_gif(
             markeredgewidth=0.6,
             zorder=5,
         )
+    cop_trail_line: Line2D | None = None
+    cop_current_point: Line2D | None = None
+    if has_cop:
+        cop_trail_line, = ax.plot(
+            [],
+            [],
+            color=COP_TRAIL_COLOR,
+            linewidth=2.0,
+            alpha=0.9,
+            linestyle=":",
+            zorder=3,
+        )
+        cop_current_point, = ax.plot(
+            [],
+            [],
+            marker="s",
+            linestyle="None",
+            markersize=7.8,
+            markerfacecolor=COP_INSIDE_COLOR,
+            markeredgecolor="black",
+            markeredgewidth=0.6,
+            zorder=5,
+        )
     bos_union_line = None
     bos_hull_line = None
     if bos_polylines is not None:
@@ -1448,6 +1737,7 @@ def render_gif(
     info_text = apply_gif_right_panel(
         ax_side,
         has_xcom=has_xcom,
+        has_cop=has_cop,
         show_step_ghost=show_step_ghost,
     )
 
@@ -1459,6 +1749,8 @@ def render_gif(
     trail_post: object | None = None
     xcom_trail_pre: object | None = None
     xcom_trail_post: object | None = None
+    cop_trail_pre: object | None = None
+    cop_trail_post: object | None = None
     if step_vis in ("phase_trail", "phase_bos"):
         trail_line.set_visible(False)
         (trail_pre,) = ax.plot([], [], color="tab:blue", linewidth=2.0, alpha=0.95, zorder=3)
@@ -1483,12 +1775,33 @@ def render_gif(
                 linestyle=":",
                 zorder=3,
             )
+        if cop_trail_line is not None:
+            cop_trail_line.set_visible(False)
+            (cop_trail_pre,) = ax.plot(
+                [],
+                [],
+                color=COP_TRAIL_COLOR,
+                linewidth=2.0,
+                alpha=0.9,
+                linestyle=":",
+                zorder=3,
+            )
+            (cop_trail_post,) = ax.plot(
+                [],
+                [],
+                color=COP_OUTSIDE_COLOR,
+                linewidth=2.0,
+                alpha=0.9,
+                linestyle=":",
+                zorder=3,
+            )
     # ---- end step_vis setup ----
 
     # ---- ghost snapshot setup (live mode only) ----
     ghost_bos_rect: Rectangle | None = None
     ghost_com_pt = None
     ghost_xcom_pt = None
+    ghost_cop_pt = None
     ghost_label = None
     ghost_bos_union_line = None
     ghost_bos_hull_line = None
@@ -1525,6 +1838,19 @@ def render_gif(
                 linestyle="None",
                 markersize=9,
                 markerfacecolor=XCOM_GHOST_COLOR,
+                markeredgecolor="black",
+                markeredgewidth=0.8,
+                alpha=0.0,
+                zorder=7,
+            )
+        if has_cop:
+            (ghost_cop_pt,) = ax.plot(
+                [],
+                [],
+                marker="X",
+                linestyle="None",
+                markersize=9,
+                markerfacecolor=COP_GHOST_COLOR,
                 markeredgecolor="black",
                 markeredgewidth=0.8,
                 alpha=0.0,
@@ -1569,7 +1895,14 @@ def render_gif(
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
     gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
-    main_title = "BOS + COM/xCOM XY animation" if has_xcom else "BOS + COM XY animation"
+    if has_xcom and has_cop:
+        main_title = "BOS + COM/xCOM/COP XY animation"
+    elif has_xcom:
+        main_title = "BOS + COM/xCOM XY animation"
+    elif has_cop:
+        main_title = "BOS + COM/COP XY animation"
+    else:
+        main_title = "BOS + COM XY animation"
     set_title_and_subtitle(
         ax,
         title=main_title,
@@ -1602,6 +1935,7 @@ def render_gif(
         frame_value = int(series.mocap_frame[idx])
         history = valid_indices[valid_indices <= idx]
         xcom_history = xcom_valid_indices[xcom_valid_indices <= idx] if has_xcom else np.asarray([], dtype=int)
+        cop_history = cop_valid_indices[cop_valid_indices <= idx] if has_cop else np.asarray([], dtype=int)
 
         trail_line.set_data(display.com_x[history], display.com_y[history])
         cx = float(display.com_x[idx])
@@ -1628,6 +1962,21 @@ def render_gif(
             else:
                 xcom_current_point.set_data([], [])
                 xcom_current_point.set_alpha(0.0)
+        if has_cop and cop_trail_line is not None and display.cop_x is not None and display.cop_y is not None:
+            cop_trail_line.set_data(display.cop_x[cop_history], display.cop_y[cop_history])
+        if has_cop and cop_current_point is not None and series.cop_valid_mask is not None:
+            if bool(series.cop_valid_mask[idx]) and display.cop_x is not None and display.cop_y is not None:
+                ccx = float(display.cop_x[idx])
+                ccy = float(display.cop_y[idx])
+                cop_current_point.set_data([ccx], [ccy])
+                cop_current_point.set_alpha(1.0)
+                cop_inside = bool(series.cop_inside_mask[idx]) if series.cop_inside_mask is not None else True
+                cop_color = COP_INSIDE_COLOR if cop_inside else COP_OUTSIDE_COLOR
+                cop_current_point.set_markerfacecolor(cop_color)
+                cop_current_point.set_markeredgecolor("black")
+            else:
+                cop_current_point.set_data([], [])
+                cop_current_point.set_alpha(0.0)
 
         bos_idx = idx
         bos_state = "live(no-freeze)" if mode == "live" else "live"
@@ -1643,13 +1992,14 @@ def render_gif(
         bos_rect.set_width(max_x - min_x)
         bos_rect.set_height(max_y - min_y)
         if bos_polylines is not None and bos_union_line is not None and bos_hull_line is not None:
+            shift_x, shift_y = display.xy_shift_for_onset0
             bos_union_line.set_data(
-                bos_polylines.union_x[bos_idx],
-                bos_polylines.union_y[bos_idx],
+                bos_polylines.union_x[bos_idx] - shift_x,
+                bos_polylines.union_y[bos_idx] - shift_y,
             )
             bos_hull_line.set_data(
-                bos_polylines.hull_x[bos_idx],
-                bos_polylines.hull_y[bos_idx],
+                bos_polylines.hull_x[bos_idx] - shift_x,
+                bos_polylines.hull_y[bos_idx] - shift_y,
             )
 
         local_idx = frame_no + 1
@@ -1657,11 +2007,20 @@ def render_gif(
         if series.time_from_onset_s is not None and np.isfinite(series.time_from_onset_s[idx]):
             time_info = f"t={series.time_from_onset_s[idx]:.3f} s"
 
+        cop_status_line = ""
+        if has_cop:
+            cop_state = "-"
+            if series.cop_valid_mask is not None and bool(series.cop_valid_mask[idx]):
+                is_cop_inside = bool(series.cop_inside_mask[idx]) if series.cop_inside_mask is not None else True
+                cop_state = "inside" if is_cop_inside else "outside"
+            cop_status_line = f"cop_status={cop_state}\n"
+
         info_text.set_text(
             f"{panel_header}\n\n"
             f"frame_local={local_idx}/{frame_indices.size}\n"
             f"{time_info}\n"
             f"status={'inside' if is_inside else 'outside'}\n"
+            f"{cop_status_line}"
             f"event={event_state(frame_value)}\n"
             f"bos={bos_state}\n"
             f"inside ratio={inside_ratio:.1f}% ({inside_count}/{valid_count})\n"
@@ -1692,6 +2051,21 @@ def render_gif(
             )
             xcom_trail_pre.set_data(display.xcom_x[xcom_pre], display.xcom_y[xcom_pre])
             xcom_trail_post.set_data(display.xcom_x[xcom_post], display.xcom_y[xcom_post])
+        if (
+            cop_trail_pre is not None
+            and cop_trail_post is not None
+            and has_cop
+            and display.cop_x is not None
+            and display.cop_y is not None
+        ):
+            cop_pre = cop_history[cop_history <= step_onset_idx] if step_onset_idx is not None else cop_history
+            cop_post = (
+                cop_history[cop_history > step_onset_idx]
+                if step_onset_idx is not None
+                else np.array([], dtype=int)
+            )
+            cop_trail_pre.set_data(display.cop_x[cop_pre], display.cop_y[cop_pre])
+            cop_trail_post.set_data(display.cop_x[cop_post], display.cop_y[cop_post])
 
         if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
             if idx == step_onset_idx:
@@ -1743,20 +2117,36 @@ def render_gif(
                 elif ghost_xcom_pt is not None:
                     ghost_xcom_pt.set_data([], [])
                     ghost_xcom_pt.set_alpha(0.0)
+                if (
+                    ghost_cop_pt is not None
+                    and series.cop_valid_mask is not None
+                    and bool(series.cop_valid_mask[step_onset_idx])
+                    and display.cop_x is not None
+                    and display.cop_y is not None
+                ):
+                    gx_cop = float(display.cop_x[step_onset_idx])
+                    gy_cop = float(display.cop_y[step_onset_idx])
+                    ghost_cop_pt.set_data([gx_cop], [gy_cop])
+                    ghost_cop_pt.set_alpha(1.0)
+                elif ghost_cop_pt is not None:
+                    ghost_cop_pt.set_data([], [])
+                    ghost_cop_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
                     ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
                     ghost_label.set_visible(True)
                 if ghost_bos_union_line is not None and bos_polylines is not None:
+                    shift_x, shift_y = display.xy_shift_for_onset0
                     ghost_bos_union_line.set_data(
-                        bos_polylines.union_x[step_onset_idx],
-                        bos_polylines.union_y[step_onset_idx],
+                        bos_polylines.union_x[step_onset_idx] - shift_x,
+                        bos_polylines.union_y[step_onset_idx] - shift_y,
                     )
                     ghost_bos_union_line.set_alpha(0.5)
                 if ghost_bos_hull_line is not None and bos_polylines is not None:
+                    shift_x, shift_y = display.xy_shift_for_onset0
                     ghost_bos_hull_line.set_data(
-                        bos_polylines.hull_x[step_onset_idx],
-                        bos_polylines.hull_y[step_onset_idx],
+                        bos_polylines.hull_x[step_onset_idx] - shift_x,
+                        bos_polylines.hull_y[step_onset_idx] - shift_y,
                     )
                     ghost_bos_hull_line.set_alpha(0.5)
             else:
@@ -1764,6 +2154,8 @@ def render_gif(
                 ghost_com_pt.set_alpha(0.0)
                 if ghost_xcom_pt is not None:
                     ghost_xcom_pt.set_alpha(0.0)
+                if ghost_cop_pt is not None:
+                    ghost_cop_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_visible(False)
                 if ghost_bos_union_line is not None:
@@ -1777,6 +2169,10 @@ def render_gif(
             artists.append(xcom_trail_line)
         if xcom_current_point is not None:
             artists.append(xcom_current_point)
+        if cop_trail_line is not None:
+            artists.append(cop_trail_line)
+        if cop_current_point is not None:
+            artists.append(cop_current_point)
         if bos_union_line is not None and bos_hull_line is not None:
             artists.extend([bos_union_line, bos_hull_line])
         if trail_pre is not None:
@@ -1787,6 +2183,10 @@ def render_gif(
             artists.append(xcom_trail_pre)
         if xcom_trail_post is not None:
             artists.append(xcom_trail_post)
+        if cop_trail_pre is not None:
+            artists.append(cop_trail_pre)
+        if cop_trail_post is not None:
+            artists.append(cop_trail_post)
         if timeline_cursor is not None:
             artists.append(timeline_cursor)
         if ghost_bos_rect is not None:
@@ -1795,6 +2195,8 @@ def render_gif(
             artists.append(ghost_com_pt)
         if ghost_xcom_pt is not None:
             artists.append(ghost_xcom_pt)
+        if ghost_cop_pt is not None:
+            artists.append(ghost_cop_pt)
         if ghost_label is not None:
             artists.append(ghost_label)
         if ghost_bos_union_line is not None:
@@ -1850,6 +2252,7 @@ def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> Render
         frame_step=int(args.frame_step),
         dpi=int(args.dpi),
         gif_name_suffix=str(args.gif_name_suffix),
+        cop_source=normalize_cop_source(str(args.cop_source)),
         rotate_ccw_deg=int(rotate_ccw_deg),
         show_trial_state=bool(args.show_trial_state),
         start_from_platform_onset_offset=start_offset,
@@ -1892,6 +2295,7 @@ def render_one_trial(
         subject=key.subject,
         velocity=key.velocity,
         trial=key.trial,
+        cop_source=config.cop_source,
     )
     display = build_display_series(series, rotate_ccw_deg=config.rotate_ccw_deg)
     trial_state = resolve_trial_state(
@@ -1908,7 +2312,10 @@ def render_one_trial(
     )
     subject_out_dir = config.out_dir / str(key.subject)
     subject_out_dir.mkdir(parents=True, exist_ok=True)
-    gif_base = subject_out_dir / f"{base_name}__{safe_name(config.gif_name_suffix)}"
+    gif_base = (
+        subject_out_dir
+        / f"{base_name}__{safe_name(config.gif_name_suffix)}__copsrc-{safe_name(config.cop_source)}"
+    )
 
     if verbose:
         print(
@@ -1929,6 +2336,17 @@ def render_one_trial(
         )
         print(f"Display rotation: CCW {config.rotate_ccw_deg} deg")
         print(f"Trial state: {trial_state}")
+        print(f"COP source: {config.cop_source}")
+        if series.cop_enabled:
+            print(
+                "COP overlay: enabled "
+                f"(source={series.cop_source}, onset0_shift_xy={series.xy_shift_for_onset0})"
+            )
+        else:
+            print(
+                "COP overlay: disabled "
+                f"(source={series.cop_source}, reason={series.cop_disabled_reason})"
+            )
         print(f"Output root: {config.out_dir}")
         print(f"Subject output directory: {subject_out_dir}")
 
@@ -1973,7 +2391,7 @@ def render_one_trial(
 
     gif_outputs: list[tuple[str, int, str]] = []
     if verbose:
-        print(f"GIF outputs: step_vis={step_vis}, bos_mode=freeze/live")
+        print(f"GIF outputs: step_vis={step_vis}, bos_mode=freeze/live, cop_source={config.cop_source}")
     for sv in vis_list:
         # step_vis 템플릿 모드는 live만 렌더링 (freeze는 기존 none 모드에서 사용)
         bos_modes_for_sv = GIF_BOS_MODES if sv == "none" else ("live",)
@@ -2048,7 +2466,8 @@ def run_all_trials(
     max_workers = resolve_jobs(jobs)
     print(
         "Batch mode enabled: "
-        f"trials={total_trials}, workers={max_workers}, bos_modes={','.join(GIF_BOS_MODES)}"
+        f"trials={total_trials}, workers={max_workers}, bos_modes={','.join(GIF_BOS_MODES)}, "
+        f"cop_source={config.cop_source}"
     )
     started_at = time.perf_counter()
     pending = deque(trial_keys)
