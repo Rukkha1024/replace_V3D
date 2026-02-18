@@ -53,6 +53,11 @@ TRIAL_KEYS = ["subject", "velocity", "trial"]
 GIF_FIGSIZE = (8.2, 8.0)
 GIF_LAYOUT_WIDTH_RATIOS = (3.45, 1.15)
 GIF_LAYOUT_WSPACE = 0.05
+XCOM_COLUMNS = ("xCOM_X", "xCOM_Y")
+XCOM_TRAIL_COLOR = "teal"
+XCOM_INSIDE_COLOR = "teal"
+XCOM_OUTSIDE_COLOR = "mediumvioletred"
+XCOM_GHOST_COLOR = "purple"
 BOS_MARKERS_ALL = [
     "LHEE",
     "LTOE",
@@ -98,6 +103,10 @@ class TrialSeries:
     inside_mask: np.ndarray
     nan_invalid_count: int
     bos_invalid_count: int
+    xcom_x: np.ndarray | None
+    xcom_y: np.ndarray | None
+    xcom_valid_mask: np.ndarray | None
+    xcom_inside_mask: np.ndarray | None
     platform_onset_local: int
     platform_offset_local: int
     step_onset_local: int | None
@@ -109,6 +118,8 @@ class DisplaySeries:
     rotate_ccw_deg: int
     com_x: np.ndarray
     com_y: np.ndarray
+    xcom_x: np.ndarray | None
+    xcom_y: np.ndarray | None
     bos_minx: np.ndarray
     bos_maxx: np.ndarray
     bos_miny: np.ndarray
@@ -164,6 +175,7 @@ class TrialRenderResult:
 
 _PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
 _WORKER_CSV_CACHE: dict[Path, pl.DataFrame] = {}
+_XCOM_MISSING_WARNED = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -416,6 +428,16 @@ def resolve_jobs(requested_jobs: int | None) -> int:
     return jobs
 
 
+def warn_missing_xcom_columns_once(columns: list[str]) -> None:
+    global _XCOM_MISSING_WARNED
+    if _XCOM_MISSING_WARNED:
+        return
+    missing = [col for col in XCOM_COLUMNS if col not in columns]
+    if missing:
+        print(f"Warning: xCOM overlay disabled. Missing columns: {', '.join(missing)}")
+        _XCOM_MISSING_WARNED = True
+
+
 def get_optional_int_scalar(trial_df: pl.DataFrame, col_name: str) -> int | None:
     values = trial_df.get_column(col_name).drop_nulls().unique()
     if values.len() == 0:
@@ -458,6 +480,26 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
         & (com_y[valid_mask] <= bos_maxy[valid_mask])
     )
 
+    xcom_x: np.ndarray | None = None
+    xcom_y: np.ndarray | None = None
+    xcom_valid_mask: np.ndarray | None = None
+    xcom_inside_mask: np.ndarray | None = None
+    has_xcom = all(col in trial_df.columns for col in XCOM_COLUMNS)
+    if has_xcom:
+        xcom_x = np.asarray(trial_df.get_column("xCOM_X").to_list(), dtype=float)
+        xcom_y = np.asarray(trial_df.get_column("xCOM_Y").to_list(), dtype=float)
+        xcom_finite_mask = np.isfinite(xcom_x) & np.isfinite(xcom_y)
+        xcom_valid_mask = valid_mask & xcom_finite_mask
+        xcom_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
+        xcom_inside_mask[xcom_valid_mask] = (
+            (xcom_x[xcom_valid_mask] >= bos_minx[xcom_valid_mask])
+            & (xcom_x[xcom_valid_mask] <= bos_maxx[xcom_valid_mask])
+            & (xcom_y[xcom_valid_mask] >= bos_miny[xcom_valid_mask])
+            & (xcom_y[xcom_valid_mask] <= bos_maxy[xcom_valid_mask])
+        )
+    else:
+        warn_missing_xcom_columns_once(trial_df.columns)
+
     platform_onset = get_optional_int_scalar(trial_df, "platform_onset_local")
     platform_offset = get_optional_int_scalar(trial_df, "platform_offset_local")
     if platform_onset is None or platform_offset is None:
@@ -479,6 +521,10 @@ def build_trial_series(trial_df: pl.DataFrame, subject: str, velocity: float, tr
         inside_mask=inside_mask,
         nan_invalid_count=nan_invalid_count,
         bos_invalid_count=bos_invalid_count,
+        xcom_x=xcom_x,
+        xcom_y=xcom_y,
+        xcom_valid_mask=xcom_valid_mask,
+        xcom_inside_mask=xcom_inside_mask,
         platform_onset_local=platform_onset,
         platform_offset_local=platform_offset,
         step_onset_local=step_onset,
@@ -576,6 +622,10 @@ def compute_axis_limits_from_arrays(
 def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySeries:
     deg = normalize_rotate_ccw_deg(rotate_ccw_deg)
     com_x, com_y = rotate_xy(series.com_x, series.com_y, rotate_ccw_deg=deg)
+    xcom_x: np.ndarray | None = None
+    xcom_y: np.ndarray | None = None
+    if series.xcom_x is not None and series.xcom_y is not None:
+        xcom_x, xcom_y = rotate_xy(series.xcom_x, series.xcom_y, rotate_ccw_deg=deg)
     bos_minx, bos_maxx, bos_miny, bos_maxy = rotate_box_bounds(
         series.bos_minx,
         series.bos_maxx,
@@ -596,6 +646,8 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
         rotate_ccw_deg=deg,
         com_x=com_x,
         com_y=com_y,
+        xcom_x=xcom_x,
+        xcom_y=xcom_y,
         bos_minx=bos_minx,
         bos_maxx=bos_maxx,
         bos_miny=bos_miny,
@@ -768,8 +820,8 @@ def draw_bos_outline(
     ax.plot(x, y, color=color, alpha=alpha, linewidth=linewidth)
 
 
-def build_gif_legend_handles() -> list[object]:
-    return [
+def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[object]:
+    handles: list[object] = [
         Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
         Line2D([0], [0], color="0.25", lw=1.4, linestyle="--", label="BOS hull (all-foot convex)"),
         Line2D([0], [0], color="tab:purple", lw=1.4, label="BOS union (L/R hull)"),
@@ -793,6 +845,62 @@ def build_gif_legend_handles() -> list[object]:
             label="Current COM (outside)",
         ),
     ]
+    if show_step_ghost:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="X",
+                linestyle="None",
+                markerfacecolor="darkorange",
+                markeredgecolor="black",
+                label="Step-onset COM ghost",
+            )
+        )
+    if has_xcom:
+        handles.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    color=XCOM_TRAIL_COLOR,
+                    lw=2,
+                    linestyle=":",
+                    label="xCOM cumulative trajectory",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker="^",
+                    linestyle="None",
+                    markerfacecolor=XCOM_INSIDE_COLOR,
+                    markeredgecolor="black",
+                    label="Current xCOM (inside)",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker="^",
+                    linestyle="None",
+                    markerfacecolor=XCOM_OUTSIDE_COLOR,
+                    markeredgecolor="black",
+                    label="Current xCOM (outside)",
+                ),
+            ]
+        )
+        if show_step_ghost:
+            handles.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker="X",
+                    linestyle="None",
+                    markerfacecolor=XCOM_GHOST_COLOR,
+                    markeredgecolor="black",
+                    label="Step-onset xCOM ghost",
+                )
+            )
+    return handles
 
 
 def resolve_gif_trial_state_line(trial_state_label: str | None) -> str:
@@ -812,7 +920,7 @@ def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes]:
     return fig, ax_main, ax_side
 
 
-def apply_gif_right_panel(ax_side: plt.Axes) -> object:
+def apply_gif_right_panel(ax_side: plt.Axes, *, has_xcom: bool, show_step_ghost: bool) -> object:
     info_text = ax_side.text(
         0.02,
         0.98,
@@ -824,7 +932,7 @@ def apply_gif_right_panel(ax_side: plt.Axes) -> object:
         bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
     )
     ax_side.legend(
-        handles=build_gif_legend_handles(),
+        handles=build_gif_legend_handles(has_xcom=has_xcom, show_step_ghost=show_step_ghost),
         loc="lower left",
         bbox_to_anchor=(0.02, 0.02),
         ncol=1,
@@ -908,6 +1016,15 @@ def compute_fixed_gif_axis_limits(
         display.bos_miny[valid_idx],
         display.bos_maxy[valid_idx],
     ]
+    if (
+        series.xcom_valid_mask is not None
+        and display.xcom_x is not None
+        and display.xcom_y is not None
+    ):
+        xcom_valid_idx = np.flatnonzero(series.xcom_valid_mask)
+        if xcom_valid_idx.size > 0:
+            x_parts.append(display.xcom_x[xcom_valid_idx])
+            y_parts.append(display.xcom_y[xcom_valid_idx])
     if bos_polylines is not None:
         hull_x = _collect_finite_polyline_values(bos_polylines.hull_x, series.valid_mask)
         hull_y = _collect_finite_polyline_values(bos_polylines.hull_y, series.valid_mask)
@@ -1114,6 +1231,18 @@ def render_gif(
     if valid_indices.size == 0:
         raise ValueError("No valid frame available for GIF generation.")
 
+    has_xcom = (
+        series.xcom_valid_mask is not None
+        and series.xcom_inside_mask is not None
+        and display.xcom_x is not None
+        and display.xcom_y is not None
+    )
+    xcom_valid_indices = np.asarray([], dtype=int)
+    if has_xcom:
+        xcom_valid_indices = np.flatnonzero(series.xcom_valid_mask)
+        if xcom_valid_indices.size == 0:
+            has_xcom = False
+
     frame_indices = valid_indices[::frame_step]
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
@@ -1169,6 +1298,29 @@ def render_gif(
         markeredgewidth=0.6,
         zorder=5,
     )
+    xcom_trail_line: Line2D | None = None
+    xcom_current_point: Line2D | None = None
+    if has_xcom:
+        xcom_trail_line, = ax.plot(
+            [],
+            [],
+            color=XCOM_TRAIL_COLOR,
+            linewidth=2.0,
+            alpha=0.9,
+            linestyle=":",
+            zorder=3,
+        )
+        xcom_current_point, = ax.plot(
+            [],
+            [],
+            marker="^",
+            linestyle="None",
+            markersize=8.5,
+            markerfacecolor=XCOM_INSIDE_COLOR,
+            markeredgecolor="black",
+            markeredgewidth=0.6,
+            zorder=5,
+        )
     bos_union_line = None
     bos_hull_line = None
     if bos_polylines is not None:
@@ -1189,8 +1341,6 @@ def render_gif(
             linestyle="--",
             zorder=4,
         )
-    info_text = apply_gif_right_panel(ax_side)
-
     # ---- step_vis template setup ----
     # Always compute step_onset_idx independently (bos_freeze_idx is only set for freeze mode)
     step_onset_idx: int | None = None
@@ -1204,25 +1354,55 @@ def render_gif(
             if _after.size > 0:
                 step_onset_idx = int(_after[0])
 
+    show_step_ghost = mode == "live" and step_onset_idx is not None
+    info_text = apply_gif_right_panel(
+        ax_side,
+        has_xcom=has_xcom,
+        show_step_ghost=show_step_ghost,
+    )
+
     timeline_cursor: Line2D | None = None
     if step_vis != "none":
         timeline_cursor = add_timeline_inset(ax_side, series)
 
     trail_pre: object | None = None
     trail_post: object | None = None
+    xcom_trail_pre: object | None = None
+    xcom_trail_post: object | None = None
     if step_vis in ("phase_trail", "phase_bos"):
         trail_line.set_visible(False)
         (trail_pre,) = ax.plot([], [], color="tab:blue", linewidth=2.0, alpha=0.95, zorder=3)
         (trail_post,) = ax.plot([], [], color="tab:orange", linewidth=2.0, alpha=0.95, zorder=3)
+        if xcom_trail_line is not None:
+            xcom_trail_line.set_visible(False)
+            (xcom_trail_pre,) = ax.plot(
+                [],
+                [],
+                color=XCOM_TRAIL_COLOR,
+                linewidth=2.0,
+                alpha=0.9,
+                linestyle=":",
+                zorder=3,
+            )
+            (xcom_trail_post,) = ax.plot(
+                [],
+                [],
+                color=XCOM_OUTSIDE_COLOR,
+                linewidth=2.0,
+                alpha=0.9,
+                linestyle=":",
+                zorder=3,
+            )
     # ---- end step_vis setup ----
 
     # ---- ghost snapshot setup (live mode only) ----
     ghost_bos_rect: Rectangle | None = None
     ghost_com_pt = None
+    ghost_xcom_pt = None
     ghost_label = None
     ghost_bos_union_line = None
     ghost_bos_hull_line = None
-    if mode == "live" and step_onset_idx is not None:
+    if show_step_ghost:
         ghost_bos_rect = Rectangle(
             (0.0, 0.0),
             width=0.0,
@@ -1247,6 +1427,19 @@ def render_gif(
             alpha=0.0,
             zorder=7,
         )
+        if has_xcom:
+            (ghost_xcom_pt,) = ax.plot(
+                [],
+                [],
+                marker="X",
+                linestyle="None",
+                markersize=9,
+                markerfacecolor=XCOM_GHOST_COLOR,
+                markeredgecolor="black",
+                markeredgewidth=0.8,
+                alpha=0.0,
+                zorder=7,
+            )
         ghost_label = ax.text(
             0.0,
             0.0,
@@ -1286,9 +1479,10 @@ def render_gif(
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
     gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
+    main_title = "BOS + COM/xCOM XY animation" if has_xcom else "BOS + COM XY animation"
     set_title_and_subtitle(
         ax,
-        title="BOS + COM XY animation",
+        title=main_title,
         subtitle=gif_trial_state_line,
     )
 
@@ -1317,6 +1511,7 @@ def render_gif(
         idx = int(frame_indices[frame_no])
         frame_value = int(series.mocap_frame[idx])
         history = valid_indices[valid_indices <= idx]
+        xcom_history = xcom_valid_indices[xcom_valid_indices <= idx] if has_xcom else np.asarray([], dtype=int)
 
         trail_line.set_data(display.com_x[history], display.com_y[history])
         cx = float(display.com_x[idx])
@@ -1327,6 +1522,22 @@ def render_gif(
         color = "tab:green" if is_inside else "tab:red"
         current_point.set_markerfacecolor(color)
         current_point.set_markeredgecolor("black")
+
+        if has_xcom and xcom_trail_line is not None and display.xcom_x is not None and display.xcom_y is not None:
+            xcom_trail_line.set_data(display.xcom_x[xcom_history], display.xcom_y[xcom_history])
+        if has_xcom and xcom_current_point is not None and series.xcom_valid_mask is not None:
+            if bool(series.xcom_valid_mask[idx]) and display.xcom_x is not None and display.xcom_y is not None:
+                xcx = float(display.xcom_x[idx])
+                xcy = float(display.xcom_y[idx])
+                xcom_current_point.set_data([xcx], [xcy])
+                xcom_current_point.set_alpha(1.0)
+                xcom_inside = bool(series.xcom_inside_mask[idx]) if series.xcom_inside_mask is not None else True
+                xcom_color = XCOM_INSIDE_COLOR if xcom_inside else XCOM_OUTSIDE_COLOR
+                xcom_current_point.set_markerfacecolor(xcom_color)
+                xcom_current_point.set_markeredgecolor("black")
+            else:
+                xcom_current_point.set_data([], [])
+                xcom_current_point.set_alpha(0.0)
 
         bos_idx = idx
         bos_state = "live(no-freeze)" if mode == "live" else "live"
@@ -1376,6 +1587,21 @@ def render_gif(
             post_hist = history[history > step_onset_idx] if step_onset_idx is not None else np.array([], dtype=int)
             trail_pre.set_data(display.com_x[pre_hist], display.com_y[pre_hist])
             trail_post.set_data(display.com_x[post_hist], display.com_y[post_hist])
+        if (
+            xcom_trail_pre is not None
+            and xcom_trail_post is not None
+            and has_xcom
+            and display.xcom_x is not None
+            and display.xcom_y is not None
+        ):
+            xcom_pre = xcom_history[xcom_history <= step_onset_idx] if step_onset_idx is not None else xcom_history
+            xcom_post = (
+                xcom_history[xcom_history > step_onset_idx]
+                if step_onset_idx is not None
+                else np.array([], dtype=int)
+            )
+            xcom_trail_pre.set_data(display.xcom_x[xcom_pre], display.xcom_y[xcom_pre])
+            xcom_trail_post.set_data(display.xcom_x[xcom_post], display.xcom_y[xcom_post])
 
         if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
             if idx == step_onset_idx:
@@ -1413,6 +1639,20 @@ def render_gif(
                 g_cy = float(display.com_y[step_onset_idx])
                 ghost_com_pt.set_data([g_cx], [g_cy])
                 ghost_com_pt.set_alpha(1.0)
+                if (
+                    ghost_xcom_pt is not None
+                    and series.xcom_valid_mask is not None
+                    and bool(series.xcom_valid_mask[step_onset_idx])
+                    and display.xcom_x is not None
+                    and display.xcom_y is not None
+                ):
+                    gx_xcom = float(display.xcom_x[step_onset_idx])
+                    gy_xcom = float(display.xcom_y[step_onset_idx])
+                    ghost_xcom_pt.set_data([gx_xcom], [gy_xcom])
+                    ghost_xcom_pt.set_alpha(1.0)
+                elif ghost_xcom_pt is not None:
+                    ghost_xcom_pt.set_data([], [])
+                    ghost_xcom_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
                     ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
@@ -1432,6 +1672,8 @@ def render_gif(
             else:
                 ghost_bos_rect.set_alpha(0.0)
                 ghost_com_pt.set_alpha(0.0)
+                if ghost_xcom_pt is not None:
+                    ghost_xcom_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_visible(False)
                 if ghost_bos_union_line is not None:
@@ -1441,18 +1683,28 @@ def render_gif(
         # ---- end ghost per-frame ----
 
         artists: list[object] = [trail_line, current_point, bos_rect, info_text]
+        if xcom_trail_line is not None:
+            artists.append(xcom_trail_line)
+        if xcom_current_point is not None:
+            artists.append(xcom_current_point)
         if bos_union_line is not None and bos_hull_line is not None:
             artists.extend([bos_union_line, bos_hull_line])
         if trail_pre is not None:
             artists.append(trail_pre)
         if trail_post is not None:
             artists.append(trail_post)
+        if xcom_trail_pre is not None:
+            artists.append(xcom_trail_pre)
+        if xcom_trail_post is not None:
+            artists.append(xcom_trail_post)
         if timeline_cursor is not None:
             artists.append(timeline_cursor)
         if ghost_bos_rect is not None:
             artists.append(ghost_bos_rect)
         if ghost_com_pt is not None:
             artists.append(ghost_com_pt)
+        if ghost_xcom_pt is not None:
+            artists.append(ghost_xcom_pt)
         if ghost_label is not None:
             artists.append(ghost_label)
         if ghost_bos_union_line is not None:
