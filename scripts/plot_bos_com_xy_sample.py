@@ -1,7 +1,6 @@
-"""Create BOS/COM XY sample visualizations as static PNG + GIF.
+"""Create BOS/COM XY sample visualizations as GIF.
 
 This script reads `output/all_trials_timeseries.csv` and renders one trial:
-- Static PNG: aggregated BOS outlines + COM trajectory + inside/outside markers
 - GIF: frame-by-frame BOS rectangle + cumulative COM trail + current COM state
 
 Default behavior picks the first trial by sorted (subject, velocity, trial).
@@ -42,6 +41,8 @@ DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
 DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
+GIF_BOS_MODES = ("freeze", "live")
+RIGHT1COL_SUFFIX = "right1col"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
 BOS_MARKERS_ALL = [
     "LHEE",
@@ -123,7 +124,7 @@ _PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
 
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        description="Render BOS/COM XY sample as static PNG + GIF (inside/outside visible)."
+        description="Render BOS/COM XY sample as GIF (inside/outside visible)."
     )
     ap.add_argument("--csv", type=Path, default=DEFAULT_CSV, help="Input long CSV path")
     ap.add_argument(
@@ -144,18 +145,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="bos_com_xy_anim",
         help="Output GIF filename suffix",
-    )
-    ap.add_argument(
-        "--png_name_suffix",
-        type=str,
-        default="bos_com_xy_static",
-        help="Output PNG filename suffix",
-    )
-    ap.add_argument(
-        "--save_png",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Save static PNG output (default: enabled; disable with --no-save_png).",
     )
     ap.add_argument(
         "--save_gif",
@@ -654,6 +643,123 @@ def draw_bos_outline(
     ax.plot(x, y, color=color, alpha=alpha, linewidth=linewidth)
 
 
+def build_gif_legend_handles() -> list[object]:
+    return [
+        Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
+        Line2D([0], [0], color="0.25", lw=1.4, linestyle="--", label="BOS hull (all-foot convex)"),
+        Line2D([0], [0], color="tab:purple", lw=1.4, label="BOS union (L/R hull)"),
+        Line2D([0], [0], color="tab:blue", lw=2, label="COM cumulative trajectory"),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="None",
+            markerfacecolor="tab:green",
+            markeredgecolor="black",
+            label="Current COM (inside)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="None",
+            markerfacecolor="tab:red",
+            markeredgecolor="black",
+            label="Current COM (outside)",
+        ),
+    ]
+
+
+def apply_gif_legend_layout(
+    fig: plt.Figure,
+    ax: plt.Axes,
+    *,
+    trial_state_label: str | None,
+) -> None:
+    right_rect = [0, 0, 0.76, 0.94] if trial_state_label else [0, 0, 0.76, 0.98]
+    ax.legend(
+        handles=build_gif_legend_handles(),
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+        ncol=1,
+        fontsize=8,
+        frameon=True,
+        borderaxespad=0.25,
+        handlelength=2.0,
+        columnspacing=0.9,
+    )
+    fig.tight_layout(rect=right_rect)
+
+
+def _collect_finite_polyline_values(polylines: list[np.ndarray], valid_mask: np.ndarray) -> np.ndarray:
+    chunks: list[np.ndarray] = []
+    for i, arr in enumerate(polylines):
+        if i >= valid_mask.size or (not bool(valid_mask[i])):
+            continue
+        values = np.asarray(arr, dtype=float)
+        if values.size == 0:
+            continue
+        finite = values[np.isfinite(values)]
+        if finite.size > 0:
+            chunks.append(finite)
+    if not chunks:
+        return np.asarray([], dtype=float)
+    return np.concatenate(chunks)
+
+
+def compute_fixed_gif_axis_limits(
+    *,
+    series: TrialSeries,
+    display: DisplaySeries,
+    bos_polylines: BOSPolylines | None,
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    valid_idx = np.flatnonzero(series.valid_mask)
+    if valid_idx.size == 0:
+        raise ValueError("No valid frame remains for fixed GIF axis calculation.")
+
+    x_parts: list[np.ndarray] = [
+        display.com_x[valid_idx],
+        display.bos_minx[valid_idx],
+        display.bos_maxx[valid_idx],
+    ]
+    y_parts: list[np.ndarray] = [
+        display.com_y[valid_idx],
+        display.bos_miny[valid_idx],
+        display.bos_maxy[valid_idx],
+    ]
+    if bos_polylines is not None:
+        hull_x = _collect_finite_polyline_values(bos_polylines.hull_x, series.valid_mask)
+        hull_y = _collect_finite_polyline_values(bos_polylines.hull_y, series.valid_mask)
+        union_x = _collect_finite_polyline_values(bos_polylines.union_x, series.valid_mask)
+        union_y = _collect_finite_polyline_values(bos_polylines.union_y, series.valid_mask)
+        if hull_x.size > 0:
+            x_parts.append(hull_x)
+        if hull_y.size > 0:
+            y_parts.append(hull_y)
+        if union_x.size > 0:
+            x_parts.append(union_x)
+        if union_y.size > 0:
+            y_parts.append(union_y)
+
+    x_values = np.concatenate(x_parts)
+    y_values = np.concatenate(y_parts)
+    x_min = float(np.nanmin(x_values))
+    x_max = float(np.nanmax(x_values))
+    y_min = float(np.nanmin(y_values))
+    y_max = float(np.nanmax(y_values))
+
+    x_span = x_max - x_min
+    y_span = y_max - y_min
+    x_margin = max(0.05 * x_span, 1e-3)
+    y_margin = max(0.05 * y_span, 1e-3)
+    if x_span <= 1e-12:
+        x_margin = max(x_margin, 0.05)
+    if y_span <= 1e-12:
+        y_margin = max(y_margin, 0.05)
+
+    return (x_min - x_margin, x_max + x_margin), (y_min - y_margin, y_max + y_margin)
+
+
 def get_com_point_for_frame(
     series: TrialSeries,
     display: DisplaySeries,
@@ -809,12 +915,18 @@ def render_gif(
     fps: int,
     frame_step: int,
     dpi: int,
+    x_lim: tuple[float, float],
+    y_lim: tuple[float, float],
     bos_polylines: BOSPolylines | None = None,
+    bos_mode: str = "freeze",
 ) -> int:
     if fps <= 0:
         raise ValueError("--fps must be >= 1")
     if frame_step <= 0:
         raise ValueError("--frame_step must be >= 1")
+    mode = str(bos_mode).strip().lower()
+    if mode not in GIF_BOS_MODES:
+        raise ValueError(f"Unsupported bos_mode={bos_mode!r}. Allowed: {', '.join(GIF_BOS_MODES)}")
 
     valid_indices = np.flatnonzero(series.valid_mask)
     if valid_indices.size == 0:
@@ -824,9 +936,8 @@ def render_gif(
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
 
-    # For step trials, freeze BOS at step onset while COM keeps updating.
     bos_freeze_idx: int | None = None
-    if series.step_onset_local is not None:
+    if mode == "freeze" and series.step_onset_local is not None:
         step_frame = int(series.step_onset_local)
         step_exact = np.flatnonzero((series.mocap_frame == step_frame) & series.valid_mask)
         if step_exact.size > 0:
@@ -907,32 +1018,8 @@ def render_gif(
         bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
     )
 
-    legend_handles = [
-        Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS"),
-        Line2D([0], [0], color="tab:blue", lw=2, label="COM cumulative trajectory"),
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            linestyle="None",
-            markerfacecolor="tab:green",
-            markeredgecolor="black",
-            label="Current COM (inside)",
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            linestyle="None",
-            markerfacecolor="tab:red",
-            markeredgecolor="black",
-            label="Current COM (outside)",
-        ),
-    ]
-    ax.legend(handles=legend_handles, loc="best", fontsize=8, frameon=True)
-
-    ax.set_xlim(*display.x_lim)
-    ax.set_ylim(*display.y_lim)
+    ax.set_xlim(*x_lim)
+    ax.set_ylim(*y_lim)
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
@@ -942,11 +1029,15 @@ def render_gif(
         title=(
             "BOS + COM XY animation | "
             f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
-            f"view=CCW{display.rotate_ccw_deg}"
+            f"view=CCW{display.rotate_ccw_deg}, bos_mode={mode}"
         ),
         subtitle=trial_state_label,
     )
-    fig.tight_layout(rect=[0, 0, 1, 0.96] if trial_state_label else None)
+    apply_gif_legend_layout(
+        fig,
+        ax,
+        trial_state_label=trial_state_label,
+    )
 
     valid_count = int(valid_indices.size)
     inside_count = int(np.count_nonzero(series.inside_mask[valid_indices]))
@@ -979,8 +1070,8 @@ def render_gif(
         current_point.set_markeredgecolor("black")
 
         bos_idx = idx
-        bos_state = "live"
-        if bos_freeze_idx is not None and idx >= bos_freeze_idx:
+        bos_state = "live(no-freeze)" if mode == "live" else "live"
+        if mode == "freeze" and bos_freeze_idx is not None and idx >= bos_freeze_idx:
             bos_idx = int(bos_freeze_idx)
             bos_state = "frozen@step_onset"
 
@@ -1041,8 +1132,8 @@ def render_gif(
 
 def main() -> None:
     args = parse_args()
-    if (not bool(args.save_png)) and (not bool(args.save_gif)):
-        raise ValueError("At least one output must be enabled: --save_png and/or --save_gif.")
+    if not bool(args.save_gif):
+        raise ValueError("GIF output is required. Use --save_gif.")
     rotate_ccw_deg = normalize_rotate_ccw_deg(int(args.rotate_ccw_deg))
 
     args.csv = resolve_repo_path(Path(args.csv))
@@ -1075,8 +1166,7 @@ def main() -> None:
         f"{safe_name(subject)}__velocity-{safe_name(format_velocity(velocity))}"
         f"__trial-{int(trial)}"
     )
-    png_out = args.out_dir / f"{base_name}__{safe_name(args.png_name_suffix)}.png"
-    gif_out = args.out_dir / f"{base_name}__{safe_name(args.gif_name_suffix)}.gif"
+    gif_base = args.out_dir / f"{base_name}__{safe_name(args.gif_name_suffix)}"
 
     print(
         "Trial selection: "
@@ -1097,39 +1187,43 @@ def main() -> None:
     print(f"Trial state: {trial_state}")
 
     bos_polylines: BOSPolylines | None = None
-    if bool(args.save_gif):
-        try:
-            c3d_path = resolve_c3d_for_trial(
-                c3d_dir=DEFAULT_C3D_DIR,
-                event_xlsm=args.event_xlsm,
-                subject=subject,
-                velocity=float(velocity),
-                trial=int(trial),
-            )
-            if c3d_path is None:
-                print("[BOS overlay] matching C3D not found; hull/union overlay disabled.")
-            else:
-                bos_polylines = compute_bos_polylines_from_c3d(
-                    c3d_path=c3d_path,
-                    n_frames=series.mocap_frame.size,
-                    rotate_ccw_deg=display.rotate_ccw_deg,
-                )
-                print(f"[BOS overlay] using C3D: {c3d_path}")
-        except Exception as exc:
-            print(f"[BOS overlay] disabled due to error: {exc}")
-            bos_polylines = None
-
-    gif_frames: int | None = None
-    if bool(args.save_png):
-        render_static_png(
-            series=series,
-            display=display,
-            trial_state_label=trial_state_label,
-            out_path=png_out,
-            dpi=int(args.dpi),
+    try:
+        c3d_path = resolve_c3d_for_trial(
+            c3d_dir=DEFAULT_C3D_DIR,
+            event_xlsm=args.event_xlsm,
+            subject=subject,
+            velocity=float(velocity),
+            trial=int(trial),
         )
-    if bool(args.save_gif):
-        gif_frames = render_gif(
+        if c3d_path is None:
+            print("[BOS overlay] matching C3D not found; hull/union overlay disabled.")
+        else:
+            bos_polylines = compute_bos_polylines_from_c3d(
+                c3d_path=c3d_path,
+                n_frames=series.mocap_frame.size,
+                rotate_ccw_deg=display.rotate_ccw_deg,
+            )
+            print(f"[BOS overlay] using C3D: {c3d_path}")
+    except Exception as exc:
+        print(f"[BOS overlay] disabled due to error: {exc}")
+        bos_polylines = None
+
+    fixed_x_lim, fixed_y_lim = compute_fixed_gif_axis_limits(
+        series=series,
+        display=display,
+        bos_polylines=bos_polylines,
+    )
+    print(
+        "Fixed axis limits: "
+        f"x=({fixed_x_lim[0]:.4f}, {fixed_x_lim[1]:.4f}), "
+        f"y=({fixed_y_lim[0]:.4f}, {fixed_y_lim[1]:.4f})"
+    )
+
+    gif_outputs: list[tuple[Path, int, str]] = []
+    print("GIF outputs: right1col with bos_mode=freeze/live")
+    for bos_mode in GIF_BOS_MODES:
+        gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
+        frames = render_gif(
             series=series,
             display=display,
             trial_state_label=trial_state_label,
@@ -1137,8 +1231,12 @@ def main() -> None:
             fps=int(args.fps),
             frame_step=int(args.frame_step),
             dpi=int(args.dpi),
+            x_lim=fixed_x_lim,
+            y_lim=fixed_y_lim,
             bos_polylines=bos_polylines,
+            bos_mode=bos_mode,
         )
+        gif_outputs.append((gif_out, int(frames), bos_mode))
 
     valid_count = int(np.count_nonzero(series.valid_mask))
     inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
@@ -1148,10 +1246,11 @@ def main() -> None:
         "Inside/outside summary: "
         f"inside={inside_count}, outside={outside_count}, inside_ratio={inside_ratio:.2f}%"
     )
-    if bool(args.save_png):
-        print(f"Saved PNG: {png_out}")
-    if bool(args.save_gif):
-        print(f"Saved GIF: {gif_out} (frames={gif_frames}, fps={args.fps}, frame_step={args.frame_step})")
+    for out_path, frames, bos_mode in gif_outputs:
+        print(
+            f"Saved GIF[{bos_mode}]: {out_path} "
+            f"(frames={frames}, fps={args.fps}, frame_step={args.frame_step})"
+        )
 
 
 if __name__ == "__main__":
