@@ -221,15 +221,16 @@ def parse_args() -> argparse.Namespace:
     )
     ap.add_argument(
         "--step_vis",
-        default="none",
+        default="phase_bos",
         choices=["none", "phase_trail", "bos_phase", "star_only", "phase_bos", "all"],
         help=(
-            "Step-onset visualization style. 'none' = current behavior (unchanged). "
+            "Step-onset visualization style (default: phase_bos). "
+            "'none' = no step_onset overlay (legacy). "
             "'phase_trail' = color-split COM trail + gold star at step onset. "
             "'bos_phase' = BOS rect color changes at step onset + gold star. "
             "'star_only' = gold star at step onset position only. "
-            "'phase_bos' = trail split + BOS color + star (full combo). "
-            "'all' = render all 4 template styles for comparison (8 GIFs total)."
+            "'phase_bos' = trail split + BOS color flash + star (default). "
+            "'all' = render all 4 template styles for comparison."
         ),
     )
     return ap.parse_args()
