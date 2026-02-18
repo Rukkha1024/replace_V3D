@@ -1175,7 +1175,17 @@ def render_gif(
     info_text = apply_gif_right_panel(ax_side)
 
     # ---- step_vis template setup ----
-    step_onset_idx: int | None = bos_freeze_idx  # same valid-array index, reused for templates
+    # Always compute step_onset_idx independently (bos_freeze_idx is only set for freeze mode)
+    step_onset_idx: int | None = None
+    if series.step_onset_local is not None:
+        _step_frame = int(series.step_onset_local)
+        _exact = np.flatnonzero((series.mocap_frame == _step_frame) & series.valid_mask)
+        if _exact.size > 0:
+            step_onset_idx = int(_exact[0])
+        else:
+            _after = np.flatnonzero(series.valid_mask & (series.mocap_frame >= _step_frame))
+            if _after.size > 0:
+                step_onset_idx = int(_after[0])
 
     timeline_cursor: Line2D | None = None
     if step_vis != "none":
@@ -1303,12 +1313,24 @@ def render_gif(
             trail_post.set_data(display.com_x[post_hist], display.com_y[post_hist])
 
         if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
-            if idx >= step_onset_idx:
-                bos_rect.set_facecolor("lightyellow")
+            if idx == step_onset_idx:
+                # 정확히 step_onset 프레임: 강한 빨강으로 flash
+                bos_rect.set_facecolor("tomato")
+                bos_rect.set_edgecolor("red")
+                bos_rect.set_alpha(0.65)
+                bos_rect.set_linewidth(3.0)
+            elif idx > step_onset_idx:
+                # step_onset 이후: 주황색 유지
+                bos_rect.set_facecolor("moccasin")
                 bos_rect.set_edgecolor("tab:orange")
+                bos_rect.set_alpha(0.40)
+                bos_rect.set_linewidth(2.0)
             else:
+                # step_onset 이전: 기본 파란색
                 bos_rect.set_facecolor("lightskyblue")
                 bos_rect.set_edgecolor("tab:blue")
+                bos_rect.set_alpha(0.25)
+                bos_rect.set_linewidth(1.2)
         # ---- end step_vis per-frame ----
 
         artists: list[object] = [trail_line, current_point, bos_rect, info_text]
@@ -1471,7 +1493,9 @@ def render_one_trial(
     if verbose:
         print(f"GIF outputs: step_vis={step_vis}, bos_mode=freeze/live")
     for sv in vis_list:
-        for bos_mode in GIF_BOS_MODES:
+        # step_vis 템플릿 모드는 live만 렌더링 (freeze는 기존 none 모드에서 사용)
+        bos_modes_for_sv = GIF_BOS_MODES if sv == "none" else ("live",)
+        for bos_mode in bos_modes_for_sv:
             if sv == "none":
                 gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
             else:
