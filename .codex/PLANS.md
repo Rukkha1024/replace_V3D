@@ -16,6 +16,7 @@ When researching a design with challenging requirements or significant unknowns,
 
 NON-NEGOTIABLE REQUIREMENTS:
 
+* Every ExecPlan must be written in both English and Korean. Both versions must be kept in sync whenever the plan is updated.
 * Every ExecPlan must be fully self-contained. Self-contained means that in its current form it contains all knowledge and instructions needed for a novice to succeed.
 * Every ExecPlan is a living document. Contributors are required to revise it as progress is made, as discoveries occur, and as design decisions are finalized. Each revision must remain fully self-contained.
 * Every ExecPlan must enable a complete novice to implement the feature end-to-end without prior knowledge of this repo.
