@@ -234,4 +234,4 @@ Selected: _______________
 - [ ] Verifiable Goals table is fully filled in.
 - [ ] Surgical Change Boundary has been reviewed and agreed upon.
 - [ ] Minimal Implementation Contract has been agreed upon.
-- [ ] Agent may now proceed to author the ExecPlan per `.codex/PLANS.md`.
+- [ ] Agent may now proceed to author the ExecPlan per `.claude/PLANS.md`.
