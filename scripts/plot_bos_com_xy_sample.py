@@ -27,13 +27,34 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 
+from replace_v3d.cli.batch_utils import iter_c3d_files
+from replace_v3d.geometry.geometry2d import convex_hull_2d
+from replace_v3d.io.c3d_reader import read_c3d_points
+from replace_v3d.io.events_excel import (
+    parse_subject_velocity_trial_from_filename,
+    resolve_subject_from_token,
+)
+
 matplotlib.use("Agg")
 
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
 DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
+DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
 TRIAL_KEYS = ["subject", "velocity", "trial"]
+BOS_MARKERS_ALL = [
+    "LHEE",
+    "LTOE",
+    "LANK",
+    "LFoot_3",
+    "RHEE",
+    "RTOE",
+    "RANK",
+    "RFoot_3",
+]
+BOS_MARKERS_L = ["LHEE", "LTOE", "LANK", "LFoot_3"]
+BOS_MARKERS_R = ["RHEE", "RTOE", "RANK", "RFoot_3"]
 REQUIRED_COLUMNS = [
     "subject",
     "velocity",
@@ -84,6 +105,17 @@ class DisplaySeries:
     bos_maxy: np.ndarray
     x_lim: tuple[float, float]
     y_lim: tuple[float, float]
+
+
+@dataclass(frozen=True)
+class BOSPolylines:
+    """Optional BOS overlay polylines already rotated into display frame."""
+
+    source_c3d: Path
+    hull_x: list[np.ndarray]
+    hull_y: list[np.ndarray]
+    union_x: list[np.ndarray]
+    union_y: list[np.ndarray]
 
 
 _PLATFORM_SHEET_CACHE: dict[Path, pd.DataFrame] = {}
@@ -465,6 +497,147 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
     )
 
 
+def resolve_c3d_for_trial(
+    *,
+    c3d_dir: Path,
+    event_xlsm: Path,
+    subject: str,
+    velocity: float,
+    trial: int,
+) -> Path | None:
+    """Locate matching C3D for (subject, velocity, trial) using token resolution."""
+    c3d_dir = Path(c3d_dir)
+    if not c3d_dir.exists():
+        return None
+
+    matches: list[Path] = []
+    for path in iter_c3d_files(c3d_dir):
+        try:
+            token, vel, tri = parse_subject_velocity_trial_from_filename(path.name)
+        except Exception:
+            continue
+
+        if int(tri) != int(trial):
+            continue
+        if not np.isclose(float(vel), float(velocity), rtol=0.0, atol=1e-9):
+            continue
+
+        try:
+            subj = resolve_subject_from_token(event_xlsm, token)
+        except Exception:
+            continue
+
+        if str(subj).strip() != str(subject).strip():
+            continue
+        matches.append(path)
+
+    if not matches:
+        return None
+    matches = sorted(matches)
+    if len(matches) > 1:
+        print(
+            "Warning: multiple C3D matches for "
+            f"subject={subject}, velocity={format_velocity(velocity)}, trial={trial}. "
+            f"Using: {matches[0].name}"
+        )
+    return matches[0]
+
+
+def _poly_to_closed_xy(poly_xy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    poly = np.asarray(poly_xy, dtype=float)
+    if poly.size == 0:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+    x = np.append(poly[:, 0], poly[0, 0])
+    y = np.append(poly[:, 1], poly[0, 1])
+    return x, y
+
+
+def _join_polylines(parts: list[tuple[np.ndarray, np.ndarray]]) -> tuple[np.ndarray, np.ndarray]:
+    xs: list[np.ndarray] = []
+    ys: list[np.ndarray] = []
+    for x, y in parts:
+        if x.size == 0 or y.size == 0:
+            continue
+        if xs:
+            xs.append(np.asarray([np.nan], dtype=float))
+            ys.append(np.asarray([np.nan], dtype=float))
+        xs.append(np.asarray(x, dtype=float))
+        ys.append(np.asarray(y, dtype=float))
+    if not xs:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+    return np.concatenate(xs), np.concatenate(ys)
+
+
+def compute_bos_polylines_from_c3d(
+    *,
+    c3d_path: Path,
+    n_frames: int,
+    rotate_ccw_deg: int,
+) -> BOSPolylines:
+    """Compute BOS hull and left/right-union outlines from C3D markers."""
+    c3d = read_c3d_points(c3d_path)
+    label_to_idx = {label: i for i, label in enumerate(c3d.labels)}
+
+    def idx_for(markers: list[str]) -> list[int]:
+        missing = [marker for marker in markers if marker not in label_to_idx]
+        if missing:
+            raise KeyError(f"Missing BoS markers in {c3d_path.name}: {', '.join(missing)}")
+        return [int(label_to_idx[marker]) for marker in markers]
+
+    idx_all = idx_for(BOS_MARKERS_ALL)
+    idx_l = idx_for(BOS_MARKERS_L)
+    idx_r = idx_for(BOS_MARKERS_R)
+
+    n_csv = int(n_frames)
+    n_c3d = int(c3d.points.shape[0])
+    end = min(n_csv, n_c3d)
+    if n_c3d != n_csv:
+        print(
+            f"Warning: C3D frames ({n_c3d}) != CSV frames ({n_csv}). "
+            f"Using first {end} frames for BOS hull/union."
+        )
+
+    hull_x: list[np.ndarray] = []
+    hull_y: list[np.ndarray] = []
+    union_x: list[np.ndarray] = []
+    union_y: list[np.ndarray] = []
+    for t in range(n_csv):
+        if t >= end:
+            hull_x.append(np.asarray([], dtype=float))
+            hull_y.append(np.asarray([], dtype=float))
+            union_x.append(np.asarray([], dtype=float))
+            union_y.append(np.asarray([], dtype=float))
+            continue
+
+        pts_all = c3d.points[t, idx_all, :2]
+        poly_hull = convex_hull_2d(pts_all)
+        hx, hy = _poly_to_closed_xy(poly_hull)
+        hx, hy = rotate_xy(hx, hy, rotate_ccw_deg=rotate_ccw_deg)
+        hull_x.append(hx)
+        hull_y.append(hy)
+
+        pts_l = c3d.points[t, idx_l, :2]
+        pts_r = c3d.points[t, idx_r, :2]
+        poly_l = convex_hull_2d(pts_l)
+        poly_r = convex_hull_2d(pts_r)
+        lx, ly = _poly_to_closed_xy(poly_l)
+        rx, ry = _poly_to_closed_xy(poly_r)
+        lx, ly = rotate_xy(lx, ly, rotate_ccw_deg=rotate_ccw_deg)
+        rx, ry = rotate_xy(rx, ry, rotate_ccw_deg=rotate_ccw_deg)
+
+        ux, uy = _join_polylines([(lx, ly), (rx, ry)])
+        union_x.append(ux)
+        union_y.append(uy)
+
+    return BOSPolylines(
+        source_c3d=Path(c3d_path),
+        hull_x=hull_x,
+        hull_y=hull_y,
+        union_x=union_x,
+        union_y=union_y,
+    )
+
+
 def draw_bos_outline(
     ax: plt.Axes,
     min_x: float,
@@ -636,6 +809,7 @@ def render_gif(
     fps: int,
     frame_step: int,
     dpi: int,
+    bos_polylines: BOSPolylines | None = None,
 ) -> int:
     if fps <= 0:
         raise ValueError("--fps must be >= 1")
@@ -702,6 +876,26 @@ def render_gif(
         markeredgewidth=0.6,
         zorder=5,
     )
+    bos_union_line = None
+    bos_hull_line = None
+    if bos_polylines is not None:
+        bos_union_line, = ax.plot(
+            [],
+            [],
+            color="tab:purple",
+            linewidth=1.4,
+            alpha=0.9,
+            zorder=4,
+        )
+        bos_hull_line, = ax.plot(
+            [],
+            [],
+            color="0.25",
+            linewidth=1.4,
+            alpha=0.9,
+            linestyle="--",
+            zorder=4,
+        )
     info_text = ax.text(
         0.02,
         0.98,
@@ -797,6 +991,15 @@ def render_gif(
         bos_rect.set_xy((min_x, min_y))
         bos_rect.set_width(max_x - min_x)
         bos_rect.set_height(max_y - min_y)
+        if bos_polylines is not None and bos_union_line is not None and bos_hull_line is not None:
+            bos_union_line.set_data(
+                bos_polylines.union_x[bos_idx],
+                bos_polylines.union_y[bos_idx],
+            )
+            bos_hull_line.set_data(
+                bos_polylines.hull_x[bos_idx],
+                bos_polylines.hull_y[bos_idx],
+            )
 
         time_info = f"idx={idx + 1}/{series.mocap_frame.size}"
         if series.time_from_onset_s is not None and np.isfinite(series.time_from_onset_s[idx]):
@@ -811,7 +1014,10 @@ def render_gif(
             f"inside ratio={inside_ratio:.1f}% ({inside_count}/{valid_count})\n"
             f"outside={outside_count}"
         )
-        return trail_line, current_point, bos_rect, info_text
+        artists: list[object] = [trail_line, current_point, bos_rect, info_text]
+        if bos_union_line is not None and bos_hull_line is not None:
+            artists.extend([bos_union_line, bos_hull_line])
+        return tuple(artists)
 
     def init():
         return update(0)
@@ -890,6 +1096,29 @@ def main() -> None:
     print(f"Display rotation: CCW {rotate_ccw_deg} deg")
     print(f"Trial state: {trial_state}")
 
+    bos_polylines: BOSPolylines | None = None
+    if bool(args.save_gif):
+        try:
+            c3d_path = resolve_c3d_for_trial(
+                c3d_dir=DEFAULT_C3D_DIR,
+                event_xlsm=args.event_xlsm,
+                subject=subject,
+                velocity=float(velocity),
+                trial=int(trial),
+            )
+            if c3d_path is None:
+                print("[BOS overlay] matching C3D not found; hull/union overlay disabled.")
+            else:
+                bos_polylines = compute_bos_polylines_from_c3d(
+                    c3d_path=c3d_path,
+                    n_frames=series.mocap_frame.size,
+                    rotate_ccw_deg=display.rotate_ccw_deg,
+                )
+                print(f"[BOS overlay] using C3D: {c3d_path}")
+        except Exception as exc:
+            print(f"[BOS overlay] disabled due to error: {exc}")
+            bos_polylines = None
+
     gif_frames: int | None = None
     if bool(args.save_png):
         render_static_png(
@@ -908,6 +1137,7 @@ def main() -> None:
             fps=int(args.fps),
             frame_step=int(args.frame_step),
             dpi=int(args.dpi),
+            bos_polylines=bos_polylines,
         )
 
     valid_count = int(np.count_nonzero(series.valid_mask))
