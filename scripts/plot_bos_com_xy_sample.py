@@ -226,10 +226,10 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Step-onset visualization style (default: phase_bos). "
             "'none' = no step_onset overlay (legacy). "
-            "'phase_trail' = color-split COM trail + gold star at step onset. "
-            "'bos_phase' = BOS rect color changes at step onset + gold star. "
-            "'star_only' = gold star at step onset position only. "
-            "'phase_bos' = trail split + BOS color flash + star (default). "
+            "'phase_trail' = color-split COM trail at step onset. "
+            "'bos_phase' = BOS rect color changes at step onset. "
+            "'star_only' = (no-op; star removed). "
+            "'phase_bos' = trail split + BOS color flash (default). "
             "'all' = render all 4 template styles for comparison."
         ),
     )
@@ -1191,22 +1191,6 @@ def render_gif(
     timeline_cursor: Line2D | None = None
     if step_vis != "none":
         timeline_cursor = add_timeline_inset(ax_side, series)
-
-    step_star_artist: object | None = None
-    if step_vis != "none" and step_onset_idx is not None:
-        xs = float(display.com_x[step_onset_idx])
-        ys = float(display.com_y[step_onset_idx])
-        (step_star_artist,) = ax.plot(
-            [xs],
-            [ys],
-            marker="*",
-            linestyle="None",
-            markersize=14,
-            markerfacecolor="gold",
-            markeredgecolor="darkorange",
-            markeredgewidth=0.9,
-            zorder=7,
-        )
 
     trail_pre: object | None = None
     trail_post: object | None = None
