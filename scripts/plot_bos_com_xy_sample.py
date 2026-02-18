@@ -1222,7 +1222,7 @@ def render_gif(
         (ghost_com_pt,) = ax.plot(
             [],
             [],
-            marker="D",
+            marker="X",
             linestyle="None",
             markersize=9,
             markerfacecolor="darkorange",
