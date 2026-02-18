@@ -147,6 +147,7 @@ class RenderConfig:
     gif_name_suffix: str
     rotate_ccw_deg: int
     show_trial_state: bool
+    start_from_platform_onset_offset: int | None = None
     step_vis: str = "none"
 
 
@@ -231,6 +232,15 @@ def parse_args() -> argparse.Namespace:
             "'star_only' = (no-op; star removed). "
             "'phase_bos' = trail split + BOS color flash (default). "
             "'all' = render all 4 template styles for comparison."
+        ),
+    )
+    ap.add_argument(
+        "--start_from_platform_onset_offset",
+        type=int,
+        default=None,
+        help=(
+            "Optional per-trial start frame offset from platform_onset_local. "
+            "Example: -20 trims to [platform_onset_local-20, end]."
         ),
     )
     return ap.parse_args()
@@ -669,7 +679,7 @@ def _join_polylines(parts: list[tuple[np.ndarray, np.ndarray]]) -> tuple[np.ndar
 def compute_bos_polylines_from_c3d(
     *,
     c3d_path: Path,
-    n_frames: int,
+    mocap_frames: np.ndarray,
     rotate_ccw_deg: int,
 ) -> BOSPolylines:
     """Compute BOS hull and left/right-union outlines from C3D markers."""
@@ -686,36 +696,34 @@ def compute_bos_polylines_from_c3d(
     idx_l = idx_for(BOS_MARKERS_L)
     idx_r = idx_for(BOS_MARKERS_R)
 
-    n_csv = int(n_frames)
+    mocap = np.asarray(mocap_frames, dtype=int)
+    n_csv = int(mocap.size)
     n_c3d = int(c3d.points.shape[0])
-    end = min(n_csv, n_c3d)
-    if n_c3d != n_csv:
-        print(
-            f"Warning: C3D frames ({n_c3d}) != CSV frames ({n_csv}). "
-            f"Using first {end} frames for BOS hull/union."
-        )
+    out_of_range_count = 0
 
     hull_x: list[np.ndarray] = []
     hull_y: list[np.ndarray] = []
     union_x: list[np.ndarray] = []
     union_y: list[np.ndarray] = []
     for t in range(n_csv):
-        if t >= end:
+        c3d_idx = int(mocap[t]) - 1
+        if c3d_idx < 0 or c3d_idx >= n_c3d:
+            out_of_range_count += 1
             hull_x.append(np.asarray([], dtype=float))
             hull_y.append(np.asarray([], dtype=float))
             union_x.append(np.asarray([], dtype=float))
             union_y.append(np.asarray([], dtype=float))
             continue
 
-        pts_all = c3d.points[t, idx_all, :2]
+        pts_all = c3d.points[c3d_idx, idx_all, :2]
         poly_hull = convex_hull_2d(pts_all)
         hx, hy = _poly_to_closed_xy(poly_hull)
         hx, hy = rotate_xy(hx, hy, rotate_ccw_deg=rotate_ccw_deg)
         hull_x.append(hx)
         hull_y.append(hy)
 
-        pts_l = c3d.points[t, idx_l, :2]
-        pts_r = c3d.points[t, idx_r, :2]
+        pts_l = c3d.points[c3d_idx, idx_l, :2]
+        pts_r = c3d.points[c3d_idx, idx_r, :2]
         poly_l = convex_hull_2d(pts_l)
         poly_r = convex_hull_2d(pts_r)
         lx, ly = _poly_to_closed_xy(poly_l)
@@ -726,6 +734,14 @@ def compute_bos_polylines_from_c3d(
         ux, uy = _join_polylines([(lx, ly), (rx, ry)])
         union_x.append(ux)
         union_y.append(uy)
+
+    if out_of_range_count > 0:
+        print(
+            "Warning: C3D overlay frame mapping out-of-range "
+            f"({out_of_range_count}/{n_csv}). "
+            f"CSV MocapFrame range={int(mocap.min())}..{int(mocap.max())}, "
+            f"C3D valid frame range=1..{n_c3d}"
+        )
 
     return BOSPolylines(
         source_c3d=Path(c3d_path),
@@ -1335,13 +1351,14 @@ def render_gif(
                 bos_polylines.hull_y[bos_idx],
             )
 
-        time_info = f"idx={idx + 1}/{series.mocap_frame.size}"
+        local_idx = frame_no + 1
+        time_info = f"frame_local={local_idx}/{frame_indices.size}"
         if series.time_from_onset_s is not None and np.isfinite(series.time_from_onset_s[idx]):
             time_info = f"t={series.time_from_onset_s[idx]:.3f} s"
 
         info_text.set_text(
             f"{panel_header}\n\n"
-            f"frame={frame_value} ({frame_no + 1}/{frame_indices.size})\n"
+            f"frame_local={local_idx}/{frame_indices.size}\n"
             f"{time_info}\n"
             f"status={'inside' if is_inside else 'outside'}\n"
             f"event={event_state(frame_value)}\n"
@@ -1479,6 +1496,9 @@ def select_trial_df(df: pl.DataFrame, key: TrialKey) -> pl.DataFrame:
 
 
 def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> RenderConfig:
+    start_offset = None
+    if args.start_from_platform_onset_offset is not None:
+        start_offset = int(args.start_from_platform_onset_offset)
     return RenderConfig(
         csv_path=Path(args.csv),
         event_xlsm=Path(args.event_xlsm),
@@ -1490,6 +1510,7 @@ def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> Render
         gif_name_suffix=str(args.gif_name_suffix),
         rotate_ccw_deg=int(rotate_ccw_deg),
         show_trial_state=bool(args.show_trial_state),
+        start_from_platform_onset_offset=start_offset,
         step_vis=str(args.step_vis),
     )
 
@@ -1504,6 +1525,25 @@ def render_one_trial(
 ) -> TrialRenderResult:
     started_at = time.perf_counter()
     trial_df = select_trial_df(df, key)
+    if config.start_from_platform_onset_offset is not None:
+        platform_onset = get_optional_int_scalar(trial_df, "platform_onset_local")
+        if platform_onset is None:
+            raise ValueError("platform_onset_local is required when using --start_from_platform_onset_offset.")
+        start_frame = int(platform_onset + int(config.start_from_platform_onset_offset))
+        trial_df = trial_df.filter(pl.col("MocapFrame") >= start_frame)
+        if trial_df.is_empty():
+            raise ValueError(
+                "No rows remain after start trim: "
+                f"start_frame={start_frame}, subject={key.subject}, "
+                f"velocity={format_velocity(key.velocity)}, trial={key.trial}"
+            )
+        if verbose:
+            print(
+                "Start trim: "
+                f"platform_onset_local={platform_onset}, "
+                f"offset={config.start_from_platform_onset_offset}, "
+                f"start_frame={start_frame}"
+            )
 
     series = build_trial_series(
         trial_df=trial_df,
@@ -1565,7 +1605,7 @@ def render_one_trial(
         else:
             bos_polylines = compute_bos_polylines_from_c3d(
                 c3d_path=c3d_path,
-                n_frames=series.mocap_frame.size,
+                mocap_frames=series.mocap_frame,
                 rotate_ccw_deg=display.rotate_ccw_deg,
             )
             if verbose:
