@@ -1204,6 +1204,8 @@ def render_gif(
     ghost_bos_rect: Rectangle | None = None
     ghost_com_pt = None
     ghost_label = None
+    ghost_bos_union_line = None
+    ghost_bos_hull_line = None
     if mode == "live" and step_onset_idx is not None:
         ghost_bos_rect = Rectangle(
             (0.0, 0.0),
@@ -1240,6 +1242,25 @@ def render_gif(
             zorder=8,
             visible=False,
         )
+        if bos_polylines is not None:
+            (ghost_bos_union_line,) = ax.plot(
+                [],
+                [],
+                color="tab:purple",
+                linewidth=1.0,
+                alpha=0.0,
+                linestyle="--",
+                zorder=5,
+            )
+            (ghost_bos_hull_line,) = ax.plot(
+                [],
+                [],
+                color="0.45",
+                linewidth=1.0,
+                alpha=0.0,
+                linestyle=":",
+                zorder=5,
+            )
     # ---- end ghost setup ----
 
     ax.set_xlim(*x_lim)
@@ -1379,11 +1400,27 @@ def render_gif(
                     ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
                     ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
                     ghost_label.set_visible(True)
+                if ghost_bos_union_line is not None and bos_polylines is not None:
+                    ghost_bos_union_line.set_data(
+                        bos_polylines.union_x[step_onset_idx],
+                        bos_polylines.union_y[step_onset_idx],
+                    )
+                    ghost_bos_union_line.set_alpha(0.5)
+                if ghost_bos_hull_line is not None and bos_polylines is not None:
+                    ghost_bos_hull_line.set_data(
+                        bos_polylines.hull_x[step_onset_idx],
+                        bos_polylines.hull_y[step_onset_idx],
+                    )
+                    ghost_bos_hull_line.set_alpha(0.5)
             else:
                 ghost_bos_rect.set_alpha(0.0)
                 ghost_com_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_visible(False)
+                if ghost_bos_union_line is not None:
+                    ghost_bos_union_line.set_alpha(0.0)
+                if ghost_bos_hull_line is not None:
+                    ghost_bos_hull_line.set_alpha(0.0)
         # ---- end ghost per-frame ----
 
         artists: list[object] = [trail_line, current_point, bos_rect, info_text]
@@ -1401,6 +1438,10 @@ def render_gif(
             artists.append(ghost_com_pt)
         if ghost_label is not None:
             artists.append(ghost_label)
+        if ghost_bos_union_line is not None:
+            artists.append(ghost_bos_union_line)
+        if ghost_bos_hull_line is not None:
+            artists.append(ghost_bos_hull_line)
         return tuple(artists)
 
     def init():
