@@ -1180,7 +1180,9 @@ def main() -> None:
         f"{safe_name(subject)}__velocity-{safe_name(format_velocity(velocity))}"
         f"__trial-{int(trial)}"
     )
-    gif_base = args.out_dir / f"{base_name}__{safe_name(args.gif_name_suffix)}"
+    subject_out_dir = args.out_dir / str(subject)
+    subject_out_dir.mkdir(parents=True, exist_ok=True)
+    gif_base = subject_out_dir / f"{base_name}__{safe_name(args.gif_name_suffix)}"
 
     print(
         "Trial selection: "
@@ -1199,6 +1201,8 @@ def main() -> None:
     )
     print(f"Display rotation: CCW {rotate_ccw_deg} deg")
     print(f"Trial state: {trial_state}")
+    print(f"Output root: {args.out_dir}")
+    print(f"Subject output directory: {subject_out_dir}")
 
     bos_polylines: BOSPolylines | None = None
     try:
