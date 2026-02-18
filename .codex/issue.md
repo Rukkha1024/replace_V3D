@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-18
 
+- [JOINT] In `src/replace_v3d/joint_angles/v3d_joint_angles.py`, shank X-axis was previously derived from ankle medial/lateral pair (`LFoot_3-LANK`, `RANK-RFoot_3`) using the same directional information as foot X-axis, causing `Ankle_L_Z_deg`/`Ankle_R_Z_deg` to collapse near zero (micro-degree scale) in joint-angle outputs.
 - [VERIFY] Running a repo script copied to `/tmp` can fail with `ModuleNotFoundError: No module named '_bootstrap'`, which blocks baseline/reference GIF generation outside the repository script path.
 - [VIZ] For freeze/live BOS comparison in GIF, if axis limits are not fixed from COM + BOS (bbox/hull/union) full-range, one mode can appear clipped or visually rescaled, reducing interpretability across modes.
 - [VIZ] GIF export can emit matplotlib warnings for Korean glyphs (`Glyph xxxx missing from font(s) DejaVu Sans`), and Hangul text (e.g., subject names) may render as tofu/missing characters in titles or side-panel metadata.

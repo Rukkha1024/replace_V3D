@@ -134,6 +134,28 @@ def _frame_from_yz(y0: np.ndarray, z0: np.ndarray, right_hint: Optional[np.ndarr
     return np.stack([x, y, z], axis=-1)
 
 
+def _fit_plane_normal_ls(P: np.ndarray) -> np.ndarray:
+    """Least-squares plane normal for point sets (per frame).
+
+    Parameters
+    ----------
+    P : (T,K,3)
+        K>=3 points defining a plane (K=4 for Method 2 shank example).
+
+    Returns
+    -------
+    n_unit : (T,3)
+        Unit normal vectors of the best-fit plane for each frame.
+    """
+    if P.ndim != 3 or P.shape[-1] != 3:
+        raise ValueError(f"P must have shape (T,K,3). Got {P.shape}")
+
+    centered = P - np.mean(P, axis=1, keepdims=True)
+    _u, _s, vh = np.linalg.svd(centered, full_matrices=False)
+    n = vh[:, -1, :]
+    return _normalize(n)
+
+
 def _m(points: np.ndarray, labels: list[str], name: str) -> np.ndarray:
     try:
         idx = labels.index(name)
@@ -241,7 +263,10 @@ def build_segment_frames(
     thigh_L = _frame_from_xz(xhint_thigh_L, z0_thigh_L, right_hint=xhint_thigh_L)
     thigh_R = _frame_from_xz(xhint_thigh_R, z0_thigh_R, right_hint=xhint_thigh_R)
 
-    # Shank (L/R): Z=knee->ankle (proximal), X=+Right (ankle medial/lateral)
+    # Shank (L/R): Visual3D Method 2-style (4 border targets)
+    # - Fit plane from knee+ankle medial/lateral markers
+    # - Align Z with knee->ankle (proximal)
+    # - Build Y from plane-normal + Z, then complete X by right-hand rule
     LANK = _m(pts, labels, "LANK")
     RANK = _m(pts, labels, "RANK")
     LFoot = _m(pts, labels, "LFoot_3")
@@ -252,10 +277,12 @@ def build_segment_frames(
 
     z0_shank_L = knee_L - ankle_L
     z0_shank_R = knee_R - ankle_R
-    xhint_shank_L = LFoot - LANK  # medial - lateral (left): to right
-    xhint_shank_R = RANK - RFoot  # lateral - medial (right): to right
-    shank_L = _frame_from_xz(xhint_shank_L, z0_shank_L, right_hint=xhint_shank_L)
-    shank_R = _frame_from_xz(xhint_shank_R, z0_shank_R, right_hint=xhint_shank_R)
+    y0_shank_L = _fit_plane_normal_ls(np.stack([LKNE, LShin, LANK, LFoot], axis=1))
+    y0_shank_R = _fit_plane_normal_ls(np.stack([RKNE, RShin, RANK, RFoot], axis=1))
+    right_hint_shank_L = LShin - LKNE  # medial - lateral (left): points to right
+    right_hint_shank_R = RKNE - RShin  # lateral - medial (right): points to right
+    shank_L = _frame_from_yz(y0_shank_L, z0_shank_L, right_hint=right_hint_shank_L)
+    shank_R = _frame_from_yz(y0_shank_R, z0_shank_R, right_hint=right_hint_shank_R)
 
     # Foot (L/R): X=+Right (ankle axis), Y=heel->toe (anterior), Z=Up
     LTOE = _m(pts, labels, "LTOE")
@@ -361,4 +388,3 @@ def compute_v3d_joint_angles_3d(
         neck_Y=neck[1],
         neck_Z=neck[2],
     )
-
