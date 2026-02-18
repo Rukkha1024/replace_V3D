@@ -1200,6 +1200,48 @@ def render_gif(
         (trail_post,) = ax.plot([], [], color="tab:orange", linewidth=2.0, alpha=0.95, zorder=3)
     # ---- end step_vis setup ----
 
+    # ---- ghost snapshot setup (live mode only) ----
+    ghost_bos_rect: Rectangle | None = None
+    ghost_com_pt = None
+    ghost_label = None
+    if mode == "live" and step_onset_idx is not None:
+        ghost_bos_rect = Rectangle(
+            (0.0, 0.0),
+            width=0.0,
+            height=0.0,
+            facecolor="none",
+            edgecolor="darkorange",
+            alpha=0.0,
+            linewidth=2.0,
+            linestyle="--",
+            zorder=6,
+        )
+        ax.add_patch(ghost_bos_rect)
+        (ghost_com_pt,) = ax.plot(
+            [],
+            [],
+            marker="D",
+            linestyle="None",
+            markersize=9,
+            markerfacecolor="darkorange",
+            markeredgecolor="black",
+            markeredgewidth=0.8,
+            alpha=0.0,
+            zorder=7,
+        )
+        ghost_label = ax.text(
+            0.0,
+            0.0,
+            "",
+            fontsize=6.5,
+            color="darkorange",
+            ha="left",
+            va="bottom",
+            zorder=8,
+            visible=False,
+        )
+    # ---- end ghost setup ----
+
     ax.set_xlim(*x_lim)
     ax.set_ylim(*y_lim)
     ax.set_aspect("equal", adjustable="box")
@@ -1318,6 +1360,32 @@ def render_gif(
                 bos_rect.set_linewidth(1.2)
         # ---- end step_vis per-frame ----
 
+        # ---- ghost snapshot per-frame ----
+        if ghost_bos_rect is not None and ghost_com_pt is not None and step_onset_idx is not None:
+            if idx >= step_onset_idx:
+                g_minx = float(display.bos_minx[step_onset_idx])
+                g_maxx = float(display.bos_maxx[step_onset_idx])
+                g_miny = float(display.bos_miny[step_onset_idx])
+                g_maxy = float(display.bos_maxy[step_onset_idx])
+                ghost_bos_rect.set_xy((g_minx, g_miny))
+                ghost_bos_rect.set_width(g_maxx - g_minx)
+                ghost_bos_rect.set_height(g_maxy - g_miny)
+                ghost_bos_rect.set_alpha(0.75)
+                g_cx = float(display.com_x[step_onset_idx])
+                g_cy = float(display.com_y[step_onset_idx])
+                ghost_com_pt.set_data([g_cx], [g_cy])
+                ghost_com_pt.set_alpha(1.0)
+                if ghost_label is not None:
+                    ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
+                    ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
+                    ghost_label.set_visible(True)
+            else:
+                ghost_bos_rect.set_alpha(0.0)
+                ghost_com_pt.set_alpha(0.0)
+                if ghost_label is not None:
+                    ghost_label.set_visible(False)
+        # ---- end ghost per-frame ----
+
         artists: list[object] = [trail_line, current_point, bos_rect, info_text]
         if bos_union_line is not None and bos_hull_line is not None:
             artists.extend([bos_union_line, bos_hull_line])
@@ -1327,6 +1395,12 @@ def render_gif(
             artists.append(trail_post)
         if timeline_cursor is not None:
             artists.append(timeline_cursor)
+        if ghost_bos_rect is not None:
+            artists.append(ghost_bos_rect)
+        if ghost_com_pt is not None:
+            artists.append(ghost_com_pt)
+        if ghost_label is not None:
+            artists.append(ghost_label)
         return tuple(artists)
 
     def init():
