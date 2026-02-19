@@ -31,7 +31,6 @@ Follow the approved ExecPlan. Proceed through milestones autonomously without pr
 - Use `polars` then `pandas` library.
 - Leverage Parallel Agent Execution: you can use multiple agents to handle different parts of the task concurrently. Proactively launch multiple independent tasks (search, read, validation) simultaneously to reduce turnaround time.
 - Organize and separate each scripts by biomechanical variable categories: EMG, COM, torque, joint, GRF&COP
-- Do not create subfolders under `scripts`; keep runnable entry scripts directly under `scripts/`.
 
 ---
 
