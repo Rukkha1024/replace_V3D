@@ -27,30 +27,32 @@ Platform translation perturbation 실험에서 동일한 mixed velocity 조건 �
 
 방향성 해석을 위해 좌표축의 `(+)/(-)`를 아래 기준으로 고정하였다 (실데이터 QC: 185개 C3D).
 
-- `+X = Anterior`, `-X = Posterior` (AP axis)
-- `+Y = Left`, `-Y = Right` (ML axis)
-- `+Z = Up`, `-Z = Down` (Vertical axis)
+#### Axis & Direction Sign
 
-레거시 메모(`-X=AP`, `+Z=ML`, `+Y=UP`)와 충돌할 수 있으나, 본 리포트에서는 현재 배치 데이터의 실측 검증값을 우선 적용한다.
+| Axis | Positive (+) | Negative (-) | 대표 변수 |
+|------|---------------|---------------|-----------|
+| AP (X) | `+X = Anterior` | `-X = Posterior` | `COM_X`, `vCOM_X`, `xCOM_X`, `COP_X_*`, `BOS_minX/BOS_maxX`, `MOS_AP_v3d` |
+| ML (Y) | `+Y = Left` | `-Y = Right` | `COM_Y`, `vCOM_Y`, `xCOM_Y`, `COP_Y_*`, `BOS_minY/BOS_maxY`, `MOS_ML_v3d` |
+| Vertical (Z) | `+Z = Up` | `-Z = Down` | `COM_Z`, `vCOM_Z`, `xCOM_Z`, `GRF_Z` |
 
-변수 해석 매핑:
-- AP 계열: `COM_X`, `vCOM_X`, `xCOM_X`, `COP_X_*`, `BOS_minX/BOS_maxX`, `MOS_AP_v3d`
-- ML 계열: `COM_Y`, `vCOM_Y`, `xCOM_Y`, `COP_Y_*`, `BOS_minY/BOS_maxY`, `MOS_ML_v3d`
+#### Signed Metrics Interpretation
 
-부호 해석:
-- `MOS_minDist_signed`: `(+)=inside`, `(-)=outside`
-- `MOS_AP_v3d`, `MOS_ML_v3d`: 해당 축 bound 내부는 `(+)`, 외부는 `(-)`
+| Metric | (+) meaning | (-) meaning | 판정 기준/참조 |
+|--------|--------------|--------------|----------------|
+| `MOS_minDist_signed` | `inside` | `outside` | convex hull 기반 signed min distance |
+| `MOS_AP_v3d` | AP bound 내부 | AP bound 외부 | closest-bound (AP) |
+| `MOS_ML_v3d` | ML bound 내부 | ML bound 외부 | closest-bound (ML) |
 
-관절각 부호:
-- X: `+Flex / -Ext` (ankle X는 `+Dorsi / -Plantar`)
-- Y: `+Add / -Abd`
-- Z: `+IR / -ER`
-- Left Y/Z는 좌우 해석 일관성을 위해 sign-unification(부호 반전) 적용
+#### Joint/Force/Torque Sign Conventions
 
-힘/토크/COP 부호:
-- `GRF_*`, `GRM_*`, `AnkleTorque*`는 platform onset 기준 Δ값(onset-zeroed)으로 해석
-- `AnkleTorque*_int = -AnkleTorque*_ext` 관계를 사용
-- COP는 absolute(`COP_*_m`)와 onset-zeroed(`COP_*_m_onset0`)를 구분해 사용
+| Variable group | (+)/(-) meaning | 추가 규칙 |
+|----------------|------------------|-----------|
+| Joint angles (X/Y/Z) | X: `+Flex / -Ext` (ankle X: `+Dorsi / -Plantar`), Y: `+Add / -Abd`, Z: `+IR / -ER` | Left Y/Z는 sign-unification(부호 반전) 적용 |
+| `GRF_*`, `GRM_*`, `AnkleTorque*` | 플랫폼 onset 기준 Δ값으로 해석 | onset-zeroed 값 기준으로 비교 |
+| `AnkleTorque*_int`, `AnkleTorque*_ext` | 내부토크는 외부토크와 반대 부호 | `AnkleTorque*_int = -AnkleTorque*_ext` |
+| `COP_*_m`, `COP_*_m_onset0` | absolute 좌표 vs onset-zeroed 변위 | 두 표현을 구분해 해석 |
+
+Note: 레거시 메모(`-X=AP`, `+Z=ML`, `+Y=UP`)와 충돌할 수 있으나, 본 리포트는 현재 배치 데이터의 실측 QC 기준을 우선 적용한다.
 
 ### Key Variables
 
@@ -126,7 +128,7 @@ Statistical method: Linear Mixed Model via R lmerTest
 
 ## Interpretation
 
-해석 섹션의 AP/ML/inside-outside 방향 문구는 위 `Coordinate & Sign Conventions`의 `(+)/(-)` 정의를 따른다.
+해석 섹션의 AP/ML/inside-outside 방향 문구는 위 `Coordinate & Sign Conventions` 표의 `(+)/(-)` 정의를 따른다.
 
 ### Balance & Stability
 
