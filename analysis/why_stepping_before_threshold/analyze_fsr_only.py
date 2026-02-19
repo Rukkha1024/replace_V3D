@@ -1,7 +1,12 @@
-"""FSR-only stepping analysis.
+"""FSR-only stepping analysis using window-mean trial features.
 
 Answers: "Can COM velocity-position state variables explain stepping better than
 MoS baseline without any COP-based boundary assumptions?"
+
+Window definition (fixed):
+  - start_frame = platform_onset_local
+  - end_frame = step_onset_local (step trials)
+  - end_frame = subject mean step_onset_local (nonstep trials)
 
 Produces:
   - 4 publication-quality figures (saved alongside this script)
@@ -84,104 +89,83 @@ def build_trial_summary(
     df: pl.DataFrame,
     platform: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Build per-trial snapshot at reference timepoint.
+    """Build per-trial window metadata for frame-wise aggregation.
 
-    ref_frame:
-    - step trial: step_onset_local
-    - nonstep trial: mean step_onset_local of same (subject, velocity)
+    Window rule:
+    - start_frame: platform_onset_local
+    - end_frame:
+      - step trial: step_onset_local
+      - nonstep trial: subject mean step_onset_local across stepping trials
     """
 
-    trials = (
-        df.select(TRIAL_KEYS + ["step_onset_local"])
+    onset_by_trial = (
+        df.select(TRIAL_KEYS + ["platform_onset_local", "step_onset_local"])
         .group_by(TRIAL_KEYS)
-        .agg(pl.col("step_onset_local").drop_nulls().first().alias("step_onset_local"))
+        .agg(
+            [
+                pl.col("platform_onset_local").drop_nulls().first().alias("platform_onset_local"),
+                pl.col("step_onset_local").drop_nulls().first().alias("step_onset_local"),
+            ]
+        )
         .sort(TRIAL_KEYS)
         .to_pandas()
     )
-    trials["subject"] = trials["subject"].astype(str).str.strip()
-    trials["trial"] = trials["trial"].astype(int)
+    onset_by_trial["subject"] = onset_by_trial["subject"].astype(str).str.strip()
+    onset_by_trial["trial"] = pd.to_numeric(onset_by_trial["trial"], errors="coerce").astype("Int64")
 
     plat_sub = platform[["subject", "velocity", "trial", "step_TF", "state"]].copy()
-    trials = trials.merge(plat_sub, on=["subject", "velocity", "trial"], how="left")
+    trials = plat_sub.merge(onset_by_trial, on=TRIAL_KEYS, how="left")
+    trials["subject"] = trials["subject"].astype(str).str.strip()
+    trials["trial"] = pd.to_numeric(trials["trial"], errors="coerce").astype("Int64")
     trials["step_TF"] = trials["step_TF"].fillna("unknown")
     trials["state"] = trials["state"].fillna("unknown")
 
-    trials["ref_frame"] = np.nan
-    step_mask = (trials["step_TF"] == "step") & trials["step_onset_local"].notna()
-    trials.loc[step_mask, "ref_frame"] = trials.loc[step_mask, "step_onset_local"]
+    trials["start_frame"] = pd.to_numeric(trials["platform_onset_local"], errors="coerce")
 
-    step_means = (
+    step_mask = (trials["step_TF"] == "step") & trials["step_onset_local"].notna()
+    subject_step_means = (
         trials.loc[step_mask]
-        .groupby(["subject", "velocity"])["step_onset_local"]
+        .groupby("subject")["step_onset_local"]
         .mean()
+        .rename("subject_mean_step_onset")
         .reset_index()
-        .rename(columns={"step_onset_local": "mean_step_onset"})
+    )
+    trials = trials.merge(subject_step_means, on="subject", how="left")
+
+    trials["end_frame"] = np.where(
+        step_mask,
+        trials["step_onset_local"],
+        trials["subject_mean_step_onset"],
     )
 
-    needs_ref = trials["ref_frame"].isna()
-    if needs_ref.any():
-        trials = trials.merge(step_means, on=["subject", "velocity"], how="left")
-        trials.loc[needs_ref & trials["mean_step_onset"].notna(), "ref_frame"] = (
-            trials.loc[needs_ref & trials["mean_step_onset"].notna(), "mean_step_onset"]
-        )
-        trials.drop(columns=["mean_step_onset"], inplace=True)
+    trials["start_frame"] = pd.to_numeric(trials["start_frame"], errors="coerce").round().astype("Int64")
+    trials["end_frame"] = pd.to_numeric(trials["end_frame"], errors="coerce").round().astype("Int64")
 
-    trials["ref_frame"] = trials["ref_frame"].round().astype("Int64")
     n_before = len(trials)
-    trials = trials.dropna(subset=["ref_frame"]).reset_index(drop=True)
+    trials = trials.dropna(subset=["start_frame", "end_frame"]).reset_index(drop=True)
     if n_before != len(trials):
-        print(f"  Dropped {n_before - len(trials)} trials with no computable ref_frame")
+        print(f"  Dropped {n_before - len(trials)} trials with no computable window")
 
-    snapshot_cols = [
-        "COM_X",
-        "vCOM_X",
-        "BOS_minX",
-        "BOS_maxX",
-        "MOS_minDist_signed",
-    ]
+    invalid_window = trials["end_frame"] < trials["start_frame"]
+    if invalid_window.any():
+        n_invalid = int(invalid_window.sum())
+        trials = trials.loc[~invalid_window].reset_index(drop=True)
+        print(f"  Dropped {n_invalid} trials with end_frame < start_frame")
 
-    df_pd = df.select(TRIAL_KEYS + ["MocapFrame"] + snapshot_cols).to_pandas()
-    snap_records = []
-
-    for _, row in trials.iterrows():
-        subj, vel, tri, ref = (
-            row["subject"],
-            row["velocity"],
-            int(row["trial"]),
-            int(row["ref_frame"]),
-        )
-        mask = (
-            (df_pd["subject"].astype(str).str.strip() == subj)
-            & (np.isclose(df_pd["velocity"], vel, atol=1e-9))
-            & (df_pd["trial"] == tri)
-            & (df_pd["MocapFrame"] == ref)
-        )
-        matched = df_pd.loc[mask]
-        if matched.empty:
-            trial_mask = (
-                (df_pd["subject"].astype(str).str.strip() == subj)
-                & (np.isclose(df_pd["velocity"], vel, atol=1e-9))
-                & (df_pd["trial"] == tri)
-            )
-            trial_data = df_pd.loc[trial_mask]
-            if trial_data.empty:
-                snap_records.append({c: np.nan for c in snapshot_cols})
-                continue
-            nearest_idx = (trial_data["MocapFrame"] - ref).abs().idxmin()
-            matched = trial_data.loc[[nearest_idx]]
-
-        snap_records.append(matched.iloc[0][snapshot_cols].to_dict())
-
-    snap_df = pd.DataFrame(snap_records)
-    for col in snapshot_cols:
-        trials[col] = snap_df[col].values
-
+    window_len = trials["end_frame"] - trials["start_frame"] + 1
     print(
-        f"  Trial summary: {len(trials)} trials, "
+        "  Trial windows: "
+        f"{len(trials)} trials, "
         f"step={sum(trials['step_TF'] == 'step')}, "
         f"nonstep={sum(trials['step_TF'] == 'nonstep')}"
     )
-    return trials
+    if len(window_len) > 0:
+        print(
+            "  Window length (frames): "
+            f"mean={window_len.mean():.1f}, min={window_len.min()}, max={window_len.max()}"
+        )
+
+    return trials.drop(columns=["subject_mean_step_onset"])
 
 
 def load_leg_lengths(xlsm_path: Path, subjects: list[str]) -> dict[str, float]:
@@ -198,33 +182,65 @@ def load_leg_lengths(xlsm_path: Path, subjects: list[str]) -> dict[str, float]:
 
 
 def compute_fsr_features(
+    df: pl.DataFrame,
     trials: pd.DataFrame,
     leg_lengths: dict[str, float],
 ) -> pd.DataFrame:
-    """Compute normalized COM position and velocity for FSR analysis."""
-    pos_norm = []
-    vel_norm = []
+    """Compute frame-wise normalized features and aggregate by trial window mean."""
+    frame_cols = [
+        "MocapFrame",
+        "COM_X",
+        "vCOM_X",
+        "BOS_minX",
+        "BOS_maxX",
+        "MOS_minDist_signed",
+    ]
+    frame_df = df.select(TRIAL_KEYS + frame_cols).to_pandas()
+    frame_df["subject"] = frame_df["subject"].astype(str).str.strip()
+    frame_df["trial"] = pd.to_numeric(frame_df["trial"], errors="coerce").astype("Int64")
 
-    for _, row in trials.iterrows():
-        bos_len = row["BOS_maxX"] - row["BOS_minX"]
-        subj = row["subject"]
-        ll = leg_lengths.get(subj, 0.9)
-        omega_0 = np.sqrt(G / ll)
+    trial_meta = trials[TRIAL_KEYS + ["step_TF", "state", "start_frame", "end_frame"]].copy()
+    merged = frame_df.merge(trial_meta, on=TRIAL_KEYS, how="inner")
 
-        if bos_len > 0 and np.isfinite(bos_len):
-            pn = (row["COM_X"] - row["BOS_minX"]) / bos_len
-            vn = row["vCOM_X"] / (omega_0 * bos_len)
-        else:
-            pn = np.nan
-            vn = np.nan
+    omega_0 = merged["subject"].map(lambda s: np.sqrt(G / leg_lengths.get(str(s), 0.9)))
+    bos_len = merged["BOS_maxX"] - merged["BOS_minX"]
+    valid_bos = np.isfinite(bos_len) & (bos_len > 0)
 
-        pos_norm.append(pn)
-        vel_norm.append(vn)
+    merged["COM_pos_norm_frame"] = np.where(
+        valid_bos,
+        (merged["COM_X"] - merged["BOS_minX"]) / bos_len,
+        np.nan,
+    )
+    merged["COM_vel_norm_frame"] = np.where(
+        valid_bos,
+        merged["vCOM_X"] / (omega_0 * bos_len),
+        np.nan,
+    )
 
-    trials = trials.copy()
-    trials["COM_pos_norm"] = pos_norm
-    trials["COM_vel_norm"] = vel_norm
-    return trials
+    in_window = (
+        merged["start_frame"].notna()
+        & merged["end_frame"].notna()
+        & (merged["MocapFrame"] >= merged["start_frame"])
+        & (merged["MocapFrame"] <= merged["end_frame"])
+    )
+    window_df = merged.loc[in_window].copy()
+
+    grouped = (
+        window_df.groupby(TRIAL_KEYS + ["step_TF", "state", "start_frame", "end_frame"], dropna=False)
+        .agg(
+            COM_pos_norm=("COM_pos_norm_frame", "mean"),
+            COM_vel_norm=("COM_vel_norm_frame", "mean"),
+            MOS_minDist_signed=("MOS_minDist_signed", "mean"),
+            n_frames=("MocapFrame", "count"),
+        )
+        .reset_index()
+    )
+
+    print(
+        "  Windowed frame aggregation: "
+        f"{len(grouped)} trials, total_frames={len(window_df)}"
+    )
+    return grouped
 
 
 def fit_glmm(
@@ -400,9 +416,9 @@ def fig1_state_space_scatter(
             y_boundary = -(coefs[0] + coefs[1] * x_range) / coefs[2]
             ax.plot(x_range, y_boundary, color="black", linewidth=2, linestyle="-", label="GLMM P(step)=0.5")
 
-    ax.set_xlabel("COM position (normalized to BOS, 0=post, 1=ant)")
-    ax.set_ylabel("COM velocity (normalized, dimensionless)")
-    ax.set_title("COM Velocity-Position State Space (FSR)", fontweight="bold")
+    ax.set_xlabel("COM position (window mean, normalized to BOS, 0=post, 1=ant)")
+    ax.set_ylabel("COM velocity (window mean, normalized)")
+    ax.set_title("COM Velocity-Position State Space (FSR, Window Mean)", fontweight="bold")
     ax.legend(fontsize=8, loc="best")
     ax.grid(True, linewidth=0.3, alpha=0.4)
 
@@ -441,10 +457,10 @@ def fig2_state_space_marginals(
     g.plot_joint(sns.scatterplot, alpha=0.6, s=40, edgecolor="white", linewidth=0.3)
     g.plot_marginals(sns.histplot, kde=True, alpha=0.4, common_norm=False)
 
-    g.ax_joint.set_xlabel("COM position (norm)", fontsize=10)
-    g.ax_joint.set_ylabel("COM velocity (norm)", fontsize=10)
+    g.ax_joint.set_xlabel("COM position (window mean, norm)", fontsize=10)
+    g.ax_joint.set_ylabel("COM velocity (window mean, norm)", fontsize=10)
     g.figure.suptitle(
-        "State Space with Marginal Distributions",
+        "State Space with Marginal Distributions (Window Mean)",
         fontsize=12,
         fontweight="bold",
         y=1.02,
@@ -485,7 +501,7 @@ def fig3_roc_2d_vs_1d(
     ax.plot([0, 1], [0, 1], color="gray", linestyle=":", linewidth=1, alpha=0.5)
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC: 2D State-Space vs 1D Models (LOSO-CV)", fontweight="bold")
+    ax.set_title("ROC: 2D State-Space vs 1D Models (LOSO-CV, Window Mean)", fontweight="bold")
     ax.legend(fontsize=9, loc="lower right")
     ax.set_xlim(-0.02, 1.02)
     ax.set_ylim(-0.02, 1.02)
@@ -546,7 +562,7 @@ def fig4_summary_auc_comparison(
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=30, ha="right", fontsize=9)
     ax.set_ylabel("AUC (LOSO-CV)")
-    ax.set_title("Stepping Prediction: Model Comparison", fontweight="bold")
+    ax.set_title("Stepping Prediction: Model Comparison (Window Mean)", fontweight="bold")
     ax.set_ylim(0, 1.05)
     ax.legend(fontsize=8)
     ax.grid(axis="y", linewidth=0.3, alpha=0.4)
@@ -570,6 +586,9 @@ def main() -> None:
     print("=" * 70)
     print("FSR-only stepping analysis")
     print("COP-based boundaries excluded by coordinate-system constraints")
+    print("Window rule: platform_onset_local ~ step_onset_local")
+    print("             nonstep end = subject mean step_onset_local")
+    print("Trial feature rule: window mean")
     print("=" * 70)
 
     print("\n[Milestone 1] Loading data...")
@@ -586,13 +605,20 @@ def main() -> None:
         omega0 = np.sqrt(G / ll)
         print(f"    {s}: {ll:.3f} m, omega_0={omega0:.2f} rad/s")
 
-    print("\n[Milestone 2] FSR feature engineering...")
-    trials = compute_fsr_features(trials, leg_lengths)
-    valid = trials[trials["step_TF"].isin(["step", "nonstep"])].copy()
+    print("\n[Milestone 2] FSR feature engineering (window mean)...")
+    trial_features = compute_fsr_features(df, trials, leg_lengths)
+    valid = trial_features[trial_features["step_TF"].isin(["step", "nonstep"])].copy()
     valid["step_binary"] = (valid["step_TF"] == "step").astype(int)
 
     fsr_valid = valid.dropna(subset=["COM_pos_norm", "COM_vel_norm"])
     print(f"  FSR features computed: {len(fsr_valid)} valid trials")
+    if len(fsr_valid) > 0:
+        print(
+            "    Frames per trial in window: "
+            f"mean={fsr_valid['n_frames'].mean():.1f}, "
+            f"min={int(fsr_valid['n_frames'].min())}, "
+            f"max={int(fsr_valid['n_frames'].max())}"
+        )
     print(
         f"    COM_pos_norm: mean={fsr_valid['COM_pos_norm'].mean():.3f}, "
         f"std={fsr_valid['COM_pos_norm'].std():.3f}"
@@ -664,10 +690,10 @@ def main() -> None:
     print(f"  1D position:  AUC={roc_pos['overall_auc']:.3f} (mean={roc_pos['mean_auc']:.3f})")
 
     print("\n[Milestone 5] Generating figures 1-4...")
-    fig1_state_space_scatter(trials, glmm_2d, out_dir, dpi)
+    fig1_state_space_scatter(valid, glmm_2d, out_dir, dpi)
     print("    fig1_state_space_scatter.png")
 
-    fig2_state_space_marginals(trials, out_dir, dpi)
+    fig2_state_space_marginals(valid, out_dir, dpi)
     print("    fig2_state_space_marginals.png")
 
     fig3_roc_2d_vs_1d(roc_results, out_dir, dpi)
@@ -680,6 +706,7 @@ def main() -> None:
     print("SUMMARY")
     print("=" * 70)
     print("  COP-based boundary analyses were excluded by design constraints.")
+    print("  Trial features use window mean from platform_onset to step_onset rule.")
     print(f"  2D (pos+vel) LOSO AUC: {roc_2d['overall_auc']:.3f}")
     print(f"  1D MoS LOSO AUC:       {roc_mos['overall_auc']:.3f}")
     print(f"  1D velocity LOSO AUC:  {roc_vel['overall_auc']:.3f}")
