@@ -71,6 +71,10 @@ analysis/<topic>/
 - **Script boilerplate**: `templates/script_boilerplate.py` — copy and modify for each new analysis
 - **Report template**: `templates/report_template.md` — includes Analysis Methodology section
 
+## Companion Skills
+
+- **Prior-study-based analyses**: When replicating or following a published study's methodology, use `prior-study-replication` skill alongside this one. That skill provides an alternative `report.md` template with mandatory sections for prior study methods/results, methodological adaptation rationale, and systematic comparison. Code rules and folder structure still follow this skill.
+
 ## Workflow
 
 1. **Define research question** — Confirm core question, hypotheses, and required data with the user
