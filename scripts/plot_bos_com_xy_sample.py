@@ -82,7 +82,6 @@ DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
 DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
-GIF_BOS_MODES = ("freeze", "live")
 RIGHT1COL_SUFFIX = "right1col"
 STEP_VIS_TEMPLATES = ("phase_trail", "bos_phase", "star_only", "phase_bos")
 TRIAL_KEYS = ["subject", "velocity", "trial"]
@@ -201,7 +200,7 @@ class RenderConfig:
 @dataclass(frozen=True)
 class TrialRenderResult:
     key: TrialKey
-    gif_outputs: tuple[tuple[str, int, str], ...]
+    gif_outputs: tuple[tuple[str, int], ...]
     valid_count: int
     inside_count: int
     outside_count: int
@@ -851,22 +850,6 @@ def compute_bos_polylines_from_c3d(
     )
 
 
-def draw_bos_outline(
-    ax: plt.Axes,
-    min_x: float,
-    max_x: float,
-    min_y: float,
-    max_y: float,
-    *,
-    color: str = "0.65",
-    alpha: float = 0.14,
-    linewidth: float = 0.7,
-) -> None:
-    x = np.asarray([min_x, max_x, max_x, min_x, min_x], dtype=float)
-    y = np.asarray([min_y, min_y, max_y, max_y, min_y], dtype=float)
-    ax.plot(x, y, color=color, alpha=alpha, linewidth=linewidth)
-
-
 def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[object]:
     handles: list[object] = [
         Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
@@ -1105,46 +1088,6 @@ def compute_fixed_gif_axis_limits(
     return (x_min - x_margin, x_max + x_margin), (y_min - y_margin, y_max + y_margin)
 
 
-def get_com_point_for_frame(
-    series: TrialSeries,
-    display: DisplaySeries,
-    event_frame: int | None,
-) -> tuple[float, float] | None:
-    if event_frame is None:
-        return None
-    idx = np.flatnonzero((series.mocap_frame == int(event_frame)) & series.valid_mask)
-    if idx.size == 0:
-        return None
-    i = int(idx[0])
-    return float(display.com_x[i]), float(display.com_y[i])
-
-
-def get_xcom_point_for_frame(
-    series: TrialSeries,
-    display: DisplaySeries,
-    event_frame: int | None,
-) -> tuple[float, float] | None:
-    if (
-        event_frame is None
-        or series.xcom_valid_mask is None
-        or display.xcom_x is None
-        or display.xcom_y is None
-    ):
-        return None
-    idx = np.flatnonzero((series.mocap_frame == int(event_frame)) & series.xcom_valid_mask)
-    if idx.size == 0:
-        return None
-    i = int(idx[0])
-    return float(display.xcom_x[i]), float(display.xcom_y[i])
-
-
-def save_figure(fig: plt.Figure, out_path: Path, dpi: int) -> None:
-    if out_path.exists():
-        out_path.unlink()
-        print(f"Overwrote: {out_path}")
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor="white")
-
-
 def set_title_and_subtitle(
     ax: plt.Axes,
     *,
@@ -1158,179 +1101,6 @@ def set_title_and_subtitle(
         ax.set_title(title, fontsize=11, fontweight="bold")
 
 
-def render_static_png(
-    series: TrialSeries,
-    display: DisplaySeries,
-    trial_state_label: str | None,
-    out_path: Path,
-    dpi: int,
-) -> None:
-    fig, ax = plt.subplots(figsize=(8.2, 8.0))
-    valid_idx = np.flatnonzero(series.valid_mask)
-    has_xcom = (
-        series.xcom_valid_mask is not None
-        and series.xcom_inside_mask is not None
-        and display.xcom_x is not None
-        and display.xcom_y is not None
-    )
-    xcom_valid_idx = np.asarray([], dtype=int)
-    if has_xcom:
-        xcom_valid_idx = np.flatnonzero(series.xcom_valid_mask)
-        if xcom_valid_idx.size == 0:
-            has_xcom = False
-
-    for i in valid_idx:
-        draw_bos_outline(
-            ax,
-            float(display.bos_minx[i]),
-            float(display.bos_maxx[i]),
-            float(display.bos_miny[i]),
-            float(display.bos_maxy[i]),
-        )
-
-    ax.plot(
-        display.com_x[valid_idx],
-        display.com_y[valid_idx],
-        color="tab:blue",
-        linewidth=1.9,
-        alpha=0.95,
-        label="COM trajectory",
-    )
-    if has_xcom:
-        ax.plot(
-            display.xcom_x[xcom_valid_idx],
-            display.xcom_y[xcom_valid_idx],
-            color=XCOM_TRAIL_COLOR,
-            linewidth=1.9,
-            alpha=0.90,
-            linestyle=":",
-            label="xCOM trajectory",
-        )
-
-    inside_idx = np.flatnonzero(series.valid_mask & series.inside_mask)
-    outside_idx = np.flatnonzero(series.valid_mask & (~series.inside_mask))
-    if inside_idx.size:
-        ax.scatter(
-            display.com_x[inside_idx],
-            display.com_y[inside_idx],
-            s=14,
-            c="tab:green",
-            alpha=0.75,
-            label="COM inside BOS",
-            zorder=4,
-        )
-    if outside_idx.size:
-        ax.scatter(
-            display.com_x[outside_idx],
-            display.com_y[outside_idx],
-            s=18,
-            c="tab:red",
-            alpha=0.85,
-            label="COM outside BOS",
-            zorder=4,
-        )
-    if has_xcom:
-        xcom_inside_idx = np.flatnonzero(series.xcom_valid_mask & series.xcom_inside_mask)
-        xcom_outside_idx = np.flatnonzero(series.xcom_valid_mask & (~series.xcom_inside_mask))
-        if xcom_inside_idx.size:
-            ax.scatter(
-                display.xcom_x[xcom_inside_idx],
-                display.xcom_y[xcom_inside_idx],
-                s=20,
-                marker="^",
-                c=XCOM_INSIDE_COLOR,
-                alpha=0.80,
-                label="xCOM inside BOS",
-                zorder=5,
-            )
-        if xcom_outside_idx.size:
-            ax.scatter(
-                display.xcom_x[xcom_outside_idx],
-                display.xcom_y[xcom_outside_idx],
-                s=22,
-                marker="^",
-                c=XCOM_OUTSIDE_COLOR,
-                alpha=0.90,
-                label="xCOM outside BOS",
-                zorder=5,
-            )
-
-    event_specs = [
-        ("platform_onset", series.platform_onset_local, "o", "black"),
-        ("platform_offset", series.platform_offset_local, "s", "tab:orange"),
-        ("step_onset", series.step_onset_local, "^", "tab:purple"),
-    ]
-    for label, event_frame, marker, color in event_specs:
-        event_point = get_com_point_for_frame(series, display, event_frame)
-        if event_point is None:
-            continue
-        ax.scatter(
-            [event_point[0]],
-            [event_point[1]],
-            s=95,
-            marker=marker,
-            c=color,
-            edgecolors="white",
-            linewidths=0.7,
-            label=label,
-            zorder=6,
-        )
-    xcom_step_point = get_xcom_point_for_frame(series, display, series.step_onset_local)
-    if xcom_step_point is not None:
-        ax.scatter(
-            [xcom_step_point[0]],
-            [xcom_step_point[1]],
-            s=98,
-            marker="X",
-            c=XCOM_GHOST_COLOR,
-            edgecolors="white",
-            linewidths=0.8,
-            label="xCOM step_onset ghost",
-            zorder=7,
-        )
-
-    valid_count = int(valid_idx.size)
-    inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
-    outside_count = valid_count - inside_count
-    inside_ratio = (100.0 * inside_count / valid_count) if valid_count > 0 else float("nan")
-    summary_text = (
-        f"velocity={format_velocity(series.velocity)}, trial={series.trial}\n"
-        f"frames(valid/total)={valid_count}/{series.mocap_frame.size}\n"
-        f"inside={inside_count}, outside={outside_count} ({inside_ratio:.1f}%)"
-    )
-    ax.text(
-        0.99,
-        0.99,
-        summary_text,
-        transform=ax.transAxes,
-        ha="right",
-        va="top",
-        fontsize=9,
-        bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
-    )
-
-    ax.set_xlim(*display.x_lim)
-    ax.set_ylim(*display.y_lim)
-    ax.set_aspect("equal", adjustable="box")
-    ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [- Left / + Right]")
-    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
-    static_title = "BOS + COM/xCOM XY (static)" if has_xcom else "BOS + COM XY (static)"
-    set_title_and_subtitle(
-        ax,
-        title=(
-            f"{static_title} | "
-            f"velocity={format_velocity(series.velocity)}, trial={series.trial}, "
-            f"view=CCW{display.rotate_ccw_deg}"
-        ),
-        subtitle=trial_state_label,
-    )
-    ax.legend(loc="best", fontsize=8, frameon=True)
-    fig.tight_layout(rect=[0, 0, 1, 0.96] if trial_state_label else None)
-    save_figure(fig, out_path, dpi=dpi)
-    plt.close(fig)
-
-
 def render_gif(
     series: TrialSeries,
     display: DisplaySeries,
@@ -1342,16 +1112,12 @@ def render_gif(
     x_lim: tuple[float, float],
     y_lim: tuple[float, float],
     bos_polylines: BOSPolylines | None = None,
-    bos_mode: str = "freeze",
     step_vis: str = "none",
 ) -> int:
     if fps <= 0:
         raise ValueError("--fps must be >= 1")
     if frame_step <= 0:
         raise ValueError("--frame_step must be >= 1")
-    mode = str(bos_mode).strip().lower()
-    if mode not in GIF_BOS_MODES:
-        raise ValueError(f"Unsupported bos_mode={bos_mode!r}. Allowed: {', '.join(GIF_BOS_MODES)}")
 
     valid_indices = np.flatnonzero(series.valid_mask)
     if valid_indices.size == 0:
@@ -1372,24 +1138,6 @@ def render_gif(
     frame_indices = valid_indices[::frame_step]
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
-
-    bos_freeze_idx: int | None = None
-    if mode == "freeze" and series.step_onset_local is not None:
-        step_frame = int(series.step_onset_local)
-        step_exact = np.flatnonzero((series.mocap_frame == step_frame) & series.valid_mask)
-        if step_exact.size > 0:
-            bos_freeze_idx = int(step_exact[0])
-        else:
-            # Fallback: first valid frame at/after step onset.
-            step_after = np.flatnonzero(series.valid_mask & (series.mocap_frame >= step_frame))
-            if step_after.size > 0:
-                bos_freeze_idx = int(step_after[0])
-                print(
-                    "Warning: step_onset frame not found in valid rows. "
-                    f"Using first valid frame >= step_onset: {series.mocap_frame[bos_freeze_idx]}"
-                )
-            else:
-                print("Warning: no valid frames at/after step onset. BOS freeze disabled for this trial.")
 
     fig, ax, ax_side = create_gif_canvas()
 
@@ -1468,7 +1216,6 @@ def render_gif(
             zorder=4,
         )
     # ---- step_vis template setup ----
-    # Always compute step_onset_idx independently (bos_freeze_idx is only set for freeze mode)
     step_onset_idx: int | None = None
     if series.step_onset_local is not None:
         _step_frame = int(series.step_onset_local)
@@ -1480,7 +1227,7 @@ def render_gif(
             if _after.size > 0:
                 step_onset_idx = int(_after[0])
 
-    show_step_ghost = mode == "live" and step_onset_idx is not None
+    show_step_ghost = step_onset_idx is not None
     info_text = apply_gif_right_panel(
         ax_side,
         has_xcom=has_xcom,
@@ -1620,7 +1367,7 @@ def render_gif(
         f"subject={series.subject}\n"
         f"velocity={format_velocity(series.velocity)}, trial={series.trial}\n"
         f"view=CCW{display.rotate_ccw_deg}\n"
-        f"bos_mode={mode}"
+        "bos_mode=live"
     )
 
     def event_state(frame_value: int) -> str:
@@ -1666,10 +1413,7 @@ def render_gif(
                 xcom_current_point.set_alpha(0.0)
 
         bos_idx = idx
-        bos_state = "live(no-freeze)" if mode == "live" else "live"
-        if mode == "freeze" and bos_freeze_idx is not None and idx >= bos_freeze_idx:
-            bos_idx = int(bos_freeze_idx)
-            bos_state = "frozen@step_onset"
+        bos_state = "live(no-freeze)"
 
         min_x = float(display.bos_minx[bos_idx])
         max_x = float(display.bos_maxx[bos_idx])
@@ -2007,32 +1751,28 @@ def render_one_trial(
     step_vis = config.step_vis
     vis_list: list[str] = list(STEP_VIS_TEMPLATES) if step_vis == "all" else [step_vis]
 
-    gif_outputs: list[tuple[str, int, str]] = []
+    gif_outputs: list[tuple[str, int]] = []
     if verbose:
-        print(f"GIF outputs: step_vis={step_vis}, bos_mode=freeze/live")
+        print(f"GIF outputs: step_vis={step_vis}, bos_mode=live")
     for sv in vis_list:
-        # step_vis 템플릿 모드는 live만 렌더링 (freeze는 기존 none 모드에서 사용)
-        bos_modes_for_sv = GIF_BOS_MODES if sv == "none" else ("live",)
-        for bos_mode in bos_modes_for_sv:
-            if sv == "none":
-                gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}__{bos_mode}.gif")
-            else:
-                gif_out = gif_base.parent / f"{gif_base.name}__step_vis-{sv}__{bos_mode}.gif"
-            frames = render_gif(
-                series=series,
-                display=display,
-                trial_state_label=trial_state_label,
-                out_path=gif_out,
-                fps=int(config.fps),
-                frame_step=int(config.frame_step),
-                dpi=int(config.dpi),
-                x_lim=fixed_x_lim,
-                y_lim=fixed_y_lim,
-                bos_polylines=bos_polylines,
-                bos_mode=bos_mode,
-                step_vis=sv,
-            )
-            gif_outputs.append((str(gif_out), int(frames), bos_mode))
+        if sv == "none":
+            gif_out = Path(f"{gif_base}__{RIGHT1COL_SUFFIX}.gif")
+        else:
+            gif_out = gif_base.parent / f"{gif_base.name}__step_vis-{sv}.gif"
+        frames = render_gif(
+            series=series,
+            display=display,
+            trial_state_label=trial_state_label,
+            out_path=gif_out,
+            fps=int(config.fps),
+            frame_step=int(config.frame_step),
+            dpi=int(config.dpi),
+            x_lim=fixed_x_lim,
+            y_lim=fixed_y_lim,
+            bos_polylines=bos_polylines,
+            step_vis=sv,
+        )
+        gif_outputs.append((str(gif_out), int(frames)))
 
     valid_count = int(np.count_nonzero(series.valid_mask))
     inside_count = int(np.count_nonzero(series.valid_mask & series.inside_mask))
@@ -2043,9 +1783,9 @@ def render_one_trial(
             "Inside/outside summary: "
             f"inside={inside_count}, outside={outside_count}, inside_ratio={inside_ratio:.2f}%"
         )
-        for out_path, frames, bos_mode in gif_outputs:
+        for out_path, frames in gif_outputs:
             print(
-                f"Saved GIF[{bos_mode}]: {out_path} "
+                f"Saved GIF: {out_path} "
                 f"(frames={frames}, fps={config.fps}, frame_step={config.frame_step})"
             )
 
@@ -2084,7 +1824,7 @@ def run_all_trials(
     max_workers = resolve_jobs(jobs)
     print(
         "Batch mode enabled: "
-        f"trials={total_trials}, workers={max_workers}, bos_modes={','.join(GIF_BOS_MODES)}"
+        f"trials={total_trials}, workers={max_workers}, bos_mode=live"
     )
     started_at = time.perf_counter()
     pending = deque(trial_keys)
