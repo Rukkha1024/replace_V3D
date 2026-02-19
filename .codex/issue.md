@@ -8,6 +8,7 @@ Policy:
 ## 2026-02-19
 
 - [VIZ] `scripts/plot_bos_com_xy_sample.py` did not initialize a Hangul-capable matplotlib font at module load time, so GIF exports with Korean subject names could emit `Glyph ... missing from current font` warnings and render unreadable tofu glyphs in title/metadata text.
+- [ANALYSIS] In `analysis/why_stepping_before_threshold`, direct comparison between COP-based boundaries and COM/xCOM metrics is not valid due to coordinate-system incompatibility in the lab setup, making COP-driven boundary analyses non-interpretable for this dataset.
 
 ## 2026-02-18
 

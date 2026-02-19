@@ -1,165 +1,142 @@
-# eBOS & FSR State-Space Analysis: Why Stepping Occurs Before the Textbook Threshold
+# FSR-Only Analysis: Stepping Before the Textbook Threshold
 
 ## Research Question
 
-**"Effective BOS(eBOS)와 COM velocity-position state space(FSR)로 'xCOM이 BOS 내부에 있는데 stepping이 발생하는' 현상을 설명할 수 있는가?"**
+**"COP 기반 경계 비교를 제외한 조건에서, COM velocity-position state 변수와 MoS baseline 중 무엇이 stepping을 더 잘 설명/예측하는가?"**
 
-이전 분석(`com_vs_xcom_stepping`)에서 stepping trial의 93.6%가 MoS > 0(BOS 내부)에서 step onset을 보였다. 본 분석은 문헌 리뷰("Why stepping occurs before the textbook says it should")에서 제안한 두 가지 역학적 설명을 검증한다:
-
-1. **Effective BOS (eBOS)**: 기능적 BOS는 해부학적 BOS보다 훨씬 작다 (Hof & Curtze, 2016: ~30%)
-2. **FSR State Space**: COM 속도가 위치보다 stepping 결정의 주요 변수이다 (Pai & Patton, 1997)
+본 분석은 실험실 장비 제약( COP 좌표계와 COM/xCOM 좌표계 직접 비교 불가 )을 반영하여,
+COP 기반 기능적 경계 분석은 전부 제외하고 FSR + MoS baseline 비교만 수행했다.
 
 ## Data Summary
 
-- **184 trials** (112 step, 72 nonstep) — 이전 분석과 동일
+- **184 trials** (112 step, 72 nonstep)
 - **24 subjects** (leg length: 0.760–0.990 m, omega_0: 3.15–3.59 rad/s)
-- 기준 시점(ref_frame): stepping → step_onset_local, nonstep → 동일 (subject, velocity) stepping 평균
-- Nonstep trial COP 시계열: 24 subjects, 72 trials, 총 9,350 COP points
+- 기준 시점(`ref_frame`):
+  - stepping trial → `step_onset_local`
+  - nonstep trial → 동일 `(subject, velocity)`의 stepping 평균 onset
+- 사용 변수: `COM_X`, `vCOM_X`, `BOS_minX`, `BOS_maxX`, `MOS_minDist_signed`
+
+> [GPT Comment]
+> - Verdict: Exact
+> - Basis: `analyze_fsr_only.py`의 입력/스냅샷 컬럼 정의와 실행 로그(184 trials, 24 subjects)가 일치함.
+> - Action: 데이터 요약은 유지하되, `ref_frame` 정의가 해석에 미치는 영향은 해석 파트에서 명시.
 
 ---
 
 ## Results
 
-### 1. Effective BOS (eBOS) — COP Excursion Envelope
+### 1. FSR 변수 생성 및 기술통계
 
-eBOS는 각 피험자의 nonstep trial COP 시계열을 pooling한 후 convex hull로 정의하였다.
+정규화 정의:
+- `COM_pos_norm = (COM_X - BOS_minX) / (BOS_maxX - BOS_minX)`
+- `COM_vel_norm = vCOM_X / (omega_0 * (BOS_maxX - BOS_minX))`
 
-**eBOS / Physical BOS 면적 비율:**
-
-| Metric | Value |
-|--------|------:|
-| Mean eBOS/BOS ratio | **0.200** (20.0%) |
-| Min | 0.029 (권유영) |
-| Max | 0.665 (가윤호) |
-| Hof & Curtze (2016) 참조 | ~0.30 (30%) |
-
-- 본 데이터의 평균 eBOS/BOS 비율(20.0%)은 Hof & Curtze(2016)의 ~30%보다 낮음
-- 피험자 간 편차가 크다 (0.029–0.665)
-
-**핵심 발견 — xCOM과 eBOS 관계:**
-
-|             | step | nonstep |
-|-------------|-----:|--------:|
-| **inside eBOS**  |    0 |       0 |
-| **outside eBOS** |  112 |      72 |
-
-- **100%의 stepping trial에서 xCOM이 eBOS 외부** (vs. physical BOS에서는 6.2%만 외부)
-- Nonstep trial도 100% eBOS 외부 — xCOM은 reference timepoint에서 이미 COP 도달 범위를 넘어섰다
-- 이는 eBOS가 매우 보수적(작은) 기능적 경계임을 의미한다
-
-**GLMM 결과:**
-
-| Model | Predictor | OR | 95% CI | p |
-|-------|-----------|---:|-------:|--:|
-| `step ~ eBOS_MoS + (1\|subject)` | eBOS_MoS | 0.023 | [0.007, 0.076] | 1.04e-09 |
-| `step ~ phys_MoS + (1\|subject)` | MOS_minDist_signed | 0.016 | [0.001, 0.319] | 6.89e-03 |
-
-- eBOS-MoS의 p-value가 physical MoS보다 더 유의함 (1.04e-09 vs 6.89e-03)
-- OR < 1: MoS가 감소할수록(불안정할수록) stepping 확률 증가
-
-**ROC/AUC:**
-
-| Metric | Simple AUC | LOSO-CV AUC |
-|--------|----------:|------------:|
-| Physical BOS MoS | **0.783** | 0.773 |
-| eBOS MoS | 0.671 | 0.652 |
-
-- eBOS-MoS AUC는 physical MoS보다 낮음 — 모든 trial이 eBOS 외부이므로 판별력이 제한됨
-- Mann-Whitney: U=2655, p=9.46e-05, r=0.342
-
-### 2. COM Velocity-Position State Space (FSR)
-
-COM position은 BOS 길이로 정규화 (0=posterior, 1=anterior), COM velocity는 omega_0 × BOS 길이로 정규화.
-
-**정규화된 변수 기술통계:**
+기술통계(유효 184 trials):
 
 | Variable | Mean | SD |
 |----------|-----:|---:|
 | COM_pos_norm | 0.328 | 0.101 |
 | COM_vel_norm | 0.003 | 0.077 |
 
-**GLMM 결과 — 2D vs 1D 모델:**
+> [GPT Comment]
+> - Verdict: Exact
+> - Basis: 변수식은 `analyze_fsr_only.py` 구현과 동일하며, 평균/표준편차는 실행 로그와 일치.
+> - Action: 본 섹션 수치가 변경되면 downstream GLMM/AUC 해석을 함께 갱신.
+
+### 2. GLMM (2D vs 1D)
 
 | Model | Predictor | Coefficient | OR | p |
 |-------|-----------|------------:|---:|--:|
 | 2D (pos+vel) | COM_pos_norm | -1.125 | 0.325 | 1.04e-02 |
-| 2D (pos+vel) | COM_vel_norm | **-6.893** | 0.001 | 3.28e-06 |
+| 2D (pos+vel) | COM_vel_norm | **-6.893** | 0.001 | 3.27e-06 |
 | 1D velocity | COM_vel_norm | -7.246 | 0.001 | 8.54e-07 |
 | 1D position | COM_pos_norm | -2.847 | 0.058 | 4.39e-11 |
+| 1D MoS | MOS_minDist_signed | -4.160 | 0.016 | 6.89e-03 |
 
-- **COM velocity의 계수 크기(6.893)가 position(1.125)의 6.1배** → 속도가 지배적 예측 변수
-- 2D 모델에서 velocity의 p-value(3.28e-06)가 position(1.04e-02)보다 3 orders of magnitude 더 유의
+해석 포인트:
+- 2D 모델에서 `COM_vel_norm` 절대계수가 `COM_pos_norm`보다 큼.
+- 1D velocity 모델은 유의하며, 1D position 단독보다 예측력이 높다(아래 AUC 참조).
 
-**LOSO-CV AUC 비교:**
+> [GPT Comment]
+> - Verdict: Partial
+> - Basis: 속도 우세 방향성은 데이터와 일치하나, 계수 크기 비교만으로 "지배적" 결론을 단정하기에는 스케일/모형 가정 영향이 있음.
+> - Action: 최종 결론은 계수비보다 LOSO AUC 우선으로 기술.
+
+### 3. LOSO-CV AUC 비교
 
 | Model | Overall AUC | Mean AUC |
-|-------|----------:|----------:|
+|-------|------------:|---------:|
 | **1D velocity** | **0.794** | 0.871 |
 | 2D (pos+vel) | 0.787 | 0.882 |
 | 1D MoS | 0.773 | 0.837 |
-| eBOS MoS | 0.652 | 0.809 |
 | 1D position | 0.652 | 0.740 |
 
-- **1D velocity(AUC=0.794)가 가장 높은 overall AUC** — 속도 단독으로 MoS(0.773)보다 우수
-- 2D(0.787)는 velocity 단독과 거의 동일 → position 추가의 한계 효과
-- Position 단독(0.652)은 가장 낮은 판별력 → 위치만으로는 stepping 예측 불가
+핵심 관찰:
+- Overall AUC 기준 최상위는 **1D velocity (0.794)**.
+- 2D는 1D velocity와 성능이 매우 가깝고(0.787 vs 0.794), 위치 단독의 한계가 크다.
+- MoS baseline은 position 단독보다 우수하지만 velocity 단독에는 뒤처진다.
+
+> [GPT Comment]
+> - Verdict: Exact
+> - Basis: 표 수치는 실행 로그와 동일하며, 모델 범위도 FSR+MoS 4개로 제한되어 있음.
+> - Action: 본 문서에서는 `overall_auc`를 1차 기준으로 고정하고 `mean_auc`는 보조지표로만 사용.
 
 ---
 
 ## Interpretation
 
-### eBOS: 기능적 경계의 재정의
+### A. 본 분석에서 말할 수 있는 것
 
-- eBOS는 physical BOS의 평균 20%에 불과하며, 이는 Hof & Curtze(2016)의 ~30% 추정과 방향이 일치한다
-- **모든 trial(step+nonstep)에서 xCOM이 eBOS 외부**라는 결과는, reference timepoint(step onset 시점)에서 이미 COP 도달 범위를 초과한 불안정 상태임을 의미한다
-- 그러나 eBOS 기반 MoS의 판별력(AUC=0.671)이 physical MoS(0.783)보다 낮다 — eBOS 정의가 너무 보수적이거나, reference timepoint에서는 이미 둘 다 경계를 넘어서 있어 차별화가 어렵다
-- eBOS 개념은 "왜 stepping이 BOS 내부에서 발생하는가"에 대한 설명으로는 유효하지만, 실질적 stepping 예측 도구로는 physical MoS가 여전히 우월하다
+1. COP 기반 경계 없이도, step/nonstep 구분에서 속도 정보의 기여가 크다는 경향이 재현된다.
+2. MoS는 여전히 유의한 baseline이지만 velocity 단독 예측력보다 낮다.
+3. 위치 단독 모델은 성능이 가장 낮아, stepping 설명에 속도 성분이 필수적임을 시사한다.
 
-### FSR: COM 속도가 핵심 변수
+> [GPT Comment]
+> - Verdict: Exact
+> - Basis: GLMM/LOSO 모두 동일 방향을 지지하며, COP 불일치 제약과 독립적으로 성립하는 결과임.
+> - Action: 실무 결론은 "속도 포함 모델" 우선으로 유지.
 
-- **COM velocity가 stepping 결정의 지배적 변수**임이 명확하게 확인되었다 (GLMM 계수 6.1배 차이, AUC 0.794 vs 0.652)
-- 이는 Pai & Patton(1997)의 FSR 이론과 완벽히 일치: "COM이 BOS 어디에 있는가"보다 "COM이 얼마나 빠르게 이동하는가"가 중요하다
-- 1D velocity(AUC=0.794)가 기존 MoS(0.773)를 초과 → **MoS보다 COM 속도가 더 나은 단일 예측 변수**
-- 2D 모델은 velocity 단독과 거의 동일한 성능 → position 추가의 한계 이득
+### B. 주의해서 해석할 것 (제한사항)
 
-### 종합: "교과서적 임계값 이전 stepping"의 역학적 설명
+1. 본 구현은 Pai & Patton(1997) FSR의 **개념적 방향**(position+velocity 중요성)은 따르지만,
+   원 논문의 동역학 기반 recoverable-region 경계 계산을 직접 재현한 것은 아니다.
+2. nonstep `ref_frame`를 stepping onset 평균으로 정하는 설계는 비교 일관성은 높이지만,
+   예측 시나리오로 일반화할 때는 보수적으로 해석해야 한다.
+3. GLMM은 Bayesian VB 적합값을 기반으로 요약했으므로, p-value 해석은 보조적 증거로 보는 것이 안전하다.
 
-본 분석 결과를 종합하면:
-
-1. **eBOS 관점**: 해부학적 BOS는 기능적 안정 경계를 과대 추정한다. 실제 COP 도달 범위(eBOS)는 BOS의 ~20%에 불과하여, "BOS 내부 stepping"은 이미 기능적 경계를 넘어선 상태에서의 반응이다.
-
-2. **FSR 관점**: Stepping은 COM 위치가 아닌 **COM 속도에 의해 주로 결정**된다. 속도 단독(AUC=0.794)이 위치 포함 MoS(0.773)보다 우수한 예측 변수이다. Perturbation 감지 시 CNS는 "현재 위치"가 아닌 "현재 속도에 기반한 미래 위치"를 예측하여 stepping을 결정한다.
-
-3. 이 두 관점은 상호 보완적이다: eBOS는 "경계가 생각보다 가깝다"는 공간적 설명을, FSR은 "속도가 위치보다 중요하다"는 동역학적 설명을 제공한다.
+> [GPT Comment]
+> - Verdict: Partial
+> - Basis: 방법론 제약(구현 모델 vs 이론 모델 차이, ref_frame 정의, 통계 요약 방식)이 존재함.
+> - Action: 외부 발표 시 "방법론 동일" 대신 "개념 정합 + 예측모델 기반 검증"으로 표현.
 
 ### Conclusion
 
-1. **eBOS는 physical BOS의 약 20%** — Hof & Curtze(2016)의 ~30% 보고와 방향 일치
-2. **eBOS 기준 100% stepping trial이 기능적 경계 외부** — "BOS 내부 stepping" 패러독스 해소
-3. **COM velocity가 stepping의 지배적 예측 변수** (GLMM coefficient 6.1배, AUC 0.794)
-4. **1D velocity > MoS > 2D(pos+vel) ≈ 1D velocity > 1D position** — 속도 단독이 최적
-5. **MoS(xCOM-based)는 velocity 정보를 일부 포함**하기에 position 단독보다 우수하지만, pure velocity보다는 열등
+1. **COP 기반 경계 분석은 좌표계 제약으로 제외**했으며, 본 리포트는 FSR+MoS 결과만 보고한다.
+2. **1D velocity가 최고 Overall AUC(0.794)**로, stepping 예측에서 가장 강한 단일 지표였다.
+3. **2D(pos+vel)는 1D velocity와 유사한 성능(0.787)**을 보였고, position 단독은 가장 낮았다(0.652).
+4. **MoS baseline(0.773)은 유의미하지만 velocity 단독보다는 낮다.**
+
+> [GPT Comment]
+> - Verdict: Exact
+> - Basis: 결론 문장이 현재 코드 출력(모델/수치/제약)과 직접 대응됨.
+> - Action: 후속 작업에서는 ref_frame 대안(예: 고정 시간창) 민감도 분석을 추가 권장.
 
 ---
 
 ## Reproduction
 
 ```bash
-conda run -n module python analysis/why_stepping_before_threshold/analyze_ebos_and_fsr.py
+conda run -n module python analysis/why_stepping_before_threshold/analyze_fsr_only.py
 ```
 
-**Input**: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`, `data/all_data/` (C3D)
-**Output**: fig1~fig8 PNG (이 폴더에 생성)
+**Input**: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`  
+**Output**: fig1–fig4 PNG (이 폴더에 생성)
 
 ## Figures
 
 | File | Description |
 |------|-------------|
-| fig1_cop_excursion_envelope.png | 대표 subject COP excursion envelope (physical BOS, eBOS hull, xCOM 위치) |
-| fig2_ebos_area_ratio.png | eBOS/physical BOS 면적 비율 bar chart (피험자별, 30% reference line) |
-| fig3_mos_ebos_distribution.png | eBOS-MoS vs physical-BOS-MoS violin+strip (step/nonstep) |
-| fig4_roc_ebos_vs_physical.png | ROC curve: eBOS-MoS vs physical-BOS-MoS |
-| fig5_state_space_scatter.png | COM velocity-position state space scatter + GLMM boundary |
-| fig6_state_space_marginals.png | State space scatter + marginal histograms |
-| fig7_roc_2d_vs_1d.png | ROC curves: 2D GLMM, 1D MoS, 1D velocity, 1D position, eBOS |
-| fig8_summary_auc_comparison.png | Summary AUC bar chart (전체 모델 비교) |
+| fig1_state_space_scatter.png | COM position-velocity 산점도 + GLMM decision boundary |
+| fig2_state_space_marginals.png | State space 산점도 + 주변분포 |
+| fig3_roc_2d_vs_1d.png | ROC curves (2D, 1D velocity, 1D position, 1D MoS) |
+| fig4_summary_auc_comparison.png | AUC 비교 bar chart |
