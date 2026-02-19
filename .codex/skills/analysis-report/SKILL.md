@@ -42,6 +42,11 @@ analysis/<topic>/
 - Report significance with `Sig` only: `*`, `**`, `***`, `n.s.` at `alpha=0.05`.
 - If multiple comparison correction is used, compute `Sig` from the corrected p-values (e.g., BH-FDR) and state the correction method in Analysis Methodology.
 - If variables use `*_peak`, define it explicitly as absolute peak: `abs_peak = max(|x|)` within the analysis window.
+- Analysis Methodology must include a **Coordinate & sign conventions** block.
+- Coordinate/sign block must define both axis names and `(+)/(-)` meanings for AP/ML/Vertical directions.
+- For signed metrics (e.g., `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`), report what `(+)/(-)` means in biomechanical terms (inside/outside or bound-relative sign).
+- For joint angles, report axis-wise sign semantics (X/Y/Z) and whether left/right sign-unification was applied.
+- For force/torque/COP variables, state whether each signal is absolute or onset-zeroed and whether internal/external torque sign conversion was used.
 
 ### Code Rules
 
@@ -92,7 +97,7 @@ analysis/<topic>/
    - Confirm data loads correctly, trial counts match expectations
 5. **Full run & verify** — Remove `--dry-run` flag, confirm all figures are generated
 6. **Write report** — Use `templates/report_template.md` as starting point for `report.md`
-   - Research question → data summary → **analysis methodology** → results → interpretation → reproduction → figures
+   - Research question → data summary → **analysis methodology (including Coordinate & sign conventions)** → results → interpretation → reproduction → figures
 7. **Commit** — `git add -f analysis/<topic>/*.png` then commit the entire folder
 
 ## Validation
@@ -104,6 +109,8 @@ analysis/<topic>/
 - Key statistics printed to stdout match report.md content
 - No Excel/CSV files generated
 - User-facing report tables follow `Sig-only` convention (no numeric `p`/`df` columns unless user explicitly requests)
+- `report.md` explicitly documents coordinate/sign conventions (`(+)/(-)` direction meaning) for main variables and signed metrics
+- Directional interpretation text is consistent with the declared methodology sign conventions
 
 ## Completion Checklist
 

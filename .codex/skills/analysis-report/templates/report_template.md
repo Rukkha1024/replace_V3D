@@ -21,6 +21,12 @@ Background context in 1-2 sentences.
 - **Statistical model**: <e.g., LMM: DV ~ step_TF + (1|subject), REML>
 - **Multiple comparison correction**: <e.g., Benjamini-Hochberg FDR per variable family>
 - **Significance reporting**: `Sig` only (`*`, `**`, `***`, `n.s.`, alpha=0.05), hide numeric `p` and `df` in user-facing tables
+- **Coordinate & sign conventions**:
+  - Axis direction with `(+)/(-)`: <e.g., +X=Anterior/-X=Posterior, +Y=Left/-Y=Right, +Z=Up/-Z=Down>
+  - AP/ML variable mapping: <AP vars>, <ML vars>
+  - Signed metric meaning: <e.g., `MOS_minDist_signed` (+)=inside, (-)=outside; `MOS_AP_v3d`/`MOS_ML_v3d` inside vs outside bounds>
+  - Joint angle sign meaning: <X/Y/Z sign semantics, ankle X dorsi/plantar, left/right sign-unification 여부>
+  - Force/torque/COP sign basis: <absolute vs onset-zeroed, internal=-external 여부>
 - **Peak definition**: `*_peak` uses `abs_peak = max(|x|)` within the analysis window
 - **Variable families**:
   - <Family 1>: <list variables>

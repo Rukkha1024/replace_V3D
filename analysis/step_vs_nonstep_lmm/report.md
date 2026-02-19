@@ -23,6 +23,35 @@ Platform translation perturbation 실험에서 동일한 mixed velocity 조건 �
 
 이 방식은 step 발생 직전까지의 CPA(Compensatory Postural Adjustment) 구간에 집중하기 위한 것이다. 고정 시간 창(예: 0–800ms)은 perturbation 강도와 피험자에 따라 step onset timing이 다르므로 적합하지 않다. Nonstep trial에 동일 (subject, velocity) 내 step trial의 평균 step onset을 부여함으로써, 두 조건 간 동일한 시간 구조에서의 비교가 가능하도록 하였다.
 
+### Coordinate & Sign Conventions
+
+방향성 해석을 위해 좌표축의 `(+)/(-)`를 아래 기준으로 고정하였다 (실데이터 QC: 185개 C3D).
+
+- `+X = Anterior`, `-X = Posterior` (AP axis)
+- `+Y = Left`, `-Y = Right` (ML axis)
+- `+Z = Up`, `-Z = Down` (Vertical axis)
+
+레거시 메모(`-X=AP`, `+Z=ML`, `+Y=UP`)와 충돌할 수 있으나, 본 리포트에서는 현재 배치 데이터의 실측 검증값을 우선 적용한다.
+
+변수 해석 매핑:
+- AP 계열: `COM_X`, `vCOM_X`, `xCOM_X`, `COP_X_*`, `BOS_minX/BOS_maxX`, `MOS_AP_v3d`
+- ML 계열: `COM_Y`, `vCOM_Y`, `xCOM_Y`, `COP_Y_*`, `BOS_minY/BOS_maxY`, `MOS_ML_v3d`
+
+부호 해석:
+- `MOS_minDist_signed`: `(+)=inside`, `(-)=outside`
+- `MOS_AP_v3d`, `MOS_ML_v3d`: 해당 축 bound 내부는 `(+)`, 외부는 `(-)`
+
+관절각 부호:
+- X: `+Flex / -Ext` (ankle X는 `+Dorsi / -Plantar`)
+- Y: `+Add / -Abd`
+- Z: `+IR / -ER`
+- Left Y/Z는 좌우 해석 일관성을 위해 sign-unification(부호 반전) 적용
+
+힘/토크/COP 부호:
+- `GRF_*`, `GRM_*`, `AnkleTorque*`는 platform onset 기준 Δ값(onset-zeroed)으로 해석
+- `AnkleTorque*_int = -AnkleTorque*_ext` 관계를 사용
+- COP는 absolute(`COP_*_m`)와 onset-zeroed(`COP_*_m_onset0`)를 구분해 사용
+
 ### Key Variables
 
 Trial-level 집계 방식:
@@ -96,6 +125,8 @@ Statistical method: Linear Mixed Model via R lmerTest
 ---
 
 ## Interpretation
+
+해석 섹션의 AP/ML/inside-outside 방향 문구는 위 `Coordinate & Sign Conventions`의 `(+)/(-)` 정의를 따른다.
 
 ### Balance & Stability
 
