@@ -6,6 +6,9 @@ balance recovery strategies under identical perturbation intensity?"
 Statistical method: Linear Mixed Model (LMM) with Satterthwaite df
   Model: DV ~ step_TF + (1|subject)
   Multiple comparison: Benjamini-Hochberg FDR per variable family
+  Analysis window: [platform_onset, step_onset] per trial
+    - step trials: actual step_onset_local
+    - nonstep trials: mean step_onset of same (subject, velocity) step trials
 
 Produces:
   - 3 publication-quality figures (saved alongside this script)
@@ -172,12 +175,18 @@ def load_platform_sheet(path: Path) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def aggregate_trial_features(df: pl.DataFrame, specs: list[dict]) -> pl.DataFrame:
-    """Compute per-trial summary statistics for all DVs via polars group_by."""
+    """Compute per-trial summary statistics for all DVs via polars group_by.
 
-    # Filter time window: 0–800ms
+    Time window: [platform_onset_local, end_frame] per trial (MocapFrame units).
+    ``end_frame`` must already be joined to *df* before calling this function.
+    """
+
+    # Filter time window: [platform_onset, end_frame] per trial
     df_win = df.filter(
-        (pl.col("time_from_platform_onset_s") >= 0.0)
-        & (pl.col("time_from_platform_onset_s") <= 0.8)
+        pl.col("end_frame").is_not_null()
+    ).filter(
+        (pl.col("MocapFrame") >= pl.col("platform_onset_local"))
+        & (pl.col("MocapFrame") <= pl.col("end_frame"))
     )
 
     # Build aggregation expressions
@@ -203,6 +212,62 @@ def aggregate_trial_features(df: pl.DataFrame, specs: list[dict]) -> pl.DataFram
     return result
 
 
+def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFrame:
+    """Compute per-trial end_frame for the analysis window.
+
+    - step trials: end_frame = step_onset_local (actual step onset)
+    - nonstep trials: end_frame = mean(step_onset_local) of step trials
+      in the same (subject, velocity) group
+
+    Returns a pandas DataFrame with [subject, velocity, trial, end_frame].
+    """
+    # Extract per-trial step_onset_local
+    trials = (
+        df.select(TRIAL_KEYS + ["step_onset_local"])
+        .group_by(TRIAL_KEYS)
+        .agg(pl.col("step_onset_local").drop_nulls().first().alias("step_onset_local"))
+        .sort(TRIAL_KEYS)
+        .to_pandas()
+    )
+    trials["subject"] = trials["subject"].astype(str).str.strip()
+    trials["trial"] = pd.to_numeric(trials["trial"], errors="coerce").astype("Int64")
+    trials["velocity"] = pd.to_numeric(trials["velocity"], errors="coerce")
+
+    # Join step_TF
+    plat_sub = platform[["subject", "velocity", "trial", "step_TF"]].copy()
+    trials = trials.merge(plat_sub, on=TRIAL_KEYS, how="left")
+
+    # end_frame: step → step_onset_local, nonstep → mean
+    trials["end_frame"] = np.nan
+    step_mask = (trials["step_TF"] == "step") & trials["step_onset_local"].notna()
+    trials.loc[step_mask, "end_frame"] = trials.loc[step_mask, "step_onset_local"]
+
+    # Mean step_onset per (subject, velocity)
+    step_means = (
+        trials.loc[step_mask]
+        .groupby(["subject", "velocity"])["step_onset_local"]
+        .mean()
+        .reset_index()
+        .rename(columns={"step_onset_local": "mean_step_onset"})
+    )
+
+    needs_end = trials["end_frame"].isna()
+    if needs_end.any():
+        trials = trials.merge(step_means, on=["subject", "velocity"], how="left")
+        fill_mask = needs_end & trials["mean_step_onset"].notna()
+        trials.loc[fill_mask, "end_frame"] = trials.loc[fill_mask, "mean_step_onset"]
+        trials.drop(columns=["mean_step_onset"], inplace=True)
+
+    trials["end_frame"] = trials["end_frame"].round().astype("Int64")
+
+    n_missing = trials["end_frame"].isna().sum()
+    if n_missing > 0:
+        print(f"  Warning: {n_missing} trials with no computable end_frame (dropped)")
+    trials = trials.dropna(subset=["end_frame"]).reset_index(drop=True)
+
+    return trials[TRIAL_KEYS + ["step_TF", "end_frame"]]
+
+
 def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.DataFrame:
     """Load, filter, aggregate, join step_TF. Returns 1-row-per-trial DataFrame."""
 
@@ -213,7 +278,15 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
     print("  Loading platform sheet...")
     platform = load_platform_sheet(xlsm_path)
 
-    print("  Aggregating to trial-level features (0–800ms window)...")
+    # Compute per-trial end_frame (step_onset or subject-velocity mean)
+    print("  Computing per-trial end_frame [platform_onset → step_onset]...")
+    end_frames = _compute_end_frames(df, platform)
+
+    # Join end_frame to main timeseries for per-trial windowing
+    end_pl = pl.from_pandas(end_frames[TRIAL_KEYS + ["end_frame"]])
+    df = df.join(end_pl, on=TRIAL_KEYS, how="left")
+
+    print("  Aggregating to trial-level features [platform_onset, step_onset] window...")
     trial_pl = aggregate_trial_features(df, specs)
     trial_df = trial_pl.to_pandas()
 
@@ -222,9 +295,10 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
     trial_df["velocity"] = pd.to_numeric(trial_df["velocity"], errors="coerce")
     trial_df["trial"] = pd.to_numeric(trial_df["trial"], errors="coerce").astype("Int64")
 
-    # Join step_TF
-    plat_sub = platform[["subject", "velocity", "trial", "step_TF"]].copy()
-    trial_df = trial_df.merge(plat_sub, on=TRIAL_KEYS, how="left")
+    # Join step_TF from end_frames (already computed)
+    trial_df = trial_df.merge(
+        end_frames[TRIAL_KEYS + ["step_TF"]], on=TRIAL_KEYS, how="left"
+    )
 
     # Keep only step/nonstep
     trial_df = trial_df[trial_df["step_TF"].isin(["step", "nonstep"])].reset_index(drop=True)

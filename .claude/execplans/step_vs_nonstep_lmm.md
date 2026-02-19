@@ -38,8 +38,11 @@ Skills used: `analysis-report`, `pingouin-excel-stat-analysis` (FDR reference on
   Evidence: `UnicodeEncodeError: 'cp949' codec can't encode character '\ufffd'`
   Solution: `conda run --no-capture-output` 플래그로 해결
 
-- Observation: 22/32 변수 FDR 유의. ML 방향 변수(COM_Y, COP_Y, MOS_ML)가 가장 강한 효과
-  Evidence: MOS_ML_v3d_min의 estimate = -0.0294가 모든 MoS 변수 중 최대
+- Observation: (v1, 0-800ms) 22/32 변수 FDR 유의 → (v2, adaptive window) 13/32로 감소
+  Evidence: Force/Torque family 3/7→0/7. GRF/torque 차이는 step onset 이후에만 존재함이 확인됨
+
+- Observation: COP_X_range는 nonstep에서 유의하게 크다 (estimate=-0.0092)
+  Evidence: nonstep이 AP 방향 COP 보상(fixed-support strategy)을 더 적극적으로 사용함을 시사
 
 ---
 
@@ -59,6 +62,10 @@ Skills used: `analysis-report`, `pingouin-excel-stat-analysis` (FDR reference on
 
 - Decision: analysis-report skill 적용 — Excel/CSV 출력 없음, figures + stdout + report.md만 생성
   Rationale: 사용자가 analysis-report skill 사용을 명시적으로 요청
+  Date/Author: 2026-02-19
+
+- Decision: 분석 시간 구간을 고정 0-800ms → [platform_onset, step_onset] per-trial adaptive window로 변경
+  Rationale: 논문 방법론에서 CPA 구간(platform onset ~ step onset)을 분석 시간대로 정의. Nonstep trial은 동일 (subject, velocity) 내 step trial의 평균 step_onset을 대입
   Date/Author: 2026-02-19
 
 ---

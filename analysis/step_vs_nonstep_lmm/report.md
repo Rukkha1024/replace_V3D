@@ -10,9 +10,27 @@ Platform translation perturbation 실험에서 동일한 mixed velocity 조건 �
 
 - **184 trials** (step=112, nonstep=72) from 24 subjects
 - Data source: `output/all_trials_timeseries.csv` (frame-level 100Hz timeseries) + `data/perturb_inform.xlsm` (step/nonstep classification)
-- Analysis window: platform onset (0ms) ~ 800ms
-- Trial-level aggregation: range, path length, peak velocity, minimum MoS per trial
 - **32 dependent variables** across 3 variable families
+
+### Analysis Window
+
+분석 시간 구간은 trial마다 개별적으로 설정하였다:
+
+- **분석 시작**: `platform_onset_local` — 각 trial에서 perturbation platform이 움직이기 시작한 MocapFrame
+- **분석 종료**: `end_frame` — step onset 기반으로 trial별 산출
+  - **Step trial**: 해당 trial의 실제 `step_onset_local` (발이 지면에서 처음 떨어지는 시점)
+  - **Nonstep trial**: 동일 (subject, velocity) 내 step trial들의 `step_onset_local` 평균값을 대입
+
+이 방식은 step 발생 직전까지의 CPA(Compensatory Postural Adjustment) 구간에 집중하기 위한 것이다. 고정 시간 창(예: 0–800ms)은 perturbation 강도와 피험자에 따라 step onset timing이 다르므로 적합하지 않다. Nonstep trial에 동일 (subject, velocity) 내 step trial의 평균 step onset을 부여함으로써, 두 조건 간 동일한 시간 구조에서의 비교가 가능하도록 하였다.
+
+### Key Variables
+
+Trial-level 집계 방식:
+- **range** (max − min): COM, COP 변위 범위, GRF 범위
+- **path_length** (Σ|Δ|): COM, COP 총 이동 거리
+- **abs_peak** (max|값|): vCOM 최대 속도, GRF peak, ankle torque peak
+- **min_val** (최소값): MoS 최소값 (가장 불안정한 순간)
+- **abs_peak_velocity** (max|Δ/Δt|): COP 최대 속도
 
 ---
 
@@ -20,56 +38,60 @@ Platform translation perturbation 실험에서 동일한 mixed velocity 조건 �
 
 ### 1. LMM Summary
 
-Statistical method: Linear Mixed Model via R lmerTest (`DV ~ step_TF + (1|subject)`, REML, Satterthwaite df). Benjamini-Hochberg FDR correction applied within each variable family.
+Statistical method: Linear Mixed Model via R lmerTest
+- Model: `DV ~ step_TF + (1|subject)`
+- Estimation: REML (restricted maximum likelihood)
+- Inference: Satterthwaite degrees of freedom approximation
+- Multiple comparison: Benjamini-Hochberg FDR per variable family
 
-**Overall: 22/32 variables showed FDR-significant differences (p_FDR < 0.05)**
+**Overall: 13/32 variables showed FDR-significant differences (p_FDR < 0.05)**
 
-### 2. Balance/Stability Family (15 variables, 13 significant)
-
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | df | p_FDR | Sig |
-|----------|-------------|-----------------|----------|-----|-------|-----|
-| COM_X_range | 0.0298±0.0172 | 0.0366±0.0197 | -0.0073 | 163.9 | 0.0018 | ** |
-| COM_Y_range | 0.0326±0.0195 | 0.0185±0.0147 | 0.0152 | 164.2 | <0.0001 | *** |
-| COM_Y_path_length | 0.0367±0.0191 | 0.0198±0.0144 | 0.0179 | 163.2 | <0.0001 | *** |
-| vCOM_Y_peak | 0.1182±0.0558 | 0.0625±0.0462 | 0.0602 | 162.4 | <0.0001 | *** |
-| COP_X_range | 0.1165±0.0289 | 0.0984±0.0128 | 0.0186 | 163.7 | <0.0001 | *** |
-| COP_X_path_length | 0.1616±0.0538 | 0.1347±0.0347 | 0.0286 | 162.1 | <0.0001 | *** |
-| COP_X_peak_velocity | 1.2919±1.0309 | 1.0091±0.3901 | 0.2855 | 164.9 | 0.0199 | * |
-| COP_Y_range | 0.1721±0.1173 | 0.0777±0.0478 | 0.0969 | 167.7 | <0.0001 | *** |
-| COP_Y_path_length | 0.3467±0.2503 | 0.1767±0.1023 | 0.1796 | 166.0 | <0.0001 | *** |
-| MOS_minDist_signed_min | 0.0275±0.0203 | 0.0442±0.0164 | -0.0165 | 166.8 | <0.0001 | *** |
-| MOS_AP_v3d_min | 0.0393±0.0202 | 0.0489±0.0163 | -0.0098 | 164.6 | 0.0001 | *** |
-| MOS_ML_v3d_min | 0.0925±0.0294 | 0.1202±0.0260 | -0.0294 | 162.9 | <0.0001 | *** |
-| COM_X_path_length | — | — | -0.0028 | 164.8 | 0.1911 | n.s. |
-| vCOM_X_peak | — | — | -0.0023 | 163.9 | 0.6689 | n.s. |
-| COP_Y_peak_velocity | — | — | 2.5863 | 175.1 | 0.0531 | n.s. |
-
-### 3. Joint Angles Family (10 variables, 7 significant)
+### 2. Balance/Stability Family (15 variables, 6 significant)
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | df | p_FDR | Sig |
 |----------|-------------|-----------------|----------|-----|-------|-----|
-| Hip_R_ROM | 10.6548±4.6166 | 8.9880±4.5181 | 2.6918 | 161.1 | <0.0001 | *** |
-| Hip_R_peak | 10.3887±4.6448 | 8.0723±3.0549 | 3.0357 | 161.7 | <0.0001 | *** |
-| Knee_R_ROM | 16.2523±8.7516 | 11.4938±5.3884 | 6.1824 | 160.6 | <0.0001 | *** |
-| Knee_R_peak | 15.3082±8.6136 | 10.6343±5.2147 | 6.0188 | 160.5 | <0.0001 | *** |
-| Trunk_ROM | 6.9868±5.8001 | 5.7786±4.2952 | 1.3166 | 160.6 | 0.0307 | * |
-| Neck_ROM | 15.9277±11.2654 | 14.5762±9.8620 | 3.6762 | 160.1 | 0.0002 | *** |
-| Neck_peak | 15.3617±11.3329 | 13.9499±10.0291 | 3.6308 | 160.2 | 0.0002 | *** |
-| Ankle_R_ROM | — | — | 0.6252 | 160.3 | 0.2544 | n.s. |
-| Ankle_R_peak | — | — | 0.3444 | 160.3 | 0.4673 | n.s. |
-| Trunk_peak | — | — | 0.9967 | 160.6 | 0.0915 | n.s. |
+| vCOM_Y_peak | 0.0587±0.0329 | 0.0390±0.0284 | 0.0232 | 163.5 | <0.0001 | *** |
+| COP_X_range | 0.0849±0.0145 | 0.0957±0.0133 | -0.0092 | 161.7 | <0.0001 | *** |
+| COP_Y_range | 0.1142±0.1082 | 0.0551±0.0353 | 0.0604 | 173.3 | <0.0001 | *** |
+| MOS_minDist_signed_min | 0.0373±0.0258 | 0.0485±0.0121 | -0.0119 | 161.5 | <0.0001 | *** |
+| MOS_AP_v3d_min | 0.0421±0.0257 | 0.0530±0.0124 | -0.0115 | 161.6 | <0.0001 | *** |
+| MOS_ML_v3d_min | 0.1291±0.0163 | 0.1329±0.0169 | -0.0059 | 162.9 | 0.0069 | ** |
+| COP_Y_path_length | 0.1888±0.2315 | 0.1215±0.0751 | 0.0742 | 170.3 | 0.0159 | * |
+| COM_X_range | — | — | -0.0015 | 166.0 | 0.3544 | n.s. |
+| COM_X_path_length | — | — | 0.0003 | 161.8 | 0.8729 | n.s. |
+| vCOM_X_peak | — | — | 0.0004 | 161.4 | 0.9136 | n.s. |
+| COM_Y_range | — | — | 0.0003 | 167.0 | 0.8729 | n.s. |
+| COM_Y_path_length | — | — | 0.0008 | 165.9 | 0.5394 | n.s. |
+| COP_X_path_length | — | — | -0.0035 | 161.5 | 0.5394 | n.s. |
+| COP_X_peak_velocity | — | — | 0.1541 | 173.1 | 0.5394 | n.s. |
+| COP_Y_peak_velocity | — | — | 1.6913 | 177.0 | 0.3544 | n.s. |
 
-### 4. Force/Torque Family (7 variables, 3 significant)
+### 3. Joint Angles Family (10 variables, 5 significant)
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | df | p_FDR | Sig |
 |----------|-------------|-----------------|----------|-----|-------|-----|
-| GRF_Z_peak | 217.4900±135.0443 | 178.8896±125.0511 | 52.3015 | 159.5 | 0.0001 | *** |
-| GRF_Z_range | 358.0233±199.1921 | 310.1817±198.5282 | 77.9869 | 159.3 | <0.0001 | *** |
-| AnkleTorqueMid_Y_peak | 1.3169±0.7856 | 0.9591±0.5944 | 0.3908 | 160.7 | <0.0001 | *** |
-| GRF_X_peak | — | — | 0.8837 | 159.0 | 0.7756 | n.s. |
-| GRF_X_range | — | — | 3.7275 | 159.0 | 0.1490 | n.s. |
-| GRF_Y_peak | — | — | 3.6216 | 159.0 | 0.0509 | n.s. |
-| GRF_Y_range | — | — | -1.1537 | 159.0 | 0.7756 | n.s. |
+| Hip_R_ROM | 8.8704±3.5363 | 8.2460±4.1579 | 1.5529 | 160.1 | <0.0001 | *** |
+| Hip_R_peak | 8.6901±3.4595 | 7.6392±3.0939 | 1.7377 | 160.3 | <0.0001 | *** |
+| Knee_R_ROM | 11.5689±6.4566 | 10.6368±5.2064 | 2.2142 | 160.0 | 0.0001 | *** |
+| Knee_R_peak | 10.6882±6.2259 | 9.8288±4.9566 | 2.0362 | 159.9 | 0.0002 | *** |
+| Neck_ROM | 10.2490±10.5563 | 10.6053±9.2047 | 2.1557 | 160.5 | 0.0349 | * |
+| Neck_peak | 9.9506±10.5394 | 10.2947±9.2522 | 2.1528 | 160.6 | 0.0349 | * |
+| Ankle_R_ROM | — | — | 0.6524 | 160.4 | 0.2726 | n.s. |
+| Ankle_R_peak | — | — | 0.5597 | 160.5 | 0.2760 | n.s. |
+| Trunk_ROM | — | — | 0.8867 | 160.8 | 0.1641 | n.s. |
+| Trunk_peak | — | — | 0.7644 | 160.8 | 0.2111 | n.s. |
+
+### 4. Force/Torque Family (7 variables, 0 significant)
+
+| Variable | Estimate | df | p_FDR | Sig |
+|----------|----------|-----|-------|-----|
+| GRF_X_peak | -2.6569 | 159.0 | 0.5418 | n.s. |
+| GRF_X_range | -3.8233 | 159.0 | 0.5418 | n.s. |
+| GRF_Y_peak | 1.8912 | 159.0 | 0.5418 | n.s. |
+| GRF_Y_range | -6.0032 | 159.0 | 0.5418 | n.s. |
+| GRF_Z_peak | 11.1985 | 159.7 | 0.5418 | n.s. |
+| GRF_Z_range | 7.8412 | 159.5 | 0.6790 | n.s. |
+| AnkleTorqueMid_Y_peak | -0.0238 | 160.3 | 0.6790 | n.s. |
 
 ---
 
@@ -77,25 +99,35 @@ Statistical method: Linear Mixed Model via R lmerTest (`DV ~ step_TF + (1|subjec
 
 ### Balance & Stability
 
-Step 시행에서 COM과 COP의 Y축(ML, 좌우) 변위, 이동 거리, 최대 속도가 모두 유의하게 크다. 이는 step 발생 시 ML 방향으로 더 큰 자세 동요가 나타남을 의미한다. 반면 COM X축(AP) range는 nonstep에서 유의하게 더 크다 (estimate = -0.0073). 이는 nonstep 전략이 AP 방향에서 더 큰 COM 변위를 허용하면서도 stepping 없이 균형을 유지함을 시사한다.
+platform onset ~ step onset 구간에서 step 시행은 ML(좌우) 방향 COM 속도(vCOM_Y_peak)와 COP 변위(COP_Y_range, COP_Y_path_length)가 유의하게 크다. 이는 stepping 직전까지의 CPA 구간에서 ML 방향 자세 동요가 step 유발의 핵심 특징임을 시사한다.
 
-MoS 최소값은 step에서 유의하게 낮다 (MOS_minDist_signed_min: step=0.0275 vs nonstep=0.0442). 이는 step 시행에서 동적 안정성이 더 낮은 순간이 존재함을 확인한다. 특히 ML 방향 MoS(MOS_ML_v3d_min)의 차이가 가장 크며 (estimate = -0.0294), ML 불안정성이 step 유발의 핵심 요인일 수 있음을 시사한다.
+COP_X_range는 **nonstep에서 유의하게 크다** (estimate = -0.0092). 이는 nonstep 전략이 AP 방향 COP 이동을 통해 fixed-support strategy로 균형을 유지하는 반면, step 전략은 AP 방향 COP 보상이 부족하여 stepping으로 전환됨을 시사한다.
+
+MoS 최소값은 step에서 유의하게 낮다 (MOS_minDist_signed_min: step=0.0373 vs nonstep=0.0485; MOS_AP_v3d_min: step=0.0421 vs nonstep=0.0530). 이는 step onset 직전까지의 구간에서 step 시행이 더 불안정한 상태에 도달함을 확인한다.
 
 ### Joint Angles
 
-무릎(Knee)과 고관절(Hip)의 ROM 및 peak가 step에서 유의하게 크다. 특히 무릎 ROM이 약 5° 더 크며 (step: 16.3° vs nonstep: 11.5°), 이는 stepping 준비 과정에서의 하지 굴곡 증가를 반영한다. 경추(Neck) 각도도 step에서 유의하게 크며, 상체의 보상적 움직임을 나타낸다. 반면 발목(Ankle) 각도는 유의한 차이가 없어, 발목 전략이 두 조건에서 유사하게 작용함을 시사한다.
+Hip과 Knee의 ROM 및 peak가 step에서 유의하게 크다 (Hip ROM: 8.87° vs 8.25°, Knee ROM: 11.57° vs 10.64°). 이는 stepping 준비 과정에서의 하지 굴곡 증가를 반영한다. Neck 각도도 유의하며 상체 보상적 움직임을 나타낸다. 발목(Ankle)과 체간(Trunk)은 유의한 차이가 없어, CPA 구간에서는 ankle/trunk 전략이 두 조건에서 유사함을 시사한다.
 
 ### Force/Torque
 
-수직 GRF(Z축) peak와 range가 step에서 유의하게 크며 (peak: 217.5N vs 178.9N), ankle torque peak도 유의하게 크다 (1.32 vs 0.96 Nm/kg). 수평 GRF(X, Y)는 유의한 차이가 없어, step과 nonstep 간 차이가 주로 수직 방향의 하중 이동에서 나타남을 보여준다.
+[platform_onset, step_onset] 구간에서 GRF와 ankle torque는 **모두 비유의**하다. 이전 0-800ms 고정 구간 분석에서는 GRF_Z와 ankle torque가 유의했으나, step onset 이전 구간으로 제한하면 차이가 사라진다. 이는 GRF와 torque의 step-nonstep 차이가 주로 step onset 이후(발이 떨어지는 시점 이후)에 발생함을 의미한다.
+
+### 시간 구간 변경의 영향
+
+고정 0-800ms → [platform_onset, step_onset] 적응형 구간으로 변경한 결과:
+- FDR 유의 변수: **22/32 → 13/32**로 감소
+- Force/Torque family: **3/7 → 0/7** (step onset 이후 차이만 반영하던 것이 제거됨)
+- COM range/path_length: 유의하지 않음 (0-800ms에서 유의했던 차이가 CPA 구간에서는 미미)
+- **CPA 구간에 특이적인 차이**: vCOM_Y_peak, COP_Y_range, MoS 지표가 핵심 변별 요인으로 남음
 
 ### Conclusion
 
-1. **22/32 biomechanical 변수가 step vs. nonstep 간 FDR-유의한 차이를 보인다.** 동일 perturbation 강도에서도 두 전략은 명확히 구별되는 biomechanical 패턴을 나타낸다.
-2. **ML 방향의 COM/COP 변위 및 MoS 감소가 step의 핵심 특징이다.** ML 불안정성이 stepping 유발의 주요 기전일 가능성이 있다.
-3. **무릎·고관절 ROM이 step에서 유의하게 크며**, stepping 준비 과정의 하지 굴곡 증가를 반영한다.
-4. **발목 각도는 차이가 없으나 ankle torque는 유의하게 크다.** 발목 전략의 크기(토크)가 다를 뿐 각도 변화는 유사하다.
-5. **수직 GRF가 step에서 크며**, 수평 방향은 차이 없다.
+1. **13/32 biomechanical 변수가 [platform_onset, step_onset] 구간에서 FDR-유의.** CPA 구간에 집중할수록 변별력 있는 변수가 선별된다.
+2. **ML 방향 COM 속도와 COP 변위가 step의 핵심 특징**이며, AP 방향 COP range는 nonstep에서 더 크다 (fixed-support strategy 반영).
+3. **MoS(동적 안정성)가 step에서 유의하게 낮다.** Step onset 직전까지 더 불안정한 상태에 도달한다.
+4. **Hip/Knee ROM이 step에서 유의하게 크다.** Stepping 준비를 위한 하지 굴곡이 CPA 구간에서 이미 시작된다.
+5. **GRF와 ankle torque는 CPA 구간에서 비유의.** 이전 0-800ms 분석에서 유의했던 차이는 step onset 이후 구간의 영향이었다.
 
 ---
 
