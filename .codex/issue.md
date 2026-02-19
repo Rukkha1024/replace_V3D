@@ -13,6 +13,7 @@ Policy:
 - [ANALYSIS] In `analysis/why_stepping_before_threshold`, switching from single-timepoint snapshots to window-mean aggregation (`platform_onset_local ~ step_onset_local`, nonstep end by subject mean step onset) materially changes model ranking and coefficient significance, so legacy snapshot conclusions cannot be reused for current methodology.
 - [TOOLING] There was no standardized skill for end-to-end review/repair of existing `analysis/*` workflows (script reproducibility, quantitative consistency, and report alignment), causing repeated ad-hoc review patterns across analysis topics.
 - [VIZ] In `scripts/plot_bos_com_xy_sample.py`, dual-mode BOS GIF outputs (`freeze` + `live`) and `__live` filename suffixes created redundant artifacts and mode-specific branching complexity, increasing maintenance overhead for live-only usage and complicating filename compatibility during batch regeneration.
+- [DOC] `plot-bos-com-xy-gif` skill Quick Start examples still referenced PNG/freeze-era usage (`PNG+GIF`, `--no-save_png`) after `scripts/plot_bos_com_xy_sample.py` migrated to live-only GIF output, causing command/docs mismatch for first-time runs.
 
 ## 2026-02-18
 

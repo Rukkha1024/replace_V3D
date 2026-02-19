@@ -20,11 +20,12 @@ description: Generate BOS+COM XY overlay visualizations (static PNG and animated
 
 ## Quick Start
 
-### 1) 특정 1 trial PNG+GIF 생성 (권장 기본)
+### 1) 특정 1 trial GIF 생성 (권장 기본)
 
 ```bash
 conda run -n module python scripts/plot_bos_com_xy_sample.py \
-  --subject 조민석 --velocity 30 --trial 2
+  --subject 조민석 --velocity 30 --trial 2 \
+  --step_vis phase_bos
 ```
 
 기본값으로 아래가 적용된다.
@@ -33,14 +34,15 @@ conda run -n module python scripts/plot_bos_com_xy_sample.py \
 - `--event_xlsm data/perturb_inform.xlsm`
 - `--rotate_ccw_deg 90`
 - `--fps 20`, `--frame_step 1`, `--dpi 180`
-- `--save_png`/`--save_gif` 모두 True
+- `--save_gif` 기본 True (`--no-save_gif`로만 비활성화 가능)
+- BOS 모드는 live-only이며 freeze 출력은 생성하지 않음
 
-### 2) GIF만 생성
+### 2) right1col GIF 생성 (`--step_vis none`)
 
 ```bash
 conda run -n module python scripts/plot_bos_com_xy_sample.py \
   --subject 이재유 --velocity 20 --trial 1 \
-  --no-save_png
+  --step_vis none
 ```
 
 ### 3) Nonstep(또는 footlift) trial GIF 생성
@@ -48,7 +50,7 @@ conda run -n module python scripts/plot_bos_com_xy_sample.py \
 ```bash
 conda run -n module python scripts/plot_bos_com_xy_sample.py \
   --subject 조민석 --velocity 30 --trial 6 \
-  --no-save_png
+  --step_vis phase_bos
 ```
 
 ## 입력 요구사항
