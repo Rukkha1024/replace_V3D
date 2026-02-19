@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-19
 
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py` fails on direct full run in WSL (`conda run --no-capture-output -n module python ...`) because `RSCRIPT` is pinned to a Windows absolute path (`C:\\Users\\Alice\\miniconda3\\envs\\module\\lib\\R/bin/x64/Rscript.exe`), so baseline/full-run verification cannot complete without environment-specific runtime override.
 - [VIZ] `scripts/plot_bos_com_xy_sample.py` did not initialize a Hangul-capable matplotlib font at module load time, so GIF exports with Korean subject names could emit `Glyph ... missing from current font` warnings and render unreadable tofu glyphs in title/metadata text.
 - [ANALYSIS] In `analysis/why_stepping_before_threshold`, direct comparison between COP-based boundaries and COM/xCOM metrics is not valid due to coordinate-system incompatibility in the lab setup, making COP-driven boundary analyses non-interpretable for this dataset.
 - [ANALYSIS] In `analysis/why_stepping_before_threshold`, switching from single-timepoint snapshots to window-mean aggregation (`platform_onset_local ~ step_onset_local`, nonstep end by subject mean step onset) materially changes model ranking and coefficient significance, so legacy snapshot conclusions cannot be reused for current methodology.

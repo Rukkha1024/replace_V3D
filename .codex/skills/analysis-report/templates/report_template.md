@@ -18,8 +18,10 @@ Background context in 1-2 sentences.
 - **Analysis window**: <e.g., [platform_onset, step_onset] per trial>
   - Step trials: <actual step_onset_local>
   - Nonstep trials: <mean step_onset of same (subject, velocity) step trials>
-- **Statistical model**: <e.g., LMM: DV ~ step_TF + (1|subject), REML, Satterthwaite df>
+- **Statistical model**: <e.g., LMM: DV ~ step_TF + (1|subject), REML>
 - **Multiple comparison correction**: <e.g., Benjamini-Hochberg FDR per variable family>
+- **Significance reporting**: `Sig` only (`*`, `**`, `***`, `n.s.`, alpha=0.05), hide numeric `p` and `df` in user-facing tables
+- **Peak definition**: `*_peak` uses `abs_peak = max(|x|)` within the analysis window
 - **Variable families**:
   - <Family 1>: <list variables>
   - <Family 2>: <list variables>
@@ -31,11 +33,11 @@ Background context in 1-2 sentences.
 
 ### 1. <First analysis>
 
-(tables, statistics, p-values, effect sizes)
+(tables, statistics, Sig markers, effect sizes)
 
-| Variable | Estimate | SE | df | t | p | p_FDR | Sig |
-|----------|----------|----|-----|---|---|-------|-----|
-| ... | ... | ... | ... | ... | ... | ... | ... |
+| Variable | Estimate | SE | t | Sig |
+|----------|----------|----|---|-----|
+| ... | ... | ... | ... | ... |
 
 ### 2. <Second analysis>
 

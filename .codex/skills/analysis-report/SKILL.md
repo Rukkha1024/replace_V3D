@@ -36,6 +36,13 @@ analysis/<topic>/
 - `DEFAULT_OUT_DIR = SCRIPT_DIR` — figures saved alongside the script
 - If intermediate data is needed, process in memory; do not export to files
 
+### Reporting Conventions (default)
+
+- User-facing report tables should hide numeric `p` values and `df` by default.
+- Report significance with `Sig` only: `*`, `**`, `***`, `n.s.` at `alpha=0.05`.
+- If multiple comparison correction is used, compute `Sig` from the corrected p-values (e.g., BH-FDR) and state the correction method in Analysis Methodology.
+- If variables use `*_peak`, define it explicitly as absolute peak: `abs_peak = max(|x|)` within the analysis window.
+
 ### Code Rules
 
 - **No `_bootstrap` module** — use direct `sys.path` setup (see `templates/script_boilerplate.py`)
@@ -96,7 +103,7 @@ analysis/<topic>/
 - `report.md` exists with required sections: Research Question, Data Summary, **Analysis Methodology**, Results, Interpretation, Reproduction, Figures
 - Key statistics printed to stdout match report.md content
 - No Excel/CSV files generated
-- (If using LMM via R) Satterthwaite df values are non-integer (fractional)
+- User-facing report tables follow `Sig-only` convention (no numeric `p`/`df` columns unless user explicitly requests)
 
 ## Completion Checklist
 

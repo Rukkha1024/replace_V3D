@@ -48,6 +48,8 @@
 - **Analysis window**: ...
 - **Statistical model**: ...
 - **Multiple comparison correction**: ...
+- **Significance reporting**: `Sig` only (`*`, `**`, `***`, `n.s.`, alpha=0.05), hide numeric `p` and `df` in user-facing tables
+- **Peak definition**: `*_peak` uses `abs_peak = max(|x|)` within the analysis window
 - **Variable definitions**: ...
 - **Special handling**: ...
 
@@ -57,9 +59,9 @@
 
 ### 1. <First result>
 
-| Variable | ... | ... |
-|----------|-----|-----|
-| ... | ... | ... |
+| Variable | Estimate | SE | t | Sig |
+|----------|----------|----|---|-----|
+| ... | ... | ... | ... | ... |
 
 ### 2. <Second result>
 

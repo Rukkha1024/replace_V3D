@@ -28,7 +28,7 @@ Platform translation perturbation 실험에서 동일한 mixed velocity 조건 �
 Trial-level 집계 방식:
 - **range** (max − min): COM, COP 변위 범위, GRF 범위
 - **path_length** (Σ|Δ|): COM, COP 총 이동 거리
-- **abs_peak** (max|값|): vCOM 최대 속도, GRF peak, ankle torque peak
+- **abs_peak** (`max(|x|)`): 분석 구간 내 절대최대값(absolute peak). `*_peak` 변수명은 모두 이 정의를 사용
 - **min_val** (최소값): MoS 최소값 (가장 불안정한 순간)
 - **abs_peak_velocity** (max|Δ/Δt|): COP 최대 속도
 
@@ -41,57 +41,57 @@ Trial-level 집계 방식:
 Statistical method: Linear Mixed Model via R lmerTest
 - Model: `DV ~ step_TF + (1|subject)`
 - Estimation: REML (restricted maximum likelihood)
-- Inference: Satterthwaite degrees of freedom approximation
-- Multiple comparison: Benjamini-Hochberg FDR per variable family
+- Inference: lmerTest fixed-effect inference
+- Multiple comparison: Benjamini-Hochberg FDR per variable family (`Sig` only, α=0.05)
 
-**Overall: 13/32 variables showed FDR-significant differences (p_FDR < 0.05)**
+**Overall: 13/32 variables showed FDR-significant differences (Sig at α=0.05)**
 
 ### 2. Balance/Stability Family (15 variables, 6 significant)
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | df | p_FDR | Sig |
-|----------|-------------|-----------------|----------|-----|-------|-----|
-| vCOM_Y_peak | 0.0587±0.0329 | 0.0390±0.0284 | 0.0232 | 163.5 | <0.0001 | *** |
-| COP_X_range | 0.0849±0.0145 | 0.0957±0.0133 | -0.0092 | 161.7 | <0.0001 | *** |
-| COP_Y_range | 0.1142±0.1082 | 0.0551±0.0353 | 0.0604 | 173.3 | <0.0001 | *** |
-| MOS_minDist_signed_min | 0.0373±0.0258 | 0.0485±0.0121 | -0.0119 | 161.5 | <0.0001 | *** |
-| MOS_AP_v3d_min | 0.0421±0.0257 | 0.0530±0.0124 | -0.0115 | 161.6 | <0.0001 | *** |
-| MOS_ML_v3d_min | 0.1291±0.0163 | 0.1329±0.0169 | -0.0059 | 162.9 | 0.0069 | ** |
-| COP_Y_path_length | 0.1888±0.2315 | 0.1215±0.0751 | 0.0742 | 170.3 | 0.0159 | * |
-| COM_X_range | — | — | -0.0015 | 166.0 | 0.3544 | n.s. |
-| COM_X_path_length | — | — | 0.0003 | 161.8 | 0.8729 | n.s. |
-| vCOM_X_peak | — | — | 0.0004 | 161.4 | 0.9136 | n.s. |
-| COM_Y_range | — | — | 0.0003 | 167.0 | 0.8729 | n.s. |
-| COM_Y_path_length | — | — | 0.0008 | 165.9 | 0.5394 | n.s. |
-| COP_X_path_length | — | — | -0.0035 | 161.5 | 0.5394 | n.s. |
-| COP_X_peak_velocity | — | — | 0.1541 | 173.1 | 0.5394 | n.s. |
-| COP_Y_peak_velocity | — | — | 1.6913 | 177.0 | 0.3544 | n.s. |
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
+|----------|-------------|-----------------|----------|-----|
+| vCOM_Y_peak | 0.0587±0.0329 | 0.0390±0.0284 | 0.0232 | *** |
+| COP_X_range | 0.0849±0.0145 | 0.0957±0.0133 | -0.0092 | *** |
+| COP_Y_range | 0.1142±0.1082 | 0.0551±0.0353 | 0.0604 | *** |
+| MOS_minDist_signed_min | 0.0373±0.0258 | 0.0485±0.0121 | -0.0119 | *** |
+| MOS_AP_v3d_min | 0.0421±0.0257 | 0.0530±0.0124 | -0.0115 | *** |
+| MOS_ML_v3d_min | 0.1291±0.0163 | 0.1329±0.0169 | -0.0059 | ** |
+| COP_Y_path_length | 0.1888±0.2315 | 0.1215±0.0751 | 0.0742 | * |
+| COM_X_range | — | — | -0.0015 | n.s. |
+| COM_X_path_length | — | — | 0.0003 | n.s. |
+| vCOM_X_peak | — | — | 0.0004 | n.s. |
+| COM_Y_range | — | — | 0.0003 | n.s. |
+| COM_Y_path_length | — | — | 0.0008 | n.s. |
+| COP_X_path_length | — | — | -0.0035 | n.s. |
+| COP_X_peak_velocity | — | — | 0.1541 | n.s. |
+| COP_Y_peak_velocity | — | — | 1.6913 | n.s. |
 
 ### 3. Joint Angles Family (10 variables, 5 significant)
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | df | p_FDR | Sig |
-|----------|-------------|-----------------|----------|-----|-------|-----|
-| Hip_R_ROM | 8.8704±3.5363 | 8.2460±4.1579 | 1.5529 | 160.1 | <0.0001 | *** |
-| Hip_R_peak | 8.6901±3.4595 | 7.6392±3.0939 | 1.7377 | 160.3 | <0.0001 | *** |
-| Knee_R_ROM | 11.5689±6.4566 | 10.6368±5.2064 | 2.2142 | 160.0 | 0.0001 | *** |
-| Knee_R_peak | 10.6882±6.2259 | 9.8288±4.9566 | 2.0362 | 159.9 | 0.0002 | *** |
-| Neck_ROM | 10.2490±10.5563 | 10.6053±9.2047 | 2.1557 | 160.5 | 0.0349 | * |
-| Neck_peak | 9.9506±10.5394 | 10.2947±9.2522 | 2.1528 | 160.6 | 0.0349 | * |
-| Ankle_R_ROM | — | — | 0.6524 | 160.4 | 0.2726 | n.s. |
-| Ankle_R_peak | — | — | 0.5597 | 160.5 | 0.2760 | n.s. |
-| Trunk_ROM | — | — | 0.8867 | 160.8 | 0.1641 | n.s. |
-| Trunk_peak | — | — | 0.7644 | 160.8 | 0.2111 | n.s. |
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
+|----------|-------------|-----------------|----------|-----|
+| Hip_R_ROM | 8.8704±3.5363 | 8.2460±4.1579 | 1.5529 | *** |
+| Hip_R_peak | 8.6901±3.4595 | 7.6392±3.0939 | 1.7377 | *** |
+| Knee_R_ROM | 11.5689±6.4566 | 10.6368±5.2064 | 2.2142 | *** |
+| Knee_R_peak | 10.6882±6.2259 | 9.8288±4.9566 | 2.0362 | *** |
+| Neck_ROM | 10.2490±10.5563 | 10.6053±9.2047 | 2.1557 | * |
+| Neck_peak | 9.9506±10.5394 | 10.2947±9.2522 | 2.1528 | * |
+| Ankle_R_ROM | — | — | 0.6524 | n.s. |
+| Ankle_R_peak | — | — | 0.5597 | n.s. |
+| Trunk_ROM | — | — | 0.8867 | n.s. |
+| Trunk_peak | — | — | 0.7644 | n.s. |
 
 ### 4. Force/Torque Family (7 variables, 0 significant)
 
-| Variable | Estimate | df | p_FDR | Sig |
-|----------|----------|-----|-------|-----|
-| GRF_X_peak | -2.6569 | 159.0 | 0.5418 | n.s. |
-| GRF_X_range | -3.8233 | 159.0 | 0.5418 | n.s. |
-| GRF_Y_peak | 1.8912 | 159.0 | 0.5418 | n.s. |
-| GRF_Y_range | -6.0032 | 159.0 | 0.5418 | n.s. |
-| GRF_Z_peak | 11.1985 | 159.7 | 0.5418 | n.s. |
-| GRF_Z_range | 7.8412 | 159.5 | 0.6790 | n.s. |
-| AnkleTorqueMid_Y_peak | -0.0238 | 160.3 | 0.6790 | n.s. |
+| Variable | Estimate | Sig |
+|----------|----------|-----|
+| GRF_X_peak | -2.6569 | n.s. |
+| GRF_X_range | -3.8233 | n.s. |
+| GRF_Y_peak | 1.8912 | n.s. |
+| GRF_Y_range | -6.0032 | n.s. |
+| GRF_Z_peak | 11.1985 | n.s. |
+| GRF_Z_range | 7.8412 | n.s. |
+| AnkleTorqueMid_Y_peak | -0.0238 | n.s. |
 
 ---
 
@@ -107,7 +107,7 @@ MoS 최소값은 step에서 유의하게 낮다 (MOS_minDist_signed_min: step=0.
 
 ### Joint Angles
 
-Hip과 Knee의 ROM 및 peak가 step에서 유의하게 크다 (Hip ROM: 8.87° vs 8.25°, Knee ROM: 11.57° vs 10.64°). 이는 stepping 준비 과정에서의 하지 굴곡 증가를 반영한다. Neck 각도도 유의하며 상체 보상적 움직임을 나타낸다. 발목(Ankle)과 체간(Trunk)은 유의한 차이가 없어, CPA 구간에서는 ankle/trunk 전략이 두 조건에서 유사함을 시사한다.
+Hip과 Knee의 ROM 및 absolute peak(`abs_peak = max(|x|)`)가 step에서 유의하게 크다 (Hip ROM: 8.87° vs 8.25°, Knee ROM: 11.57° vs 10.64°). 이는 stepping 준비 과정에서의 하지 굴곡 증가를 반영한다. Neck 각도도 유의하며 상체 보상적 움직임을 나타낸다. 발목(Ankle)과 체간(Trunk)은 유의한 차이가 없어, CPA 구간에서는 ankle/trunk 전략이 두 조건에서 유사함을 시사한다.
 
 ### Force/Torque
 

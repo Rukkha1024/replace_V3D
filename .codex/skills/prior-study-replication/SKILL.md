@@ -64,6 +64,13 @@ description: "Companion to analysis-report. Provides report.md structure for ana
 - Verdict values: `Consistent` / `Partially consistent` / `Inconsistent` / `Not tested`
 - Any `Inconsistent` or `Not tested` item MUST include a brief explanation
 
+### Results Reporting Convention (default)
+
+- User-facing Results tables should hide numeric `p` values and `df` unless the user explicitly requests them.
+- Report significance with `Sig` only: `*`, `**`, `***`, `n.s.` at `alpha=0.05`.
+- If multiple comparison correction is used, compute `Sig` from corrected p-values (e.g., BH-FDR) and name the method in Analysis Methodology.
+- For metrics named `*_peak`, define the term explicitly as absolute peak: `abs_peak = max(|x|)` within the analysis window.
+
 ## Validation
 
 - report.md contains all 11 mandatory sections in order
@@ -71,6 +78,7 @@ description: "Companion to analysis-report. Provides report.md structure for ana
 - Methodological Adaptation: comparison table present; all deviation rows have rationale
 - Comparison with Prior Studies: comparison table present with verdicts; inconsistencies explained
 - All numbers in Comparison table match Results section and Prior Studies section
+- Results tables follow `Sig-only` convention by default (no numeric `p`/`df` columns unless requested)
 
 ## Completion Checklist
 

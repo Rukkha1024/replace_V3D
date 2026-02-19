@@ -3,7 +3,7 @@
 Answers: "Do biomechanical variables differ between step and non-step
 balance recovery strategies under identical perturbation intensity?"
 
-Statistical method: Linear Mixed Model (LMM) with Satterthwaite df
+Statistical method: Linear Mixed Model (LMM) with lmerTest inference
   Model: DV ~ step_TF + (1|subject)
   Multiple comparison: Benjamini-Hochberg FDR per variable family
   Analysis window: [platform_onset, step_onset] per trial
@@ -478,26 +478,24 @@ def fit_lmm_all(trial_df: pd.DataFrame, specs: list[dict]) -> pd.DataFrame:
 
 def print_results_table(results: pd.DataFrame) -> None:
     """Print formatted LMM results to stdout."""
-    print("\n" + "=" * 110)
-    print("LMM Results: DV ~ step_TF + (1|subject), REML, Satterthwaite df")
-    print("=" * 110)
-    fmt = "{:<30s} {:<20s} {:>9s} {:>8s} {:>8s} {:>8s} {:>10s} {:>10s} {:>4s}"
-    print(fmt.format("DV", "Family", "Estimate", "SE", "df", "t", "p", "p_FDR", "Sig"))
-    print("-" * 110)
+    print("\n" + "=" * 90)
+    print("LMM Results: DV ~ step_TF + (1|subject), REML")
+    print("Sig rule: BH-FDR by family, alpha=0.05")
+    print("=" * 90)
+    fmt = "{:<30s} {:<20s} {:>9s} {:>8s} {:>8s} {:>5s}"
+    print(fmt.format("DV", "Family", "Estimate", "SE", "t", "Sig"))
+    print("-" * 90)
 
     for fam in [FAMILY_BALANCE, FAMILY_JOINT, FAMILY_FORCE]:
         sub = results[results["family"] == fam]
         for _, row in sub.iterrows():
             est = f"{row['estimate']:.4f}" if pd.notna(row["estimate"]) else "FAIL"
             se = f"{row['SE']:.4f}" if pd.notna(row["SE"]) else ""
-            df = f"{row['df']:.1f}" if pd.notna(row["df"]) else ""
             t = f"{row['t_value']:.3f}" if pd.notna(row["t_value"]) else ""
-            p = f"{row['p_value']:.4f}" if pd.notna(row["p_value"]) else ""
-            pfdr = f"{row['p_fdr']:.4f}" if pd.notna(row["p_fdr"]) else ""
-            sig = row["sig"]
+            sig = row["sig"] if row["sig"] else "n.s."
             fam_short = fam[:18]
-            print(fmt.format(row["dv"][:30], fam_short, est, se, df, t, p, pfdr, sig))
-        print("-" * 110)
+            print(fmt.format(row["dv"][:30], fam_short, est, se, t, sig))
+        print("-" * 90)
 
     n_sig = (results["sig"] != "").sum()
     n_total = len(results)
@@ -506,12 +504,12 @@ def print_results_table(results: pd.DataFrame) -> None:
     # Descriptive stats for significant variables
     sig_rows = results[results["sig"] != ""].sort_values("p_fdr")
     if not sig_rows.empty:
-        print("\n--- Significant Variables (FDR < 0.05) ---")
+        print("\n--- Significant Variables (BH-FDR Sig, alpha=0.05) ---")
         for _, row in sig_rows.iterrows():
             print(
                 f"  {row['dv']}: step={row['mean_step']:.4f}±{row['sd_step']:.4f}, "
                 f"nonstep={row['mean_nonstep']:.4f}±{row['sd_nonstep']:.4f}, "
-                f"p_FDR={row['p_fdr']:.4f} {row['sig']}"
+                f"sig={row['sig']}"
             )
 
 
@@ -614,8 +612,8 @@ def fig2_violin(trial_df: pd.DataFrame, results: pd.DataFrame, out_dir: Path, dp
         )
 
         r = results[results["dv"] == dv].iloc[0]
-        p_text = f"p_FDR={r['p_fdr']:.4f}" if pd.notna(r["p_fdr"]) else ""
-        ax.set_title(f"{dv}\n{p_text} {r['sig']}", fontsize=9, fontweight="bold")
+        sig_label = r["sig"] if r["sig"] else "n.s."
+        ax.set_title(f"{dv}\nSig: {sig_label}", fontsize=9, fontweight="bold")
         ax.set_xlabel("")
         ax.set_ylabel(dv, fontsize=8)
 
@@ -669,7 +667,7 @@ def fig3_heatmap(results: pd.DataFrame, out_dir: Path, dpi: int) -> None:
         ax.add_patch(plt.Rectangle((-0.3, i), 0.25, 1, color=color, clip_on=False, transform=ax.transData))
 
     ax.set_ylabel("")
-    ax.set_title("Group Mean Comparison (z-scored)\n* p_FDR<.05, ** <.01, *** <.001",
+    ax.set_title("Group Mean Comparison (z-scored)\nSig markers: *, **, *** (BH-FDR, alpha=0.05)",
                  fontsize=11, fontweight="bold")
 
     fig.tight_layout()
