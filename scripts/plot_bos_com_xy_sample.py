@@ -944,18 +944,29 @@ def resolve_gif_trial_state_line(trial_state_label: str | None) -> str:
     return text if text else "trial_type=unknown"
 
 
-def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes]:
+def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes, plt.Axes, plt.Axes, plt.Axes]:
     fig = plt.figure(figsize=GIF_FIGSIZE)
-    grid = fig.add_gridspec(1, 2, width_ratios=GIF_LAYOUT_WIDTH_RATIOS, wspace=GIF_LAYOUT_WSPACE)
-    ax_main = fig.add_subplot(grid[0, 0])
-    ax_side = fig.add_subplot(grid[0, 1])
-    ax_side.axis("off")
+    outer = fig.add_gridspec(1, 2, width_ratios=GIF_LAYOUT_WIDTH_RATIOS, wspace=GIF_LAYOUT_WSPACE)
+    ax_main = fig.add_subplot(outer[0, 0])
+
+    # 우측 패널을 4개 행으로 분할: [메타데이터, 상태텍스트, 범례, 타임라인]
+    inner = outer[0, 1].subgridspec(4, 1, height_ratios=[3, 3, 4, 2], hspace=0.05)
+    ax_meta   = fig.add_subplot(inner[0])
+    ax_status = fig.add_subplot(inner[1])
+    ax_legend = fig.add_subplot(inner[2])
+    ax_tl     = fig.add_subplot(inner[3])
+
+    for _ax in (ax_meta, ax_status, ax_legend, ax_tl):
+        _ax.axis("off")
+
     fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.88)
-    return fig, ax_main, ax_side
+    return fig, ax_main, ax_meta, ax_status, ax_legend, ax_tl
 
 
 def apply_gif_right_panel(
-    ax_side: plt.Axes,
+    ax_meta: plt.Axes,
+    ax_status: plt.Axes,
+    ax_legend: plt.Axes,
     *,
     has_xcom: bool,
     show_step_ghost: bool,
@@ -965,7 +976,7 @@ def apply_gif_right_panel(
     rotate_ccw_deg: int,
     trial_state_label: str | None,
 ) -> object:
-    # Top Metadata Box
+    # ── 1) Metadata (ax_meta 전용 셀) ──────────────────────────────────
     meta_text = (
         f"TRIAL METADATA\n"
         f"---------------------------------\n"
@@ -975,12 +986,11 @@ def apply_gif_right_panel(
         f"View            {f'CCW {rotate_ccw_deg}°':>15}\n"
         f"Trial Type      {str(trial_state_label).replace('trial_type=', ''):>15}\n"
     )
-
-    ax_side.text(
+    ax_meta.text(
         0.05,
-        0.98,
+        0.95,
         meta_text,
-        transform=ax_side.transAxes,
+        transform=ax_meta.transAxes,
         ha="left",
         va="top",
         fontsize=9,
@@ -989,12 +999,12 @@ def apply_gif_right_panel(
         bbox=dict(facecolor="#f9fafb", edgecolor="#e5e7eb", boxstyle="round,pad=0.5"),
     )
 
-    # Dynamic Status Text (placed below metadata)
-    status_text = ax_side.text(
+    # ── 2) Dynamic Status Text (ax_status 전용 셀) ─────────────────────
+    status_text = ax_status.text(
         0.05,
-        0.65,
+        0.95,
         "",
-        transform=ax_side.transAxes,
+        transform=ax_status.transAxes,
         ha="left",
         va="top",
         fontsize=9,
@@ -1002,10 +1012,11 @@ def apply_gif_right_panel(
         family="monospace",
     )
 
-    ax_side.legend(
+    # ── 3) Legend (ax_legend 전용 셀 — 셀 중앙에 자동 배치) ───────────
+    ax_legend.legend(
         handles=build_gif_legend_handles(has_xcom=has_xcom, show_step_ghost=show_step_ghost),
-        loc="center left",
-        bbox_to_anchor=(0.05, 0.40),
+        loc="center",
+        bbox_to_anchor=(0.5, 0.5),
         ncol=1,
         title="LEGEND",
         title_fontproperties={'weight': 'bold', 'size': 9},
@@ -1021,11 +1032,10 @@ def apply_gif_right_panel(
 
 
 def add_timeline_inset(
-    ax_side: plt.Axes,
+    ax_tl: plt.Axes,
     series: TrialSeries,
 ) -> tuple[Line2D, Line2D, object]:
-    """Add an elegant horizontal timeline strip at the bottom of ax_side."""
-    ax_tl = ax_side.inset_axes([0.05, 0.05, 0.90, 0.18])
+    """Render the horizontal timeline strip into the dedicated grid cell ax_tl."""
     first_frame = int(series.mocap_frame[0])
     last_frame = int(series.mocap_frame[-1])
     ax_tl.set_xlim(first_frame, last_frame)
@@ -1201,7 +1211,7 @@ def render_gif(
     if frame_indices[-1] != valid_indices[-1]:
         frame_indices = np.append(frame_indices, valid_indices[-1])
 
-    fig, ax, ax_side = create_gif_canvas()
+    fig, ax, ax_meta, ax_status, ax_legend, ax_tl = create_gif_canvas()
 
     bos_rect = Rectangle(
         (0.0, 0.0),
@@ -1292,7 +1302,9 @@ def render_gif(
     show_step_ghost = step_onset_idx is not None
 
     status_text = apply_gif_right_panel(
-        ax_side,
+        ax_meta,
+        ax_status,
+        ax_legend,
         has_xcom=has_xcom,
         show_step_ghost=show_step_ghost,
         subject=series.subject,
@@ -1304,7 +1316,7 @@ def render_gif(
 
     timeline_artists = None
     if step_vis != "none":
-        timeline_artists = add_timeline_inset(ax_side, series)
+        timeline_artists = add_timeline_inset(ax_tl, series)
 
     trail_pre: object | None = None
     trail_post: object | None = None
