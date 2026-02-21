@@ -54,24 +54,6 @@ _KO_FONT_CANDIDATES = (
 def configure_korean_font_for_matplotlib() -> None:
     """Configure Hangul-capable matplotlib font with graceful fallback."""
     plt.rcParams["axes.unicode_minus"] = False
-
-    # --- Academic Style rcParams Update ---
-    plt.rcParams.update({
-        "font.size": 9,
-        "axes.titlesize": 12,
-        "axes.labelsize": 10,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.grid": True,
-        "grid.color": "#e5e7eb",
-        "grid.linestyle": "-",
-        "grid.linewidth": 1.0,
-        "text.color": "#374151",
-        "axes.labelcolor": "#4b5563",
-        "xtick.color": "#6b7280",
-        "ytick.color": "#6b7280",
-    })
-
     tried = ", ".join(_KO_FONT_CANDIDATES)
     try:
         available = {font.name for font in matplotlib.font_manager.fontManager.ttflist}
@@ -108,17 +90,12 @@ GIF_LAYOUT_WIDTH_RATIOS = (3.0, 1.4)
 GIF_LAYOUT_WSPACE = 0.05
 XCOM_COLUMNS = ("xCOM_X", "xCOM_Y")
 
-# --- Academic Color Palette ---
-COLOR_BOS_FACE = "#475569"
-COLOR_BOS_EDGE = "#475569"
-COLOR_BOS_HULL = "#64748b"
+XCOM_TRAIL_COLOR = "teal"
+XCOM_INSIDE_COLOR = "teal"
+XCOM_OUTSIDE_COLOR = "mediumvioletred"
+XCOM_GHOST_COLOR = "purple"
+# Timeline 전용 색상 (add_timeline_inset에서 사용)
 COLOR_COM_TRAIL = "#1e3a8a"
-COLOR_COM_INSIDE = "#10b981"
-COLOR_COM_OUTSIDE = "#ef4444"
-XCOM_TRAIL_COLOR = "#991b1b"
-XCOM_INSIDE_COLOR = "#f87171"
-XCOM_OUTSIDE_COLOR = "#ef4444"
-XCOM_GHOST_COLOR = "#f97316"
 COLOR_STEP_GHOST = "#f97316"
 BOS_MARKERS_ALL = [
     "LHEE",
@@ -879,19 +856,41 @@ def compute_bos_polylines_from_c3d(
 
 def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[object]:
     handles: list[object] = [
-        Patch(facecolor=COLOR_BOS_FACE, edgecolor=COLOR_BOS_EDGE, alpha=0.15, label="Current BOS (BBox)"),
-        Line2D([0], [0], color=COLOR_BOS_HULL, lw=1.4, linestyle="--", label="BOS Hull"),
-        Line2D([0], [0], color=COLOR_COM_TRAIL, lw=2, label="COM Trajectory"),
+        Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
+        Line2D([0], [0], color="0.25", lw=1.4, linestyle="--", label="BOS hull (all-foot convex)"),
+        Line2D([0], [0], color="tab:purple", lw=1.4, label="BOS union (L/R hull)"),
+        Line2D([0], [0], color="tab:blue", lw=2, label="COM cumulative trajectory"),
         Line2D(
             [0],
             [0],
             marker="o",
             linestyle="None",
-            markerfacecolor=COLOR_COM_INSIDE,
-            markeredgecolor="#047857",
-            label="Current COM (Inside)",
+            markerfacecolor="tab:green",
+            markeredgecolor="black",
+            label="Current COM (inside)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            linestyle="None",
+            markerfacecolor="tab:red",
+            markeredgecolor="black",
+            label="Current COM (outside)",
         ),
     ]
+    if show_step_ghost:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="X",
+                linestyle="None",
+                markerfacecolor="darkorange",
+                markeredgecolor="black",
+                label="Step-onset COM ghost",
+            )
+        )
     if has_xcom:
         handles.extend(
             [
@@ -901,7 +900,16 @@ def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[o
                     color=XCOM_TRAIL_COLOR,
                     lw=2,
                     linestyle=":",
-                    label="xCOM Trajectory",
+                    label="xCOM cumulative trajectory",
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    marker="^",
+                    linestyle="None",
+                    markerfacecolor=XCOM_INSIDE_COLOR,
+                    markeredgecolor="black",
+                    label="Current xCOM (inside)",
                 ),
                 Line2D(
                     [0],
@@ -909,24 +917,23 @@ def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[o
                     marker="^",
                     linestyle="None",
                     markerfacecolor=XCOM_OUTSIDE_COLOR,
-                    markeredgecolor="#b91c1c",
-                    label="Current xCOM",
+                    markeredgecolor="black",
+                    label="Current xCOM (outside)",
                 ),
             ]
         )
-    if show_step_ghost:
-        handles.append(
-            Line2D(
-                [0],
-                [0],
-                marker="X",
-                linestyle="None",
-                color=COLOR_STEP_GHOST,
-                markerfacecolor=COLOR_STEP_GHOST,
-                markeredgecolor="none",
-                label="Step Onset Ghost",
+        if show_step_ghost:
+            handles.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker="X",
+                    linestyle="None",
+                    markerfacecolor=XCOM_GHOST_COLOR,
+                    markeredgecolor="black",
+                    label="Step-onset xCOM ghost",
+                )
             )
-        )
     return handles
 
 
@@ -1200,9 +1207,9 @@ def render_gif(
         (0.0, 0.0),
         width=1.0,
         height=1.0,
-        facecolor=COLOR_BOS_FACE,
-        edgecolor=COLOR_BOS_EDGE,
-        alpha=0.15,
+        facecolor="lightskyblue",
+        edgecolor="tab:blue",
+        alpha=0.25,
         linewidth=1.2,
         zorder=2,
     )
@@ -1211,9 +1218,9 @@ def render_gif(
     trail_line, = ax.plot(
         [],
         [],
-        color=COLOR_COM_TRAIL,
-        linewidth=2.5,
-        alpha=0.85,
+        color="tab:blue",
+        linewidth=2.0,
+        alpha=0.95,
         zorder=3,
     )
     current_point, = ax.plot(
@@ -1221,10 +1228,10 @@ def render_gif(
         [],
         marker="o",
         linestyle="None",
-        markersize=7,
-        markerfacecolor=COLOR_COM_INSIDE,
-        markeredgecolor="#047857",
-        markeredgewidth=1.0,
+        markersize=8.5,
+        markerfacecolor="tab:green",
+        markeredgecolor="black",
+        markeredgewidth=0.6,
         zorder=5,
     )
     xcom_trail_line: Line2D | None = None
@@ -1235,7 +1242,7 @@ def render_gif(
             [],
             color=XCOM_TRAIL_COLOR,
             linewidth=2.0,
-            alpha=0.7,
+            alpha=0.9,
             linestyle=":",
             zorder=3,
         )
@@ -1244,10 +1251,10 @@ def render_gif(
             [],
             marker="^",
             linestyle="None",
-            markersize=7,
-            markerfacecolor=XCOM_OUTSIDE_COLOR,
-            markeredgecolor="#b91c1c",
-            markeredgewidth=1.0,
+            markersize=8.5,
+            markerfacecolor=XCOM_INSIDE_COLOR,
+            markeredgecolor="black",
+            markeredgewidth=0.6,
             zorder=5,
         )
     bos_union_line = None
@@ -1256,17 +1263,17 @@ def render_gif(
         bos_union_line, = ax.plot(
             [],
             [],
-            color=COLOR_BOS_HULL,
-            linewidth=1.0,
-            alpha=0.4,
+            color="tab:purple",
+            linewidth=1.4,
+            alpha=0.9,
             zorder=4,
         )
         bos_hull_line, = ax.plot(
             [],
             [],
-            color=COLOR_BOS_HULL,
+            color="0.25",
             linewidth=1.4,
-            alpha=0.8,
+            alpha=0.9,
             linestyle="--",
             zorder=4,
         )
@@ -1305,8 +1312,8 @@ def render_gif(
     xcom_trail_post: object | None = None
     if step_vis in ("phase_trail", "phase_bos"):
         trail_line.set_visible(False)
-        (trail_pre,) = ax.plot([], [], color=COLOR_COM_TRAIL, linewidth=2.5, alpha=0.85, zorder=3)
-        (trail_post,) = ax.plot([], [], color=COLOR_COM_TRAIL, linewidth=2.5, alpha=0.85, zorder=3)
+        (trail_pre,) = ax.plot([], [], color="tab:blue", linewidth=2.0, alpha=0.95, zorder=3)
+        (trail_post,) = ax.plot([], [], color="tab:orange", linewidth=2.0, alpha=0.95, zorder=3)
         if xcom_trail_line is not None:
             xcom_trail_line.set_visible(False)
             (xcom_trail_pre,) = ax.plot(
@@ -1314,16 +1321,16 @@ def render_gif(
                 [],
                 color=XCOM_TRAIL_COLOR,
                 linewidth=2.0,
-                alpha=0.7,
+                alpha=0.9,
                 linestyle=":",
                 zorder=3,
             )
             (xcom_trail_post,) = ax.plot(
                 [],
                 [],
-                color=XCOM_TRAIL_COLOR,
+                color=XCOM_OUTSIDE_COLOR,
                 linewidth=2.0,
-                alpha=0.7,
+                alpha=0.9,
                 linestyle=":",
                 zorder=3,
             )
@@ -1342,21 +1349,22 @@ def render_gif(
             width=0.0,
             height=0.0,
             facecolor="none",
-            edgecolor=COLOR_STEP_GHOST,
+            edgecolor="darkorange",
             alpha=0.0,
-            linewidth=1.5,
+            linewidth=2.0,
             linestyle="--",
-            hatch="////",
             zorder=6,
         )
         ax.add_patch(ghost_bos_rect)
         (ghost_com_pt,) = ax.plot(
             [],
             [],
-            marker="x",
+            marker="X",
             linestyle="None",
-            markersize=8,
-            color=COLOR_STEP_GHOST,
+            markersize=9,
+            markerfacecolor="darkorange",
+            markeredgecolor="black",
+            markeredgewidth=0.8,
             alpha=0.0,
             zorder=7,
         )
@@ -1364,10 +1372,12 @@ def render_gif(
             (ghost_xcom_pt,) = ax.plot(
                 [],
                 [],
-                marker="x",
+                marker="X",
                 linestyle="None",
-                markersize=8,
-                color=COLOR_STEP_GHOST,
+                markersize=9,
+                markerfacecolor=XCOM_GHOST_COLOR,
+                markeredgecolor="black",
+                markeredgewidth=0.8,
                 alpha=0.0,
                 zorder=7,
             )
@@ -1375,8 +1385,8 @@ def render_gif(
             0.0,
             0.0,
             "",
-            fontsize=7,
-            color=COLOR_STEP_GHOST,
+            fontsize=6.5,
+            color="darkorange",
             ha="left",
             va="bottom",
             zorder=8,
@@ -1386,16 +1396,16 @@ def render_gif(
             (ghost_bos_union_line,) = ax.plot(
                 [],
                 [],
-                color=COLOR_STEP_GHOST,
+                color="tab:purple",
                 linewidth=1.0,
                 alpha=0.0,
-                linestyle=":",
+                linestyle="--",
                 zorder=5,
             )
             (ghost_bos_hull_line,) = ax.plot(
                 [],
                 [],
-                color=COLOR_STEP_GHOST,
+                color="0.45",
                 linewidth=1.0,
                 alpha=0.0,
                 linestyle=":",
@@ -1406,17 +1416,15 @@ def render_gif(
     ax.set_xlim(*x_lim)
     ax.set_ylim(*y_lim)
     ax.set_aspect("equal", adjustable="box")
-    ax.grid(True, linewidth=1.0, alpha=0.5, color="#e5e7eb")
-    ax.set_xlabel("X (m) [- Left / + Right]", fontweight="bold")
-    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]", fontweight="bold")
-
+    ax.grid(True, linewidth=0.4, alpha=0.55)
+    ax.set_xlabel("X (m) [- Left / + Right]")
+    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
     gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
-    main_title = "Kinematic Trajectory of COM and xCOM relative to BOS" if has_xcom else "Kinematic Trajectory of COM relative to BOS"
-    sub_desc = f"Figure 1. Frame-by-frame analysis of center of mass dynamics. ({gif_trial_state_line})"
+    main_title = "BOS + COM/xCOM XY animation" if has_xcom else "BOS + COM XY animation"
     set_title_and_subtitle(
         ax,
         title=main_title,
-        subtitle=sub_desc,
+        subtitle=gif_trial_state_line,
     )
 
     valid_count = int(valid_indices.size)
@@ -1528,21 +1536,21 @@ def render_gif(
         if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
             if idx == step_onset_idx:
                 # 정확히 step_onset 프레임: 강한 빨강으로 flash
-                bos_rect.set_facecolor(COLOR_COM_OUTSIDE)
-                bos_rect.set_edgecolor(COLOR_COM_OUTSIDE)
-                bos_rect.set_alpha(0.3)
-                bos_rect.set_linewidth(2.0)
+                bos_rect.set_facecolor("tomato")
+                bos_rect.set_edgecolor("red")
+                bos_rect.set_alpha(0.65)
+                bos_rect.set_linewidth(3.0)
             elif idx > step_onset_idx:
                 # step_onset 이후: 주황색 유지
-                bos_rect.set_facecolor(COLOR_STEP_GHOST)
-                bos_rect.set_edgecolor(COLOR_STEP_GHOST)
-                bos_rect.set_alpha(0.15)
-                bos_rect.set_linewidth(1.5)
+                bos_rect.set_facecolor("moccasin")
+                bos_rect.set_edgecolor("tab:orange")
+                bos_rect.set_alpha(0.40)
+                bos_rect.set_linewidth(2.0)
             else:
-                # step_onset 이전: 기본 회파란색
-                bos_rect.set_facecolor(COLOR_BOS_FACE)
-                bos_rect.set_edgecolor(COLOR_BOS_EDGE)
-                bos_rect.set_alpha(0.15)
+                # step_onset 이전: 기본 파란색
+                bos_rect.set_facecolor("lightskyblue")
+                bos_rect.set_edgecolor("tab:blue")
+                bos_rect.set_alpha(0.25)
                 bos_rect.set_linewidth(1.2)
         # ---- end step_vis per-frame ----
 
@@ -1556,11 +1564,11 @@ def render_gif(
                 ghost_bos_rect.set_xy((g_minx, g_miny))
                 ghost_bos_rect.set_width(g_maxx - g_minx)
                 ghost_bos_rect.set_height(g_maxy - g_miny)
-                ghost_bos_rect.set_alpha(0.4)
+                ghost_bos_rect.set_alpha(0.75)
                 g_cx = float(display.com_x[step_onset_idx])
                 g_cy = float(display.com_y[step_onset_idx])
                 ghost_com_pt.set_data([g_cx], [g_cy])
-                ghost_com_pt.set_alpha(0.8)
+                ghost_com_pt.set_alpha(1.0)
                 if (
                     ghost_xcom_pt is not None
                     and series.xcom_valid_mask is not None
@@ -1571,26 +1579,26 @@ def render_gif(
                     gx_xcom = float(display.xcom_x[step_onset_idx])
                     gy_xcom = float(display.xcom_y[step_onset_idx])
                     ghost_xcom_pt.set_data([gx_xcom], [gy_xcom])
-                    ghost_xcom_pt.set_alpha(0.8)
+                    ghost_xcom_pt.set_alpha(1.0)
                 elif ghost_xcom_pt is not None:
                     ghost_xcom_pt.set_data([], [])
                     ghost_xcom_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
-                    ghost_label.set_text(f"Step @ Frame {int(series.mocap_frame[step_onset_idx])}")
+                    ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
                     ghost_label.set_visible(True)
                 if ghost_bos_union_line is not None and bos_polylines is not None:
                     ghost_bos_union_line.set_data(
                         bos_polylines.union_x[step_onset_idx],
                         bos_polylines.union_y[step_onset_idx],
                     )
-                    ghost_bos_union_line.set_alpha(0.3)
+                    ghost_bos_union_line.set_alpha(0.5)
                 if ghost_bos_hull_line is not None and bos_polylines is not None:
                     ghost_bos_hull_line.set_data(
                         bos_polylines.hull_x[step_onset_idx],
                         bos_polylines.hull_y[step_onset_idx],
                     )
-                    ghost_bos_hull_line.set_alpha(0.3)
+                    ghost_bos_hull_line.set_alpha(0.5)
             else:
                 ghost_bos_rect.set_alpha(0.0)
                 ghost_com_pt.set_alpha(0.0)
