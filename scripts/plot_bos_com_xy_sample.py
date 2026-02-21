@@ -54,6 +54,24 @@ _KO_FONT_CANDIDATES = (
 def configure_korean_font_for_matplotlib() -> None:
     """Configure Hangul-capable matplotlib font with graceful fallback."""
     plt.rcParams["axes.unicode_minus"] = False
+
+    # --- Academic Style rcParams Update ---
+    plt.rcParams.update({
+        "font.size": 9,
+        "axes.titlesize": 12,
+        "axes.labelsize": 10,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.grid": True,
+        "grid.color": "#e5e7eb",
+        "grid.linestyle": "-",
+        "grid.linewidth": 1.0,
+        "text.color": "#374151",
+        "axes.labelcolor": "#4b5563",
+        "xtick.color": "#6b7280",
+        "ytick.color": "#6b7280",
+    })
+
     tried = ", ".join(_KO_FONT_CANDIDATES)
     try:
         available = {font.name for font in matplotlib.font_manager.fontManager.ttflist}
@@ -85,14 +103,23 @@ DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
 RIGHT1COL_SUFFIX = "right1col"
 STEP_VIS_TEMPLATES = ("phase_trail", "bos_phase", "star_only", "phase_bos")
 TRIAL_KEYS = ["subject", "velocity", "trial"]
-GIF_FIGSIZE = (8.2, 8.0)
-GIF_LAYOUT_WIDTH_RATIOS = (3.45, 1.15)
+GIF_FIGSIZE = (9.5, 6.5)
+GIF_LAYOUT_WIDTH_RATIOS = (3.0, 1.4)
 GIF_LAYOUT_WSPACE = 0.05
 XCOM_COLUMNS = ("xCOM_X", "xCOM_Y")
-XCOM_TRAIL_COLOR = "teal"
-XCOM_INSIDE_COLOR = "teal"
-XCOM_OUTSIDE_COLOR = "mediumvioletred"
-XCOM_GHOST_COLOR = "purple"
+
+# --- Academic Color Palette ---
+COLOR_BOS_FACE = "#475569"
+COLOR_BOS_EDGE = "#475569"
+COLOR_BOS_HULL = "#64748b"
+COLOR_COM_TRAIL = "#1e3a8a"
+COLOR_COM_INSIDE = "#10b981"
+COLOR_COM_OUTSIDE = "#ef4444"
+XCOM_TRAIL_COLOR = "#991b1b"
+XCOM_INSIDE_COLOR = "#f87171"
+XCOM_OUTSIDE_COLOR = "#ef4444"
+XCOM_GHOST_COLOR = "#f97316"
+COLOR_STEP_GHOST = "#f97316"
 BOS_MARKERS_ALL = [
     "LHEE",
     "LTOE",
@@ -852,41 +879,19 @@ def compute_bos_polylines_from_c3d(
 
 def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[object]:
     handles: list[object] = [
-        Patch(facecolor="lightskyblue", edgecolor="tab:blue", alpha=0.25, label="Current BOS (bbox)"),
-        Line2D([0], [0], color="0.25", lw=1.4, linestyle="--", label="BOS hull (all-foot convex)"),
-        Line2D([0], [0], color="tab:purple", lw=1.4, label="BOS union (L/R hull)"),
-        Line2D([0], [0], color="tab:blue", lw=2, label="COM cumulative trajectory"),
+        Patch(facecolor=COLOR_BOS_FACE, edgecolor=COLOR_BOS_EDGE, alpha=0.15, label="Current BOS (BBox)"),
+        Line2D([0], [0], color=COLOR_BOS_HULL, lw=1.4, linestyle="--", label="BOS Hull"),
+        Line2D([0], [0], color=COLOR_COM_TRAIL, lw=2, label="COM Trajectory"),
         Line2D(
             [0],
             [0],
             marker="o",
             linestyle="None",
-            markerfacecolor="tab:green",
-            markeredgecolor="black",
-            label="Current COM (inside)",
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            linestyle="None",
-            markerfacecolor="tab:red",
-            markeredgecolor="black",
-            label="Current COM (outside)",
+            markerfacecolor=COLOR_COM_INSIDE,
+            markeredgecolor="#047857",
+            label="Current COM (Inside)",
         ),
     ]
-    if show_step_ghost:
-        handles.append(
-            Line2D(
-                [0],
-                [0],
-                marker="X",
-                linestyle="None",
-                markerfacecolor="darkorange",
-                markeredgecolor="black",
-                label="Step-onset COM ghost",
-            )
-        )
     if has_xcom:
         handles.extend(
             [
@@ -896,16 +901,7 @@ def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[o
                     color=XCOM_TRAIL_COLOR,
                     lw=2,
                     linestyle=":",
-                    label="xCOM cumulative trajectory",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    marker="^",
-                    linestyle="None",
-                    markerfacecolor=XCOM_INSIDE_COLOR,
-                    markeredgecolor="black",
-                    label="Current xCOM (inside)",
+                    label="xCOM Trajectory",
                 ),
                 Line2D(
                     [0],
@@ -913,23 +909,24 @@ def build_gif_legend_handles(*, has_xcom: bool, show_step_ghost: bool) -> list[o
                     marker="^",
                     linestyle="None",
                     markerfacecolor=XCOM_OUTSIDE_COLOR,
-                    markeredgecolor="black",
-                    label="Current xCOM (outside)",
+                    markeredgecolor="#b91c1c",
+                    label="Current xCOM",
                 ),
             ]
         )
-        if show_step_ghost:
-            handles.append(
-                Line2D(
-                    [0],
-                    [0],
-                    marker="X",
-                    linestyle="None",
-                    markerfacecolor=XCOM_GHOST_COLOR,
-                    markeredgecolor="black",
-                    label="Step-onset xCOM ghost",
-                )
+    if show_step_ghost:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="X",
+                linestyle="None",
+                color=COLOR_STEP_GHOST,
+                markerfacecolor=COLOR_STEP_GHOST,
+                markeredgecolor="none",
+                label="Step Onset Ghost",
             )
+        )
     return handles
 
 
@@ -946,68 +943,126 @@ def create_gif_canvas() -> tuple[plt.Figure, plt.Axes, plt.Axes]:
     ax_main = fig.add_subplot(grid[0, 0])
     ax_side = fig.add_subplot(grid[0, 1])
     ax_side.axis("off")
-    fig.subplots_adjust(left=0.08, right=0.985, bottom=0.085, top=0.88)
+    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.1, top=0.88)
     return fig, ax_main, ax_side
 
 
-def apply_gif_right_panel(ax_side: plt.Axes, *, has_xcom: bool, show_step_ghost: bool) -> object:
-    info_text = ax_side.text(
-        0.02,
+def apply_gif_right_panel(
+    ax_side: plt.Axes,
+    *,
+    has_xcom: bool,
+    show_step_ghost: bool,
+    subject: str,
+    velocity: float,
+    trial: int,
+    rotate_ccw_deg: int,
+    trial_state_label: str | None,
+) -> object:
+    # Top Metadata Box
+    meta_text = (
+        f"TRIAL METADATA\n"
+        f"---------------------------------\n"
+        f"Subject         {subject:>15}\n"
+        f"Velocity        {velocity:>11.2f} m/s\n"
+        f"Trial           {trial:>15}\n"
+        f"View            {f'CCW {rotate_ccw_deg}°':>15}\n"
+        f"Trial Type      {str(trial_state_label).replace('trial_type=', ''):>15}\n"
+    )
+
+    ax_side.text(
+        0.05,
         0.98,
+        meta_text,
+        transform=ax_side.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+        color="#374151",
+        family="monospace",
+        bbox=dict(facecolor="#f9fafb", edgecolor="#e5e7eb", boxstyle="round,pad=0.5"),
+    )
+
+    # Dynamic Status Text (placed below metadata)
+    status_text = ax_side.text(
+        0.05,
+        0.65,
         "",
         transform=ax_side.transAxes,
         ha="left",
         va="top",
         fontsize=9,
-        bbox={"facecolor": "white", "alpha": 0.86, "edgecolor": "0.7"},
+        color="#374151",
+        family="monospace",
     )
+
     ax_side.legend(
         handles=build_gif_legend_handles(has_xcom=has_xcom, show_step_ghost=show_step_ghost),
-        loc="lower left",
-        bbox_to_anchor=(0.02, 0.02),
+        loc="center left",
+        bbox_to_anchor=(0.05, 0.40),
         ncol=1,
+        title="LEGEND",
+        title_fontproperties={'weight': 'bold', 'size': 9},
         fontsize=8,
         frameon=True,
-        borderaxespad=0.25,
+        facecolor="white",
+        edgecolor="#e5e7eb",
+        borderaxespad=0.0,
         handlelength=2.0,
         columnspacing=0.9,
     )
-    return info_text
+    return status_text
 
 
 def add_timeline_inset(
     ax_side: plt.Axes,
     series: TrialSeries,
-) -> Line2D:
-    """Add a horizontal timeline strip at the bottom of ax_side.
-
-    Marks platform_onset, step_onset, platform_offset as vertical lines.
-    Returns the animated cursor Line2D that must be updated each frame via
-    cursor_line.set_xdata([frame_value, frame_value]).
-    """
-    ax_tl = ax_side.inset_axes([0.04, 0.37, 0.92, 0.12])
+) -> tuple[Line2D, Line2D, object]:
+    """Add an elegant horizontal timeline strip at the bottom of ax_side."""
+    ax_tl = ax_side.inset_axes([0.05, 0.05, 0.90, 0.18])
     first_frame = int(series.mocap_frame[0])
     last_frame = int(series.mocap_frame[-1])
     ax_tl.set_xlim(first_frame, last_frame)
     ax_tl.set_ylim(0.0, 1.0)
     ax_tl.axis("off")
-    # Base bar
-    ax_tl.axhline(0.5, color="0.55", linewidth=2.5, solid_capstyle="round")
-    # Platform onset/offset
-    ax_tl.axvline(series.platform_onset_local, color="0.40", linewidth=1.3, linestyle="--")
-    ax_tl.axvline(series.platform_offset_local, color="0.40", linewidth=1.3, linestyle="--")
-    ax_tl.text(series.platform_onset_local, 0.12, "on", fontsize=5,
-               ha="center", va="bottom", color="0.40")
-    ax_tl.text(series.platform_offset_local, 0.12, "off", fontsize=5,
-               ha="center", va="bottom", color="0.40")
-    # Step onset (orange)
+
+    ax_tl.text(0.0, 1.0, "EVENT TIMELINE", transform=ax_tl.transAxes,
+               fontsize=9, fontweight="bold", color="#9ca3af", ha="left", va="top")
+
+    # 배경 트랙 및 진행 바의 기준 Y 좌표를 0.5로 설정하여 가운데로 맞춤
+    y_base = 0.5
+    ax_tl.plot([first_frame, last_frame], [y_base, y_base], color="#e5e7eb", linewidth=6, solid_capstyle="round", zorder=1)
+    prog_line, = ax_tl.plot([first_frame, first_frame], [y_base, y_base], color=COLOR_COM_TRAIL, linewidth=6, solid_capstyle="round", zorder=2)
+
+    # 1. Platform Onset
+    ax_tl.plot([series.platform_onset_local]*2, [y_base, 0.75], color="#9ca3af", linewidth=1.0, linestyle="--", zorder=3)
+    ax_tl.plot([series.platform_onset_local], [y_base], marker="o", color="#9ca3af", markersize=4, zorder=4)
+    ax_tl.text(series.platform_onset_local, 0.85, "On", fontsize=8, fontweight="bold", color="#4b5563", ha="center", va="center", zorder=5)
+
+    # 2. Platform Offset
+    ax_tl.plot([series.platform_offset_local]*2, [y_base, 0.75], color="#9ca3af", linewidth=1.0, linestyle="--", zorder=3)
+    ax_tl.plot([series.platform_offset_local], [y_base], marker="o", color="#9ca3af", markersize=4, zorder=4)
+    ax_tl.text(series.platform_offset_local, 0.85, "Off", fontsize=8, fontweight="bold", color="#4b5563", ha="center", va="center", zorder=5)
+
+    # 3. Step Onset (Orange)
     if series.step_onset_local is not None:
-        ax_tl.axvline(int(series.step_onset_local), color="tab:orange", linewidth=2.5)
-        ax_tl.text(int(series.step_onset_local), 0.85, "step", fontsize=5,
-                   ha="center", va="top", color="tab:orange", fontweight="bold")
-    # Animated cursor (blue vertical line)
-    cursor_line = ax_tl.axvline(first_frame, color="tab:blue", linewidth=1.8, alpha=0.85)
-    return cursor_line
+        step_val = int(series.step_onset_local)
+        ax_tl.plot([step_val]*2, [y_base, 0.8], color=COLOR_STEP_GHOST, linewidth=2.0, zorder=3)
+        ax_tl.plot([step_val], [y_base], marker="o", color=COLOR_STEP_GHOST, markersize=5, zorder=4)
+        ax_tl.text(step_val, 0.95, "Step", fontsize=9, fontweight="bold", color=COLOR_STEP_GHOST,
+                   ha="center", va="center", zorder=6,
+                   bbox=dict(facecolor="white", edgecolor="none", pad=1.0, alpha=0.8))
+
+    # 4. Animated Cursor (Diamond) and Text Bubble
+    cursor_marker, = ax_tl.plot([first_frame], [y_base], marker="D", color=COLOR_COM_TRAIL, markersize=5, zorder=7)
+    cursor_text = ax_tl.text(first_frame, 0.15, f"Curr: {first_frame}", fontsize=8, fontweight="bold", color="white",
+                             ha="center", va="center", zorder=8,
+                             bbox=dict(facecolor=COLOR_COM_TRAIL, edgecolor="none", boxstyle="round,pad=0.3"))
+
+    # 하단 프레임 제한 표시
+    ax_tl.text(0.0, -0.1, f"Frame {first_frame}", transform=ax_tl.transAxes, fontsize=8, color="#6b7280", ha="left", va="top")
+    ax_tl.text(1.0, -0.1, f"Frame {last_frame}", transform=ax_tl.transAxes, fontsize=8, color="#6b7280", ha="right", va="top")
+
+    return prog_line, cursor_marker, cursor_text
 
 
 def _collect_finite_polyline_values(polylines: list[np.ndarray], valid_mask: np.ndarray) -> np.ndarray:
@@ -1145,9 +1200,9 @@ def render_gif(
         (0.0, 0.0),
         width=1.0,
         height=1.0,
-        facecolor="lightskyblue",
-        edgecolor="tab:blue",
-        alpha=0.25,
+        facecolor=COLOR_BOS_FACE,
+        edgecolor=COLOR_BOS_EDGE,
+        alpha=0.15,
         linewidth=1.2,
         zorder=2,
     )
@@ -1156,9 +1211,9 @@ def render_gif(
     trail_line, = ax.plot(
         [],
         [],
-        color="tab:blue",
-        linewidth=2.0,
-        alpha=0.95,
+        color=COLOR_COM_TRAIL,
+        linewidth=2.5,
+        alpha=0.85,
         zorder=3,
     )
     current_point, = ax.plot(
@@ -1166,10 +1221,10 @@ def render_gif(
         [],
         marker="o",
         linestyle="None",
-        markersize=8.5,
-        markerfacecolor="tab:green",
-        markeredgecolor="black",
-        markeredgewidth=0.6,
+        markersize=7,
+        markerfacecolor=COLOR_COM_INSIDE,
+        markeredgecolor="#047857",
+        markeredgewidth=1.0,
         zorder=5,
     )
     xcom_trail_line: Line2D | None = None
@@ -1180,7 +1235,7 @@ def render_gif(
             [],
             color=XCOM_TRAIL_COLOR,
             linewidth=2.0,
-            alpha=0.9,
+            alpha=0.7,
             linestyle=":",
             zorder=3,
         )
@@ -1189,10 +1244,10 @@ def render_gif(
             [],
             marker="^",
             linestyle="None",
-            markersize=8.5,
-            markerfacecolor=XCOM_INSIDE_COLOR,
-            markeredgecolor="black",
-            markeredgewidth=0.6,
+            markersize=7,
+            markerfacecolor=XCOM_OUTSIDE_COLOR,
+            markeredgecolor="#b91c1c",
+            markeredgewidth=1.0,
             zorder=5,
         )
     bos_union_line = None
@@ -1201,17 +1256,17 @@ def render_gif(
         bos_union_line, = ax.plot(
             [],
             [],
-            color="tab:purple",
-            linewidth=1.4,
-            alpha=0.9,
+            color=COLOR_BOS_HULL,
+            linewidth=1.0,
+            alpha=0.4,
             zorder=4,
         )
         bos_hull_line, = ax.plot(
             [],
             [],
-            color="0.25",
+            color=COLOR_BOS_HULL,
             linewidth=1.4,
-            alpha=0.9,
+            alpha=0.8,
             linestyle="--",
             zorder=4,
         )
@@ -1228,15 +1283,21 @@ def render_gif(
                 step_onset_idx = int(_after[0])
 
     show_step_ghost = step_onset_idx is not None
-    info_text = apply_gif_right_panel(
+
+    status_text = apply_gif_right_panel(
         ax_side,
         has_xcom=has_xcom,
         show_step_ghost=show_step_ghost,
+        subject=series.subject,
+        velocity=series.velocity,
+        trial=series.trial,
+        rotate_ccw_deg=display.rotate_ccw_deg,
+        trial_state_label=trial_state_label,
     )
 
-    timeline_cursor: Line2D | None = None
+    timeline_artists = None
     if step_vis != "none":
-        timeline_cursor = add_timeline_inset(ax_side, series)
+        timeline_artists = add_timeline_inset(ax_side, series)
 
     trail_pre: object | None = None
     trail_post: object | None = None
@@ -1244,8 +1305,8 @@ def render_gif(
     xcom_trail_post: object | None = None
     if step_vis in ("phase_trail", "phase_bos"):
         trail_line.set_visible(False)
-        (trail_pre,) = ax.plot([], [], color="tab:blue", linewidth=2.0, alpha=0.95, zorder=3)
-        (trail_post,) = ax.plot([], [], color="tab:orange", linewidth=2.0, alpha=0.95, zorder=3)
+        (trail_pre,) = ax.plot([], [], color=COLOR_COM_TRAIL, linewidth=2.5, alpha=0.85, zorder=3)
+        (trail_post,) = ax.plot([], [], color=COLOR_COM_TRAIL, linewidth=2.5, alpha=0.85, zorder=3)
         if xcom_trail_line is not None:
             xcom_trail_line.set_visible(False)
             (xcom_trail_pre,) = ax.plot(
@@ -1253,16 +1314,16 @@ def render_gif(
                 [],
                 color=XCOM_TRAIL_COLOR,
                 linewidth=2.0,
-                alpha=0.9,
+                alpha=0.7,
                 linestyle=":",
                 zorder=3,
             )
             (xcom_trail_post,) = ax.plot(
                 [],
                 [],
-                color=XCOM_OUTSIDE_COLOR,
+                color=XCOM_TRAIL_COLOR,
                 linewidth=2.0,
-                alpha=0.9,
+                alpha=0.7,
                 linestyle=":",
                 zorder=3,
             )
@@ -1281,22 +1342,21 @@ def render_gif(
             width=0.0,
             height=0.0,
             facecolor="none",
-            edgecolor="darkorange",
+            edgecolor=COLOR_STEP_GHOST,
             alpha=0.0,
-            linewidth=2.0,
+            linewidth=1.5,
             linestyle="--",
+            hatch="////",
             zorder=6,
         )
         ax.add_patch(ghost_bos_rect)
         (ghost_com_pt,) = ax.plot(
             [],
             [],
-            marker="X",
+            marker="x",
             linestyle="None",
-            markersize=9,
-            markerfacecolor="darkorange",
-            markeredgecolor="black",
-            markeredgewidth=0.8,
+            markersize=8,
+            color=COLOR_STEP_GHOST,
             alpha=0.0,
             zorder=7,
         )
@@ -1304,12 +1364,10 @@ def render_gif(
             (ghost_xcom_pt,) = ax.plot(
                 [],
                 [],
-                marker="X",
+                marker="x",
                 linestyle="None",
-                markersize=9,
-                markerfacecolor=XCOM_GHOST_COLOR,
-                markeredgecolor="black",
-                markeredgewidth=0.8,
+                markersize=8,
+                color=COLOR_STEP_GHOST,
                 alpha=0.0,
                 zorder=7,
             )
@@ -1317,8 +1375,8 @@ def render_gif(
             0.0,
             0.0,
             "",
-            fontsize=6.5,
-            color="darkorange",
+            fontsize=7,
+            color=COLOR_STEP_GHOST,
             ha="left",
             va="bottom",
             zorder=8,
@@ -1328,16 +1386,16 @@ def render_gif(
             (ghost_bos_union_line,) = ax.plot(
                 [],
                 [],
-                color="tab:purple",
+                color=COLOR_STEP_GHOST,
                 linewidth=1.0,
                 alpha=0.0,
-                linestyle="--",
+                linestyle=":",
                 zorder=5,
             )
             (ghost_bos_hull_line,) = ax.plot(
                 [],
                 [],
-                color="0.45",
+                color=COLOR_STEP_GHOST,
                 linewidth=1.0,
                 alpha=0.0,
                 linestyle=":",
@@ -1348,37 +1406,23 @@ def render_gif(
     ax.set_xlim(*x_lim)
     ax.set_ylim(*y_lim)
     ax.set_aspect("equal", adjustable="box")
-    ax.grid(True, linewidth=0.4, alpha=0.55)
-    ax.set_xlabel("X (m) [- Left / + Right]")
-    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
+    ax.grid(True, linewidth=1.0, alpha=0.5, color="#e5e7eb")
+    ax.set_xlabel("X (m) [- Left / + Right]", fontweight="bold")
+    ax.set_ylabel("Y (m) [+ Anterior / - Posterior]", fontweight="bold")
+
     gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
-    main_title = "BOS + COM/xCOM XY animation" if has_xcom else "BOS + COM XY animation"
+    main_title = "Kinematic Trajectory of COM and xCOM relative to BOS" if has_xcom else "Kinematic Trajectory of COM relative to BOS"
+    sub_desc = f"Figure 1. Frame-by-frame analysis of center of mass dynamics. ({gif_trial_state_line})"
     set_title_and_subtitle(
         ax,
         title=main_title,
-        subtitle=gif_trial_state_line,
+        subtitle=sub_desc,
     )
 
     valid_count = int(valid_indices.size)
     inside_count = int(np.count_nonzero(series.inside_mask[valid_indices]))
     outside_count = valid_count - inside_count
     inside_ratio = 100.0 * inside_count / valid_count
-    panel_header = (
-        f"subject={series.subject}\n"
-        f"velocity={format_velocity(series.velocity)}, trial={series.trial}\n"
-        f"view=CCW{display.rotate_ccw_deg}\n"
-        "bos_mode=live"
-    )
-
-    def event_state(frame_value: int) -> str:
-        labels: list[str] = []
-        if frame_value == int(series.platform_onset_local):
-            labels.append("platform_onset")
-        if frame_value == int(series.platform_offset_local):
-            labels.append("platform_offset")
-        if series.step_onset_local is not None and frame_value == int(series.step_onset_local):
-            labels.append("step_onset")
-        return ",".join(labels) if labels else "-"
 
     def update(frame_no: int):
         idx = int(frame_indices[frame_no])
@@ -1413,7 +1457,6 @@ def render_gif(
                 xcom_current_point.set_alpha(0.0)
 
         bos_idx = idx
-        bos_state = "live(no-freeze)"
 
         min_x = float(display.bos_minx[bos_idx])
         max_x = float(display.bos_maxx[bos_idx])
@@ -1433,24 +1476,33 @@ def render_gif(
             )
 
         local_idx = frame_no + 1
-        time_info = f"frame_local={local_idx}/{frame_indices.size}"
-        if series.time_from_onset_s is not None and np.isfinite(series.time_from_onset_s[idx]):
-            time_info = f"t={series.time_from_onset_s[idx]:.3f} s"
 
-        info_text.set_text(
-            f"{panel_header}\n\n"
-            f"frame_local={local_idx}/{frame_indices.size}\n"
-            f"{time_info}\n"
-            f"status={'inside' if is_inside else 'outside'}\n"
-            f"event={event_state(frame_value)}\n"
-            f"bos={bos_state}\n"
-            f"inside ratio={inside_ratio:.1f}% ({inside_count}/{valid_count})\n"
-            f"outside={outside_count}"
+        t_onset = ""
+        if series.time_from_onset_s is not None and np.isfinite(series.time_from_onset_s[idx]):
+            t_onset = f"Time from Onset {series.time_from_onset_s[idx]:.3f}s\n"
+
+        xcom_status_str = ""
+        if has_xcom and series.xcom_valid_mask is not None and bool(series.xcom_valid_mask[idx]):
+            xcom_in = bool(series.xcom_inside_mask[idx]) if series.xcom_inside_mask is not None else True
+            xcom_status_str = f"xCOM Status     {'Inside' if xcom_in else 'Outside'}\n"
+
+        status_text.set_text(
+            f"CURRENT FRAME INFO\n"
+            f"---------------------------------\n"
+            f"Frame Local     {local_idx}/{frame_indices.size}\n"
+            f"{t_onset}"
+            f"COM Status      {'Inside' if is_inside else 'Outside'}\n"
+            f"{xcom_status_str}\n"
+            f"Inside Ratio    {inside_ratio:.1f}%"
         )
 
         # ---- step_vis per-frame updates ----
-        if timeline_cursor is not None:
-            timeline_cursor.set_xdata([frame_value, frame_value])
+        if timeline_artists is not None:
+            prog_line, cursor_marker, cursor_text = timeline_artists
+            prog_line.set_data([int(series.mocap_frame[0]), frame_value], [0.5, 0.5])
+            cursor_marker.set_data([frame_value], [0.5])
+            cursor_text.set_position((frame_value, 0.15))
+            cursor_text.set_text(f"Curr: {frame_value}")
 
         if trail_pre is not None and trail_post is not None:
             pre_hist = history[history <= step_onset_idx] if step_onset_idx is not None else history
@@ -1476,21 +1528,21 @@ def render_gif(
         if step_vis in ("bos_phase", "phase_bos") and step_onset_idx is not None:
             if idx == step_onset_idx:
                 # 정확히 step_onset 프레임: 강한 빨강으로 flash
-                bos_rect.set_facecolor("tomato")
-                bos_rect.set_edgecolor("red")
-                bos_rect.set_alpha(0.65)
-                bos_rect.set_linewidth(3.0)
+                bos_rect.set_facecolor(COLOR_COM_OUTSIDE)
+                bos_rect.set_edgecolor(COLOR_COM_OUTSIDE)
+                bos_rect.set_alpha(0.3)
+                bos_rect.set_linewidth(2.0)
             elif idx > step_onset_idx:
                 # step_onset 이후: 주황색 유지
-                bos_rect.set_facecolor("moccasin")
-                bos_rect.set_edgecolor("tab:orange")
-                bos_rect.set_alpha(0.40)
-                bos_rect.set_linewidth(2.0)
+                bos_rect.set_facecolor(COLOR_STEP_GHOST)
+                bos_rect.set_edgecolor(COLOR_STEP_GHOST)
+                bos_rect.set_alpha(0.15)
+                bos_rect.set_linewidth(1.5)
             else:
-                # step_onset 이전: 기본 파란색
-                bos_rect.set_facecolor("lightskyblue")
-                bos_rect.set_edgecolor("tab:blue")
-                bos_rect.set_alpha(0.25)
+                # step_onset 이전: 기본 회파란색
+                bos_rect.set_facecolor(COLOR_BOS_FACE)
+                bos_rect.set_edgecolor(COLOR_BOS_EDGE)
+                bos_rect.set_alpha(0.15)
                 bos_rect.set_linewidth(1.2)
         # ---- end step_vis per-frame ----
 
@@ -1504,11 +1556,11 @@ def render_gif(
                 ghost_bos_rect.set_xy((g_minx, g_miny))
                 ghost_bos_rect.set_width(g_maxx - g_minx)
                 ghost_bos_rect.set_height(g_maxy - g_miny)
-                ghost_bos_rect.set_alpha(0.75)
+                ghost_bos_rect.set_alpha(0.4)
                 g_cx = float(display.com_x[step_onset_idx])
                 g_cy = float(display.com_y[step_onset_idx])
                 ghost_com_pt.set_data([g_cx], [g_cy])
-                ghost_com_pt.set_alpha(1.0)
+                ghost_com_pt.set_alpha(0.8)
                 if (
                     ghost_xcom_pt is not None
                     and series.xcom_valid_mask is not None
@@ -1519,26 +1571,26 @@ def render_gif(
                     gx_xcom = float(display.xcom_x[step_onset_idx])
                     gy_xcom = float(display.xcom_y[step_onset_idx])
                     ghost_xcom_pt.set_data([gx_xcom], [gy_xcom])
-                    ghost_xcom_pt.set_alpha(1.0)
+                    ghost_xcom_pt.set_alpha(0.8)
                 elif ghost_xcom_pt is not None:
                     ghost_xcom_pt.set_data([], [])
                     ghost_xcom_pt.set_alpha(0.0)
                 if ghost_label is not None:
                     ghost_label.set_position((g_cx + 0.01, g_cy + 0.01))
-                    ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
+                    ghost_label.set_text(f"Step @ Frame {int(series.mocap_frame[step_onset_idx])}")
                     ghost_label.set_visible(True)
                 if ghost_bos_union_line is not None and bos_polylines is not None:
                     ghost_bos_union_line.set_data(
                         bos_polylines.union_x[step_onset_idx],
                         bos_polylines.union_y[step_onset_idx],
                     )
-                    ghost_bos_union_line.set_alpha(0.5)
+                    ghost_bos_union_line.set_alpha(0.3)
                 if ghost_bos_hull_line is not None and bos_polylines is not None:
                     ghost_bos_hull_line.set_data(
                         bos_polylines.hull_x[step_onset_idx],
                         bos_polylines.hull_y[step_onset_idx],
                     )
-                    ghost_bos_hull_line.set_alpha(0.5)
+                    ghost_bos_hull_line.set_alpha(0.3)
             else:
                 ghost_bos_rect.set_alpha(0.0)
                 ghost_com_pt.set_alpha(0.0)
@@ -1552,7 +1604,7 @@ def render_gif(
                     ghost_bos_hull_line.set_alpha(0.0)
         # ---- end ghost per-frame ----
 
-        artists: list[object] = [trail_line, current_point, bos_rect, info_text]
+        artists: list[object] = [trail_line, current_point, bos_rect, status_text]
         if xcom_trail_line is not None:
             artists.append(xcom_trail_line)
         if xcom_current_point is not None:
@@ -1567,8 +1619,8 @@ def render_gif(
             artists.append(xcom_trail_pre)
         if xcom_trail_post is not None:
             artists.append(xcom_trail_post)
-        if timeline_cursor is not None:
-            artists.append(timeline_cursor)
+        if timeline_artists is not None:
+            artists.extend(timeline_artists)
         if ghost_bos_rect is not None:
             artists.append(ghost_bos_rect)
         if ghost_com_pt is not None:
