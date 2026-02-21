@@ -37,6 +37,18 @@ description: >-
   - Compute `cols = min(max_cols, n_panels)` and `rows = ceil(n_panels / cols)`.
   - Create a grid and hide unused axes (same off-policy).
   - Include subplot legend for each panel when labels exist.
+- Side / info panels (metadata, status text, legend, timeline stacked beside main plot):
+  - Subdivide the panel cell via `subgridspec` — never place stacked elements by
+    manually specifying `transAxes` y-coordinates in a single axes.
+  - Pattern:
+    ```python
+    inner = outer[0, 1].subgridspec(N, 1, height_ratios=[...], hspace=0.05)
+    ax_meta, ax_status, ax_legend, ax_tl = [fig.add_subplot(inner[i]) for i in range(N)]
+    ```
+  - Place the legend centered in its cell: `ax_legend.legend(loc="center", bbox_to_anchor=(0.5, 0.5))`.
+  - Use local `transAxes` coords (e.g. `y=0.95, va="top"`) within each cell independently.
+  - Rationale: font-size-based content height cannot be predicted in axes-fraction units;
+    fixed y-values inevitably cause overlap when content changes.
 
 ## X-axis normalization policy
 
