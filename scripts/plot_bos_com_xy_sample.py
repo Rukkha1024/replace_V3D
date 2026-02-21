@@ -995,7 +995,6 @@ def apply_gif_right_panel(
         va="top",
         fontsize=9,
         color="#374151",
-        family="monospace",
         bbox=dict(facecolor="#f9fafb", edgecolor="#e5e7eb", boxstyle="round,pad=0.5"),
     )
 
@@ -1431,12 +1430,11 @@ def render_gif(
     ax.grid(True, linewidth=0.4, alpha=0.55)
     ax.set_xlabel("X (m) [- Left / + Right]")
     ax.set_ylabel("Y (m) [+ Anterior / - Posterior]")
-    gif_trial_state_line = resolve_gif_trial_state_line(trial_state_label)
     main_title = "BOS + COM/xCOM XY animation" if has_xcom else "BOS + COM XY animation"
     set_title_and_subtitle(
         ax,
         title=main_title,
-        subtitle=gif_trial_state_line,
+        subtitle=None,
     )
 
     valid_count = int(valid_indices.size)
