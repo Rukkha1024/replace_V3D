@@ -23,7 +23,7 @@ _REPO_ROOT = _bootstrap.REPO_ROOT
 
 from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
 from replace_v3d.io.c3d_reader import read_c3d_points
-from replace_v3d.cli.batch_utils import append_rows_to_csv, iter_c3d_files
+from replace_v3d.cli.batch_utils import append_rows_to_csv, build_trial_key, iter_c3d_files
 from replace_v3d.com import (
     COMModelParams,
     compute_joint_centers,
@@ -54,6 +54,79 @@ from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
     load_forceplate_inertial_templates,
 )
+
+
+def _load_meta_with_age_group(event_xlsm: Path) -> pl.DataFrame:
+    meta_wide = pl.read_excel(str(event_xlsm), sheet_name="meta")
+    if "subject" not in meta_wide.columns:
+        raise ValueError("meta sheet is missing required column: subject")
+
+    items = [name if name is not None else f"unknown_{i}" for i, name in enumerate(meta_wide["subject"].to_list())]
+    subject_cols = [c for c in meta_wide.columns if c != "subject"]
+    if not subject_cols:
+        raise ValueError("meta sheet has no subject columns.")
+
+    transposed = meta_wide.select(subject_cols).transpose(include_header=False)
+    transposed.columns = items
+    if "나이" not in transposed.columns or "주손 or 주발" not in transposed.columns:
+        raise ValueError("meta transpose is missing one of required columns: 나이, 주손 or 주발")
+
+    return (
+        transposed.with_columns(pl.Series("subject", subject_cols))
+        .with_columns(
+            pl.col("subject").cast(pl.Utf8).str.strip_chars(),
+            pl.col("나이").cast(pl.Int32, strict=False).alias("나이"),
+            pl.col("주손 or 주발").cast(pl.Utf8, strict=False).str.strip_chars().str.to_uppercase().alias("주손 or 주발"),
+        )
+        .with_columns(
+            pl.when(pl.col("나이") < 30)
+            .then(pl.lit("young"))
+            .otherwise(pl.lit("old"))
+            .alias("age_group")
+        )
+        .select(["subject", "age_group", "주손 or 주발"])
+    )
+
+
+def _load_platform_trial_meta(event_xlsm: Path) -> pl.DataFrame:
+    platform = pl.read_excel(str(event_xlsm), sheet_name="platform")
+    required = {"subject", "velocity", "trial", "step_TF", "state", "mixed"}
+    missing = [c for c in required if c not in platform.columns]
+    if missing:
+        raise ValueError(f"platform sheet missing required columns: {missing}")
+
+    return (
+        platform.select(["subject", "velocity", "trial", "step_TF", "state", "mixed"])
+        .with_columns(
+            pl.col("subject").cast(pl.Utf8).str.strip_chars(),
+            pl.col("velocity").cast(pl.Float64, strict=False),
+            pl.col("trial").cast(pl.Int64, strict=False),
+            pl.col("step_TF").cast(pl.Utf8, strict=False).str.strip_chars(),
+            pl.col("state").cast(pl.Utf8, strict=False).str.strip_chars(),
+            pl.col("mixed").cast(pl.Float64, strict=False),
+        )
+    )
+
+
+def _build_meta_prefilter_trials(event_xlsm: Path) -> pl.DataFrame:
+    platform = _load_platform_trial_meta(event_xlsm)
+    meta = _load_meta_with_age_group(event_xlsm)
+    merged = platform.join(meta, on="subject", how="left")
+
+    mask_base = (pl.col("mixed") == 1) & (pl.col("age_group") == "young")
+    is_step = pl.col("step_TF") == "step"
+    ipsilateral_step = is_step & (
+        ((pl.col("주손 or 주발") == "R") & (pl.col("state") == "step_R"))
+        | ((pl.col("주손 or 주발") == "L") & (pl.col("state") == "step_L"))
+    )
+    is_nonstep = pl.col("step_TF") == "nonstep"
+    return (
+        merged.filter(mask_base & (ipsilateral_step | is_nonstep))
+        .select(["subject", "velocity", "trial", "age_group", "주손 or 주발", "step_TF", "state", "mixed"])
+        .drop_nulls(["subject", "velocity", "trial"])
+        .unique()
+        .sort(["subject", "velocity", "trial"])
+    )
 
 
 def _make_timeseries_dataframe(
@@ -446,6 +519,15 @@ def main() -> None:
         default=None,
         help="Optional cap on number of C3D files (for quick checks).",
     )
+    parser.add_argument(
+        "--meta_prefilter",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Apply add_meta.ipynb-equivalent trial filter before per-file computation "
+            "(mixed==1, age_group==young, ipsilateral-step/nonstep)."
+        ),
+    )
     args = parser.parse_args()
 
     c3d_dir = Path(args.c3d_dir)
@@ -487,11 +569,53 @@ def main() -> None:
         raise FileNotFoundError(f"Inertial templates not found: {tmpl_path}")
     fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
 
+    allowed_trial_keys: set[str] | None = None
+    trial_meta_lookup: dict[str, dict[str, Any]] | None = None
+    if bool(args.meta_prefilter):
+        prefilter_trials = _build_meta_prefilter_trials(event_xlsm)
+        allowed_trial_keys = set()
+        trial_meta_lookup = {}
+        for row in prefilter_trials.iter_rows(named=True):
+            trial_key = build_trial_key(
+                str(row["subject"]).strip(),
+                float(row["velocity"]),
+                int(row["trial"]),
+            )
+            allowed_trial_keys.add(trial_key)
+            trial_meta_lookup[trial_key] = {
+                "age_group": row["age_group"],
+                "주손 or 주발": row["주손 or 주발"],
+                "step_TF": row["step_TF"],
+                "state": row["state"],
+                "mixed": row["mixed"],
+            }
+        print(
+            "[INFO] meta_prefilter enabled: "
+            f"subjects={prefilter_trials.select('subject').unique().height}, "
+            f"trials={prefilter_trials.height}"
+        )
+
     for c3d_file in c3d_files:
         # Subject/token + events matching can be skipped. Torque (forceplate) must abort.
         try:
             subject_token, velocity, trial = parse_subject_velocity_trial_from_filename(c3d_file.name)
             subject = resolve_subject_from_token(event_xlsm, subject_token)
+        except Exception as exc:
+            message = f"[SKIP] {c3d_file.name}: {exc}"
+            if args.skip_unmatched:
+                skipped += 1
+                print(message)
+                continue
+            raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
+
+        trial_key = build_trial_key(str(subject).strip(), float(velocity), int(trial))
+        if (allowed_trial_keys is not None) and (trial_key not in allowed_trial_keys):
+            skipped += 1
+            print(f"[SKIP][meta_prefilter] {c3d_file.name}: trial={trial_key} not selected by meta filter")
+            continue
+        trial_meta = None if trial_meta_lookup is None else trial_meta_lookup.get(trial_key)
+
+        try:
             leg_length_cm = load_subject_leg_length_cm(event_xlsm, subject)
             if leg_length_cm is None:
                 raise ValueError(f"Leg length not found for subject='{subject}'.")
@@ -601,6 +725,9 @@ def main() -> None:
                 lower_limb_angles=lower_limb_angles,
                 torque_payload=torque_payload,
             )
+            if trial_meta is not None:
+                for meta_col, meta_val in trial_meta.items():
+                    df_ts[meta_col] = meta_val
             df_ts = finalize_export_df(df_ts, export_kind="batch_all_timeseries")
 
             header_written = append_rows_to_csv(

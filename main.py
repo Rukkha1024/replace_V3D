@@ -100,6 +100,15 @@ def _make_parser() -> argparse.ArgumentParser:
     p.add_argument("--encoding", default="utf-8-sig")
     p.add_argument("--overwrite", action="store_true", help="Overwrite batch timeseries CSV.")
     p.add_argument("--skip_unmatched", action="store_true", help="Pass unmatched cases in batch export.")
+    p.add_argument(
+        "--meta_prefilter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Apply add_meta.ipynb-equivalent trial filter before batch computations "
+            "(default: enabled)."
+        ),
+    )
     p.add_argument("--on_error", choices=["continue", "abort"], default="continue")
     p.add_argument("--md5_reference_dir", default=None, help="Optional reference directory for MD5 compare.")
     p.add_argument(
@@ -150,26 +159,15 @@ def main() -> None:
         batch_cmd.append("--overwrite")
     if args.max_files is not None:
         batch_cmd.extend(["--max_files", str(int(args.max_files))])
+    if args.meta_prefilter:
+        batch_cmd.append("--meta_prefilter")
+    else:
+        batch_cmd.append("--no-meta_prefilter")
 
     print("[RUN] scripts/run_batch_all_timeseries_csv.py")
     if _run_command(batch_cmd, step_name="batch_all_timeseries", on_error=args.on_error):
         if out_csv.exists():
             produced.append(out_csv)
-            # Apply requested post-filtering (from add_meta.ipynb), excluding actual_velocity join.
-            filter_cmd = [
-                sys.executable,
-                str(scripts_root / "apply_post_filter_from_meta.py"),
-                "--in_csv",
-                str(out_csv),
-                "--event_xlsm",
-                str(event_xlsm),
-                "--out_csv",
-                str(out_csv),
-                "--encoding",
-                str(args.encoding),
-            ]
-            print("[RUN] scripts/apply_post_filter_from_meta.py")
-            _run_command(filter_cmd, step_name="post_filter_from_meta", on_error="abort")
 
     if md5_reference_dir is not None:
         _compare_md5(produced, md5_reference_dir, out_dir)
