@@ -8,6 +8,7 @@ Policy:
 ## 2026-02-22
 
 - [PIPELINE] 신규 후처리 필터 스크립트(`scripts/apply_post_filter_from_meta.py`) 실행 시 `polars.read_excel`이 `Could not determine dtype for column 10, falling back to string` 경고를 출력함(실행은 성공하나 로그 노이즈 발생).
+- [CLI] `main.py`를 배치 전용으로 단순화한 뒤에도 argparse 기본 축약 해석 때문에 제거된 단일 실행 플래그 입력이 `--c3d_dir`로 오인식될 수 있어, 의도한 \"미지원 플래그 즉시 오류\" 정책과 불일치하는 동작이 발생할 수 있음.
 
 ## 2026-02-19
 

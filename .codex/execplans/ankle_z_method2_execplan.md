@@ -70,7 +70,7 @@ All commands are run from repository root:
 
 1. Generate pre-change references.
 
-    conda run -n module python main.py --c3d data/all_data/251128_강비은_perturb_30_004.c3d --event_xlsm data/perturb_inform.xlsm --out_dir output/qc/ankle_z_fix/ref --steps angles
+    conda run -n module python scripts/run_batch_all_timeseries_csv.py --c3d_dir data/all_data --event_xlsm data/perturb_inform.xlsm --out_csv output/qc/ankle_z_fix/ref/all_trials_timeseries.csv --analysis_mode prestep --overwrite --max_files 1
 
     conda run -n module python scripts/plot_grid_timeseries.py --sample --only_subjects 강비은 --only_velocities 30 --out_dir output/qc/ankle_z_fix/ref_fig
 
@@ -82,7 +82,7 @@ All commands are run from repository root:
 
 4. Regenerate post-change outputs (single-trial + batch CSV).
 
-    conda run -n module python main.py --c3d data/all_data/251128_강비은_perturb_30_004.c3d --event_xlsm data/perturb_inform.xlsm --out_dir output/qc/ankle_z_fix/new --steps angles
+    conda run -n module python scripts/run_batch_all_timeseries_csv.py --c3d_dir data/all_data --event_xlsm data/perturb_inform.xlsm --out_csv output/qc/ankle_z_fix/new/all_trials_timeseries.csv --analysis_mode prestep --overwrite --max_files 1
 
     conda run -n module python main.py --overwrite --skip_unmatched
 

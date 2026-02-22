@@ -162,7 +162,7 @@ Neck_X_deg,   Neck_Y_deg,   Neck_Z_deg
 
 ## 5. 출력 파일
 
-### 단일 시행 (`run_joint_angles_pipeline.py`)
+### 레거시 단일 시행 (현재 배치 전용 정책으로 미사용)
 
 - 파일명: `{c3d_stem}_JOINT_ANGLES_preStep.csv`
 - 프레임 열: `Frame` (1-indexed), `Time_s`
@@ -187,6 +187,6 @@ Neck_X_deg,   Neck_Y_deg,   Neck_Z_deg
 | 관절중심 계산 (Harrington 등) | `src/replace_v3d/com/joint_centers.py` |
 | 오일러 분해 | `src/replace_v3d/joint_angles/v3d_joint_angles.py` |
 | ana0 후처리 (부호 통일 + Resolve_Discontinuity) | `src/replace_v3d/joint_angles/postprocess.py` |
-| 단일 시행 파이프라인 | `scripts/run_joint_angles_pipeline.py` |
+| 단일 시행 파이프라인 | 배치 전용 정책으로 제거됨 |
 | 배치 통합 CSV | `scripts/run_batch_all_timeseries_csv.py` |
 | 시상면 각도 (KneeFlex, AnkleDorsi) | `src/replace_v3d/joint_angles/sagittal.py` |

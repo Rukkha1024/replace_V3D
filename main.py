@@ -13,13 +13,6 @@ _SRC_ROOT = _REPO_ROOT / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from replace_v3d.io.events_excel import (
-    load_subject_leg_length_cm,
-    parse_subject_velocity_trial_from_filename,
-    resolve_subject_from_token,
-)
-
-
 def _md5_of_file(path: Path) -> str:
     digest = hashlib.md5()
     with path.open("rb") as f:
@@ -45,17 +38,6 @@ def _run_command(cmd: list[str], *, step_name: str, on_error: str) -> bool:
         if on_error == "abort":
             raise RuntimeError(f"{step_name} failed") from exc
         return False
-
-
-def _collect_outputs(*, out_dir: Path, c3d_stem: str, steps: set[str]) -> list[Path]:
-    out = []
-    if "angles" in steps:
-        out.append(out_dir / f"{c3d_stem}_JOINT_ANGLES_preStep.csv")
-    if "mos" in steps:
-        out.append(out_dir / f"{c3d_stem}_MOS_preStep.xlsx")
-    if "torque" in steps:
-        out.append(out_dir / f"{c3d_stem}_ankle_torque.xlsx")
-    return [p for p in out if p.exists()]
 
 
 def _relative_reference_path(path: Path, output_root: Path) -> Path:
@@ -103,17 +85,8 @@ def _compare_md5(outputs: list[Path], reference_dir: Path, output_root: Path) ->
 
 def _make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description=(
-            "Default: batch export unified time series CSV (MOS/COM/xCOM/BOS + joint angles + ankle torque).\n"
-            "Single-file processing is available only via --c3d."
-        )
-    )
-    p.add_argument("--c3d", default=None, help="Optional single C3D file. If provided, runs single-file pipelines.")
-    p.add_argument(
-        "--steps",
-        choices=["all", "mos", "angles", "torque"],
-        default="all",
-        help="Single-file mode only: which pipeline(s) to run.",
+        allow_abbrev=False,
+        description="Batch export unified time series CSV (MOS/COM/xCOM/BOS + joint angles + ankle torque)."
     )
     p.add_argument("--c3d_dir", default=str(_REPO_ROOT / "data" / "all_data"))
     p.add_argument("--event_xlsm", default=str(_REPO_ROOT / "data" / "perturb_inform.xlsm"))
@@ -153,85 +126,6 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     scripts_root = _REPO_ROOT / "scripts"
     produced: list[Path] = []
-    if args.c3d:
-        c3d_path = Path(args.c3d)
-        if not c3d_path.exists():
-            raise FileNotFoundError(f"C3D file not found: {c3d_path}")
-
-        try:
-            subject_token, velocity, trial = parse_subject_velocity_trial_from_filename(c3d_path.name)
-            subject = resolve_subject_from_token(event_xlsm, subject_token)
-        except Exception as exc:
-            raise RuntimeError(f"Cannot resolve subject/velocity/trial from {c3d_path.name}: {exc}") from exc
-
-        stem = c3d_path.stem
-        if args.steps == "all":
-            steps = {"mos", "angles", "torque"}
-        else:
-            steps = {str(args.steps)}
-
-        common_args = [
-            "--c3d",
-            str(c3d_path),
-            "--event_xlsm",
-            str(event_xlsm),
-            "--subject",
-            subject,
-            "--velocity",
-            str(velocity),
-            "--trial",
-            str(trial),
-            "--out_dir",
-            str(out_dir),
-        ]
-
-        if "mos" in steps:
-            leg_length_cm: Optional[float] = load_subject_leg_length_cm(event_xlsm, subject)
-            if leg_length_cm is None:
-                msg = f"[SKIP] {c3d_path.name}: leg_length_cm missing for subject {subject}"
-                print(msg)
-                if args.on_error == "abort":
-                    raise RuntimeError(msg)
-            else:
-                cmd_mos = [
-                    sys.executable,
-                    str(scripts_root / "run_mos_pipeline.py"),
-                    *common_args,
-                    "--leg_length_cm",
-                    str(leg_length_cm),
-                ]
-                print(f"[RUN] {c3d_path.name} => run_mos_pipeline.py")
-                _run_command(cmd_mos, step_name=f"mos:{stem}", on_error=args.on_error)
-
-        if "angles" in steps:
-            cmd_joint = [
-                sys.executable,
-                str(scripts_root / "run_joint_angles_pipeline.py"),
-                *common_args,
-            ]
-            print(f"[RUN] {c3d_path.name} => run_joint_angles_pipeline.py")
-            _run_command(cmd_joint, step_name=f"joint:{stem}", on_error=args.on_error)
-
-        if "torque" in steps:
-            cmd_ankle = [
-                sys.executable,
-                str(scripts_root / "run_ankle_torque_pipeline.py"),
-                *common_args,
-            ]
-            print(f"[RUN] {c3d_path.name} => run_ankle_torque_pipeline.py")
-            _run_command(cmd_ankle, step_name=f"ankle:{stem}", on_error=args.on_error)
-
-        produced = _collect_outputs(out_dir=out_dir, c3d_stem=stem, steps=steps)
-        if produced:
-            print("[OUTPUT] generated files:")
-            for p in produced:
-                print(f" - {p}")
-        else:
-            print("[OUTPUT] no outputs captured.")
-
-        if md5_reference_dir is not None:
-            _compare_md5(produced, md5_reference_dir, out_dir)
-        return
 
     if not c3d_dir.exists():
         raise FileNotFoundError(f"C3D directory not found: {c3d_dir}")

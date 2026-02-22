@@ -59,27 +59,25 @@ See references:
 
 ## Scripted pipeline (recommended)
 
-### Quick start (single trial)
+### Quick start (batch-only via `main.py`)
 
 ```bash
-python scripts/run_mos_pipeline.py \
-  --c3d /path/to/251112_KUO_perturb_60_001.c3d \
-  --events /path/to/perturb_inform.xlsm \
-  --subject "김우연" \
-  --out_dir ./outputs \
-  --anthro ./assets/example_anthro_kimwooyeon.yaml \
-  --v3d_com_ref /path/to/251112_KUO_perturb_60_001_COM.xlsx
+conda run -n module python main.py \
+  --c3d_dir /path/to/c3d_folder \
+  --event_xlsm /path/to/perturb_inform.xlsm \
+  --out_csv output/all_trials_timeseries.csv \
+  --overwrite
 ```
 
-### Batch mode (folder)
+### MOS-focused batch export (direct batch script)
 
 ```bash
-python scripts/run_mos_pipeline.py \
+conda run -n module python scripts/run_batch_all_timeseries_csv.py \
   --c3d_dir /path/to/c3d_folder \
-  --events /path/to/perturb_inform.xlsm \
-  --subject "김우연" \
-  --out_dir ./outputs \
-  --anthro ./assets/example_anthro_kimwooyeon.yaml
+  --event_xlsm /path/to/perturb_inform.xlsm \
+  --out_csv output/all_trials_timeseries.csv \
+  --analysis_mode prestep \
+  --overwrite
 ```
 
 ## Implementation notes
@@ -87,4 +85,3 @@ python scripts/run_mos_pipeline.py \
 - The pipeline assumes C3D marker trajectories are already labeled/filtered.
 - No force plate is required; if force channels exist, they are ignored.
 - Coordinate axes can vary; the script allows configuring the vertical axis and ground plane.
-

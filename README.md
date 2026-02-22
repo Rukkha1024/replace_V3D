@@ -16,29 +16,9 @@ This repo contains a **pure-Python** pipeline to compute:
 - **MoS pipeline**: no forceplate usage (matches your V3D tutorial logic).
 - **Ankle torque pipeline**: uses the C3D `FORCE_PLATFORM` metadata + analog channels.
 - BoS uses **foot landmark markers only** (no anthropometric expansion).
-- For **step trials**, analysis is reported **up to just before step onset**  
-  (`analysis_end = step_onset_local - 1`).  
-  No “step-onset split” and no toe-off detection.
-
-## Quick start (single trial)
-
-```bash
-conda run -n module python main.py \
-  --c3d /path/to/251112_KUO_perturb_60_001.c3d \
-  --event_xlsm /path/to/perturb_inform.xlsm \
-  --out_dir output \
-  --steps all
-```
-
-Outputs:
-- `<trial>_MOS_preStep.xlsx` (timeseries + summary + event mapping + COM validation)
-- `<trial>_JOINT_ANGLES_preStep.csv` (sign-unified + platform-onset zeroed; Δ from platform onset)
-- `<trial>_ankle_torque.xlsx` (if forceplate/analog is present)
-
-Single-trial options:
-- `--steps mos`: MOS workbook only
-- `--steps angles`: joint angles only
-- `--steps torque`: ankle torque only
+- Batch export range is **full trimmed window** by default.
+- Legacy pre-step-only range is available via
+  `conda run -n module python scripts/run_batch_all_timeseries_csv.py --analysis_mode prestep ...`.
 
 ## Quick start (batch unified time series CSV: MOS + joint angles + ankle torque)
 
@@ -119,26 +99,3 @@ conda run -n module python scripts/plot_grid_timeseries.py \
 - C3D must be **trimmed** to `[platform_onset-100, platform_offset+100]` in the original 100 Hz mocap frames (as per your data rule).
 - Marker naming: supports both raw labels (e.g. `251112_KUO_LASI`) and stripped labels (`LASI`).
 - Library code lives under `src/replace_v3d/`, but entrypoints remain in `scripts/` (no install step).
-
-## Joint angles (Visual3D-like 3D)
-
-This repo also provides a **pure-Python** 3D joint angle pipeline (Visual3D-style):
-
-- ankle / knee / hip (Left & Right)
-- trunk / neck
-
-Angle definition:
-- Segment axes: **X=+Right, Y=+Anterior, Z=+Up/Proximal**
-- Joint angles: **intrinsic Cardan XYZ** (reference X, floating Y, non-reference Z)
-- Uses medial markers: `LShin_3/RShin_3` (knee), `LFoot_3/RFoot_3` (ankle)
-
-```bash
-conda run -n module python main.py \
-  --c3d /path/to/251112_KUO_perturb_60_001.c3d \
-  --event_xlsm /path/to/perturb_inform.xlsm \
-  --out_dir output \
-  --steps angles
-```
-
-Outputs:
-- `<trial>_JOINT_ANGLES_preStep.csv` (sign-unified + platform-onset zeroed; Δ from platform onset)
