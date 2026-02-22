@@ -261,6 +261,21 @@ def main() -> None:
     if _run_command(batch_cmd, step_name="batch_all_timeseries", on_error=args.on_error):
         if out_csv.exists():
             produced.append(out_csv)
+            # Apply requested post-filtering (from add_meta.ipynb), excluding actual_velocity join.
+            filter_cmd = [
+                sys.executable,
+                str(scripts_root / "apply_post_filter_from_meta.py"),
+                "--in_csv",
+                str(out_csv),
+                "--event_xlsm",
+                str(event_xlsm),
+                "--out_csv",
+                str(out_csv),
+                "--encoding",
+                str(args.encoding),
+            ]
+            print("[RUN] scripts/apply_post_filter_from_meta.py")
+            _run_command(filter_cmd, step_name="post_filter_from_meta", on_error="abort")
 
     if md5_reference_dir is not None:
         _compare_md5(produced, md5_reference_dir, out_dir)

@@ -5,6 +5,10 @@ Policy:
 - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
 
 ---
+## 2026-02-22
+
+- [PIPELINE] 신규 후처리 필터 스크립트(`scripts/apply_post_filter_from_meta.py`) 실행 시 `polars.read_excel`이 `Could not determine dtype for column 10, falling back to string` 경고를 출력함(실행은 성공하나 로그 노이즈 발생).
+
 ## 2026-02-19
 
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py` fails on direct full run in WSL (`conda run --no-capture-output -n module python ...`) because `RSCRIPT` is pinned to a Windows absolute path (`C:\\Users\\Alice\\miniconda3\\envs\\module\\lib\\R/bin/x64/Rscript.exe`), so baseline/full-run verification cannot complete without environment-specific runtime override.
