@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-23
 
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py`의 관절각 DV 정의가 `Hip_R/Knee_R/Ankle_R` 고정이라, `step_R/step_L`가 혼재한 데이터에서도 기능적 stance limb 비교가 아닌 우측 고정 비교로 집계되어 side 해석이 왜곡될 수 있었음.
 - [FORCEPLATE] `scripts/run_batch_all_timeseries_csv.py`의 forceplate 관성 제거 단계에서 C3D Stage01 변환 신호와 `shared_files` 템플릿 부호 기준이 어긋나 onset 이후 `GRF/GRM/COP` 대오차(상수 오프셋 포함)가 발생했음.
 - [VERIFY] 위 부호 정렬 수정 후에도 `scripts/verify_forceplate_stage01_parity.py --round_decimals 9 --abs_tol 1e-9` 기준에서는 미세 수치 차(`~1e-6` 수준, COP 일부 `~1e-3`)로 `mismatch_total`/`md5_equal` 엄격 조건을 만족하지 못함.
 - [PIPELINE] `main.py --overwrite` full batch 실행이 `data/all_data/251128_방주원_perturb_200_005.c3d`의 `T10` 마커 누락으로 중단되어, 변경 검증(출력 재생성/MD5 비교)이 기본 설정만으로는 완료되지 않음.

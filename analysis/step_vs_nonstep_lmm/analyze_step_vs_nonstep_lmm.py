@@ -164,10 +164,15 @@ def resolve_r_runtime() -> tuple[str, dict]:
 _COM_AXES = ["X", "Y"]
 _COP_AXES = ["X", "Y"]
 _GRF_AXES = ["X", "Y", "Z"]
+_STANCE_X_SOURCES = [
+    ("Hip_stance_X_deg", "Hip_L_X_deg", "Hip_R_X_deg"),
+    ("Knee_stance_X_deg", "Knee_L_X_deg", "Knee_R_X_deg"),
+    ("Ankle_stance_X_deg", "Ankle_L_X_deg", "Ankle_R_X_deg"),
+]
 _JOINT_NAMES = [
-    ("Hip_R", "Hip_R_X_deg"),
-    ("Knee_R", "Knee_R_X_deg"),
-    ("Ankle_R", "Ankle_R_X_deg"),
+    ("Hip_stance", "Hip_stance_X_deg"),
+    ("Knee_stance", "Knee_stance_X_deg"),
+    ("Ankle_stance", "Ankle_stance_X_deg"),
     ("Trunk", "Trunk_X_deg"),
     ("Neck", "Neck_X_deg"),
 ]
@@ -199,7 +204,7 @@ def build_dv_specs() -> list[dict]:
     specs.append({"dv": "MOS_AP_v3d_min", "col": "MOS_AP_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
     specs.append({"dv": "MOS_ML_v3d_min", "col": "MOS_ML_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
 
-    # Joint angles (sagittal plane, right side)
+    # Joint angles (sagittal plane, stance-equivalent side)
     for name, col in _JOINT_NAMES:
         specs.append({"dv": f"{name}_ROM", "col": col, "agg": "range", "family": FAMILY_JOINT})
         specs.append({"dv": f"{name}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_JOINT})
@@ -236,11 +241,89 @@ def load_csv(path: Path) -> pl.DataFrame:
 
 def load_platform_sheet(path: Path) -> pd.DataFrame:
     df = pd.read_excel(str(path), sheet_name="platform")
-    df["subject"] = df["subject"].astype(str).str.strip()
-    df["velocity"] = pd.to_numeric(df["velocity"], errors="coerce")
-    df["trial"] = pd.to_numeric(df["trial"], errors="coerce").astype("Int64")
-    df["step_TF"] = df["step_TF"].astype(str).str.strip()
-    return df
+    required = {"subject", "velocity", "trial", "step_TF", "state", "mixed"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"platform sheet missing required columns: {missing}")
+
+    out = df[["subject", "velocity", "trial", "step_TF", "state", "mixed"]].copy()
+    out["subject"] = out["subject"].astype(str).str.strip()
+    out["velocity"] = pd.to_numeric(out["velocity"], errors="coerce")
+    out["trial"] = pd.to_numeric(out["trial"], errors="coerce").astype("Int64")
+    out["step_TF"] = out["step_TF"].astype(str).str.strip().str.lower()
+    out["state"] = out["state"].astype(str).str.strip().str.lower()
+    out["mixed"] = pd.to_numeric(out["mixed"], errors="coerce")
+    return out
+
+
+def build_subject_major_step_side(platform: pd.DataFrame) -> pd.DataFrame:
+    """Build subject-level major stepping side from mixed==1 step trials."""
+    trial_unique = platform[TRIAL_KEYS + ["step_TF", "state", "mixed"]].drop_duplicates().copy()
+    mask = (
+        trial_unique["mixed"].eq(1)
+        & trial_unique["step_TF"].eq("step")
+        & trial_unique["state"].isin(["step_r", "step_l"])
+    )
+    valid = trial_unique.loc[mask, ["subject", "state"]].copy()
+    if valid.empty:
+        raise ValueError("No mixed==1 step trials with state in {step_r, step_l} were found.")
+
+    counts = (
+        valid.assign(n=1)
+        .pivot_table(index="subject", columns="state", values="n", aggfunc="sum", fill_value=0)
+        .reset_index()
+    )
+    counts.columns.name = None
+    if "step_r" not in counts.columns:
+        counts["step_r"] = 0
+    if "step_l" not in counts.columns:
+        counts["step_l"] = 0
+
+    counts["step_r_count"] = pd.to_numeric(counts["step_r"], errors="coerce").fillna(0).astype(int)
+    counts["step_l_count"] = pd.to_numeric(counts["step_l"], errors="coerce").fillna(0).astype(int)
+    counts["major_step_side"] = np.where(
+        counts["step_r_count"] > counts["step_l_count"],
+        "step_r",
+        np.where(counts["step_l_count"] > counts["step_r_count"], "step_l", "tie"),
+    )
+    return counts[["subject", "step_r_count", "step_l_count", "major_step_side"]]
+
+
+def add_stance_joint_x_columns(df: pl.DataFrame, platform: pd.DataFrame) -> tuple[pl.DataFrame, pd.DataFrame]:
+    """Attach stance-equivalent sagittal joint columns to frame-level timeseries."""
+    major_side = build_subject_major_step_side(platform)
+    trial_meta = platform[TRIAL_KEYS + ["step_TF", "state"]].drop_duplicates().copy()
+
+    for out_col, _left, _right in _STANCE_X_SOURCES:
+        df = df.drop([out_col], strict=False)
+    df = df.drop(["step_TF", "state", "major_step_side"], strict=False)
+
+    df = (
+        df.with_columns(
+            pl.col("subject").cast(pl.Utf8).str.strip_chars(),
+            pl.col("velocity").cast(pl.Float64, strict=False),
+            pl.col("trial").cast(pl.Int64, strict=False),
+        )
+        .join(pl.from_pandas(trial_meta), on=TRIAL_KEYS, how="left")
+        .join(pl.from_pandas(major_side[["subject", "major_step_side"]]), on="subject", how="left")
+    )
+
+    stance_exprs: list[pl.Expr] = []
+    for out_col, left_col, right_col in _STANCE_X_SOURCES:
+        stance_exprs.append(
+            pl.when(pl.col("state") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("state") == "step_l")
+            .then(pl.col(right_col))
+            .when(pl.col("major_step_side") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("major_step_side") == "step_l")
+            .then(pl.col(right_col))
+            .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+            .alias(out_col)
+        )
+
+    return df.with_columns(stance_exprs), major_side
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +451,18 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
 
     print("  Loading platform sheet...")
     platform = load_platform_sheet(xlsm_path)
+
+    print("  Building stance-equivalent joint columns (major step side from mixed==1)...")
+    df, major_side = add_stance_joint_x_columns(df, platform)
+    tie_rows = int((major_side["major_step_side"] == "tie").sum())
+    print(
+        "  major_step_side subjects="
+        f"{len(major_side)} (step_r={(major_side['major_step_side'] == 'step_r').sum()}, "
+        f"step_l={(major_side['major_step_side'] == 'step_l').sum()}, tie={tie_rows})"
+    )
+    if tie_rows > 0:
+        tie_subjects = major_side.loc[major_side["major_step_side"] == "tie", "subject"].tolist()
+        print(f"  tie subjects use nonstep average (L+R)/2: {', '.join(tie_subjects)}")
 
     # Compute per-trial end_frame (step_onset or subject-velocity mean)
     print("  Computing per-trial end_frame [platform_onset → step_onset]...")
