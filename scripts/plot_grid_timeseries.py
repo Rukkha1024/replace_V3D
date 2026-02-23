@@ -42,6 +42,7 @@ TIME_COL = "time_from_platform_onset_s"
 DEFAULT_SEGMENT_FRAMES = 100
 STEP_COLOR = "tab:orange"
 NONSTEP_COLOR = "tab:blue"
+_NO_ZERO_PREFIXES = ("MOS_", "BOS_")
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,7 +132,8 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help=(
             "Plot-only: subtract the value at platform onset (t=0) per trial/series "
-            "so each line starts at 0. Disable with --no-y_zero_onset."
+            "so each line starts at 0 (except MOS_/BOS_ series). "
+            "Disable with --no-y_zero_onset."
         ),
     )
     return parser.parse_args()
@@ -168,6 +170,12 @@ def parse_float_list(text: str | None) -> list[float] | None:
         except ValueError as exc:
             raise ValueError(f"Invalid float in list: {raw!r}") from exc
     return out
+
+
+def _should_zero(col_name: str, y_zero_onset: bool) -> bool:
+    if not y_zero_onset:
+        return False
+    return not any(col_name.startswith(prefix) for prefix in _NO_ZERO_PREFIXES)
 
 
 def format_velocity(value: object) -> str:
@@ -626,7 +634,7 @@ def plot_single_col(
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
         )
-        if y_zero_onset:
+        if _should_zero(col_name, y_zero_onset):
             onset_x = 0.0
             y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
         ax.plot(
@@ -704,7 +712,7 @@ def plot_lr_overlay(
                 x_mode=x_mode,
                 piecewise_mid_duration_s=piecewise_mid_duration_s,
             )
-            if y_zero_onset:
+            if _should_zero(col_name, y_zero_onset):
                 onset_x = 0.0
                 y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
             ax.plot(
@@ -779,7 +787,7 @@ def compute_mean_curve(
             x_mode=x_mode,
             piecewise_mid_duration_s=piecewise_mid_duration_s,
         )
-        if y_zero_onset:
+        if _should_zero(col_name, y_zero_onset):
             y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=0.0)
         if np.isfinite(y_vals).any():
             curves.append(y_vals)

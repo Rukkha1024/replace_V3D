@@ -51,3 +51,32 @@ Plan: MOS/BOS zeroing 제거
  1. --y_zero_onset(default) 상태로 MOS/BOS 그래프 재생성
  2. MOS 값이 양수/음수 절대값으로 표시되는지 확인
  3. 다른 컬럼(joint angle 등)은 여전히 zeroing 적용되는지 확인
+
+---
+
+구현 결정(확정)
+
+- 기존 result column을 replace-only로 적용한다(신규/병행 컬럼 추가 없음).
+- legacy MOS alias(`*_dir`)는 코드/API/CSV에서 완전 제거하고 canonical(`*_v3d`)만 유지한다.
+- `--y_zero_onset` 기본 동작은 유지하되 `MOS_`, `BOS_` prefix series는 zeroing에서 제외한다.
+
+변경 대상(확정)
+
+- src/replace_v3d/mos/core.py
+  - `MOSResult`에서 legacy alias 필드 제거
+  - alias 생성/반환 로직 제거
+- scripts/run_batch_all_timeseries_csv.py
+  - payload에서 legacy alias 컬럼 제거
+  - export finalizer 의존 제거
+- scripts/plot_grid_timeseries.py
+  - `_NO_ZERO_PREFIXES=("MOS_","BOS_")`, `_should_zero(...)` 추가
+  - zeroing 3개 지점을 `_should_zero` 기반으로 교체
+- README.md
+  - canonical-only 정책 및 y-zero 예외 동작 반영
+
+검증 산출물 경로
+
+- output/qc/mos_bos_replace/before_all_trials.md5
+- output/qc/mos_bos_replace/after_all_trials.md5
+- output/qc/mos_bos_replace/before_fig.md5
+- output/qc/mos_bos_replace/after_fig.md5

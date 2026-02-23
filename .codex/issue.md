@@ -11,6 +11,8 @@ Policy:
 - [VERIFY] 위 부호 정렬 수정 후에도 `scripts/verify_forceplate_stage01_parity.py --round_decimals 9 --abs_tol 1e-9` 기준에서는 미세 수치 차(`~1e-6` 수준, COP 일부 `~1e-3`)로 `mismatch_total`/`md5_equal` 엄격 조건을 만족하지 못함.
 - [PIPELINE] `main.py --overwrite` full batch 실행이 `data/all_data/251128_방주원_perturb_200_005.c3d`의 `T10` 마커 누락으로 중단되어, 변경 검증(출력 재생성/MD5 비교)이 기본 설정만으로는 완료되지 않음.
 - [FORCEPLATE] `shared_files` Stage01 대비 `replace_V3D` 배치 출력에서 COP 축 부호 해석이 반대로 나타나(`COP_X/COP_Y` sign inversion) 좌표 해석 및 보고서 방향성(`+X anterior`, `+Y left`)과 수치 결과 간 불일치가 발생함.
+- [VIZ] `scripts/plot_grid_timeseries.py`의 기본 `--y_zero_onset=True` 적용 시 `MOS_*`/`BOS_*`까지 onset-zeroing 되어, MoS 부호 해석(경계 내/외)과 BoS 절대면적 해석이 시각화에서 왜곡됨.
+- [SCHEMA] 배치 payload에 legacy alias(`MOS_*_dir`) 경로가 남아 있으면 canonical-only 결과 컬럼 정책과 충돌해, 동일 지표의 과거 명칭이 코드 경로에 잔존하게 됨.
 
 ## 2026-02-22
 

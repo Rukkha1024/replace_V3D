@@ -43,10 +43,6 @@ class MOSResult:
     - MOS_AP_v3d / MOS_ML_v3d / MOS_v3d:
         Visual3D-style closest-bound distances (recommended).
 
-    - MOS_AP_dir / MOS_ML_dir:
-        Backward-compatible aliases of the Visual3D-style values above.
-        (Kept because downstream scripts/plots often referenced "*_dir".)
-
     - MOS_signed:
         Polygon-based signed min distance to the convex hull boundary (+inside).
         This is *not* the same as Visual3D's original scalar MoS, but can be
@@ -60,10 +56,6 @@ class MOSResult:
     MOS_AP_v3d: np.ndarray  # (T,)
     MOS_ML_v3d: np.ndarray  # (T,)
     MOS_v3d: np.ndarray  # (T,)
-
-    # Backward-compatible aliases (same as MOS_*_v3d)
-    MOS_AP_dir: np.ndarray  # (T,)
-    MOS_ML_dir: np.ndarray  # (T,)
 
     # BoS geometry summaries
     BOS_area: np.ndarray  # (T,)
@@ -115,9 +107,6 @@ def compute_mos_timeseries(
     - MOS_v3d:
         min(MOS_AP_v3d, MOS_ML_v3d)  (closest boundary overall)
 
-    - MOS_AP_dir / MOS_ML_dir:
-        Aliases of MOS_AP_v3d / MOS_ML_v3d (for backward compatibility)
-
     Parameters
     ----------
     points:
@@ -157,10 +146,6 @@ def compute_mos_timeseries(
     MOS_ML_v3d = np.zeros(end, dtype=float)
     MOS_v3d = np.zeros(end, dtype=float)
 
-    # Backward-compat aliases (filled at the end)
-    MOS_AP_dir = np.zeros(end, dtype=float)
-    MOS_ML_dir = np.zeros(end, dtype=float)
-
     area = np.zeros(end, dtype=float)
     minX = np.zeros(end, dtype=float)
     maxX = np.zeros(end, dtype=float)
@@ -184,17 +169,11 @@ def compute_mos_timeseries(
         MOS_ML_v3d[t] = _closest_bound_1d(float(p[1]), bminy, bmaxy)
         MOS_v3d[t] = min(MOS_AP_v3d[t], MOS_ML_v3d[t])
 
-    # Backward-compat aliases
-    MOS_AP_dir[:] = MOS_AP_v3d
-    MOS_ML_dir[:] = MOS_ML_v3d
-
     return MOSResult(
         MOS_signed=MOS_signed,
         MOS_AP_v3d=MOS_AP_v3d,
         MOS_ML_v3d=MOS_ML_v3d,
         MOS_v3d=MOS_v3d,
-        MOS_AP_dir=MOS_AP_dir,
-        MOS_ML_dir=MOS_ML_dir,
         BOS_area=area,
         BOS_minX=minX,
         BOS_maxX=maxX,

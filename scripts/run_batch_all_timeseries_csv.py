@@ -38,7 +38,6 @@ from replace_v3d.io.events_excel import (
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
 )
-from replace_v3d.io.export_schema import finalize_export_df
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
@@ -205,8 +204,6 @@ def _make_timeseries_dataframe(
         "MOS_AP_v3d": mos.MOS_AP_v3d,
         "MOS_ML_v3d": mos.MOS_ML_v3d,
         "MOS_v3d": mos.MOS_v3d,
-        "MOS_AP_dir": mos.MOS_AP_dir,
-        "MOS_ML_dir": mos.MOS_ML_dir,
         "Is_platform_onset_frame": is_platform_onset,
         "Is_step_onset_frame": is_step_onset,
         # Simple sagittal summary angles (match single-trial MOS workbook schema)
@@ -742,7 +739,6 @@ def main() -> None:
             if trial_meta is not None:
                 for meta_col, meta_val in trial_meta.items():
                     df_ts[meta_col] = meta_val
-            df_ts = finalize_export_df(df_ts, export_kind="batch_all_timeseries")
 
             header_written = append_rows_to_csv(
                 out_csv,

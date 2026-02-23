@@ -9,7 +9,6 @@ This repo contains a **pure-Python** pipeline to compute:
   - `MOS_minDist_signed`: signed minimum distance from xCOM to BoS polygon boundary (+inside, -outside)
   - `MOS_*_v3d`: Visual3D tutorial (Closest_Bound) style — distance to the *closest* BoS bound in AP/ML
     (`MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`)
-  - `MOS_*_dir`: legacy alias of `MOS_*_v3d` (same values; not written to current outputs)
 
 ## Important constraints (matching your V3D tutorial logic)
 
@@ -43,7 +42,7 @@ Notes:
 - If forceplate extraction fails, the script **aborts** (to prevent silently mixed schemas).
 - Batch export range is **full trimmed window** by default (not preStep-cut at step onset).
 - Duplicate time-axis columns are avoided: the CSV keeps `MocapFrame` (and `time_from_platform_onset_s`) without redundant per-pipeline frame/time columns.
-- Legacy MOS alias columns are not saved: use `MOS_AP_v3d` / `MOS_ML_v3d` (not `MOS_AP_dir` / `MOS_ML_dir`).
+- Legacy MOS alias columns are removed from outputs; use canonical columns only (`MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d`).
 - By default, some metadata columns are excluded (e.g., `c3d_file`, `subject_token`, `rate_hz`, `Time_s`) to keep one unified schema.
 - Joint angle columns (e.g., `Hip_*_deg`, `Knee_*_deg`, `Ankle_*_deg`, `Trunk_*_deg`, `Neck_*_deg`) are sign-unified and platform-onset zeroed (Δ from onset).
 - Force/torque columns are also exported as Δ from platform onset: `GRF_*`, `GRM_*`, `AnkleTorque*`.
@@ -63,7 +62,8 @@ After generating `output/all_trials_timeseries.csv`, you can render grid plots f
   - Disable with `--no-x_piecewise` to plot raw seconds from platform onset.
   - Window size can be changed via `--segment_frames` (default: `100`).
 - Default y-axis is **onset-zeroed** for readability (plot-only):
-  - Each trial line subtracts its value at platform onset (`t=0`) so all variables start at 0.
+  - Each trial line subtracts its value at platform onset (`t=0`) for non-MOS/BOS series.
+  - `MOS_*` and `BOS_*` keep their absolute values (no onset-zeroing).
   - Note: some columns are already onset-zeroed in the saved CSV (e.g., `*_deg`, `GRF_*`, `GRM_*`, `AnkleTorque*`).
   - Disable with `--no-y_zero_onset`.
 - Event vlines: `platform_onset` (red), `platform_offset` (green), `step_onset` (blue dashed).
