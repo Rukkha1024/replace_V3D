@@ -180,6 +180,8 @@ _JOINT_NAMES = [
 FAMILY_BALANCE = "Balance/Stability"
 FAMILY_JOINT = "Joint Angles"
 FAMILY_FORCE = "Force/Torque"
+FRAME_RATE_HZ = 100.0
+FIXED_300MS_FRAMES = int(round(0.300 * FRAME_RATE_HZ))
 
 
 def build_dv_specs() -> list[dict]:
@@ -203,6 +205,24 @@ def build_dv_specs() -> list[dict]:
     specs.append({"dv": "MOS_minDist_signed_min", "col": "MOS_minDist_signed", "agg": "min_val", "family": FAMILY_BALANCE})
     specs.append({"dv": "MOS_AP_v3d_min", "col": "MOS_AP_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
     specs.append({"dv": "MOS_ML_v3d_min", "col": "MOS_ML_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
+    specs.append(
+        {
+            "dv": "xCOM_BOS_platformonset",
+            "col": "xCOM_BOS_norm_frame",
+            "agg": "value_at_event",
+            "event_col": "platform_eval_frame",
+            "family": FAMILY_BALANCE,
+        }
+    )
+    specs.append(
+        {
+            "dv": "xCOM_BOS_steponset",
+            "col": "xCOM_BOS_norm_frame",
+            "agg": "value_at_event",
+            "event_col": "steponset_eval_frame",
+            "family": FAMILY_BALANCE,
+        }
+    )
 
     # Joint angles (sagittal plane, stance-equivalent side)
     for name, col in _JOINT_NAMES:
@@ -232,6 +252,11 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR)
     ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--dry-run", action="store_true", help="Only load data; skip analysis")
+    ap.add_argument(
+        "--no-figures",
+        action="store_true",
+        help="Skip figure generation and keep existing figure files untouched.",
+    )
     return ap.parse_args()
 
 
@@ -358,36 +383,54 @@ def aggregate_trial_features(df: pl.DataFrame, specs: list[dict]) -> pl.DataFram
     Time window: [platform_onset_local, end_frame] per trial (MocapFrame units).
     ``end_frame`` must already be joined to *df* before calling this function.
     """
+    df_valid = df.filter(pl.col("end_frame").is_not_null())
+    if df_valid.is_empty():
+        return pl.DataFrame(schema={k: pl.Utf8 for k in TRIAL_KEYS})
 
-    # Filter time window: [platform_onset, end_frame] per trial
-    df_win = df.filter(
-        pl.col("end_frame").is_not_null()
-    ).filter(
+    in_window = (
         (pl.col("MocapFrame") >= pl.col("platform_onset_local"))
         & (pl.col("MocapFrame") <= pl.col("end_frame"))
     )
 
-    # Build aggregation expressions
-    agg_exprs = []
+    # Build aggregation expressions. Windowed features and event-point features
+    # are evaluated in one grouped pass via per-expression filters.
+    agg_exprs: list[pl.Expr] = []
     for spec in specs:
         col = spec["col"]
         dv = spec["dv"]
         agg = spec["agg"]
 
         if agg == "range":
-            agg_exprs.append((pl.col(col).max() - pl.col(col).min()).alias(dv))
+            agg_exprs.append(
+                (
+                    pl.col(col).filter(in_window).max()
+                    - pl.col(col).filter(in_window).min()
+                ).alias(dv)
+            )
         elif agg == "path_length":
-            agg_exprs.append(pl.col(col).diff().abs().sum().alias(dv))
+            agg_exprs.append(pl.col(col).filter(in_window).diff().abs().sum().alias(dv))
         elif agg == "abs_peak":
-            agg_exprs.append(pl.col(col).abs().max().alias(dv))
+            agg_exprs.append(pl.col(col).filter(in_window).abs().max().alias(dv))
         elif agg == "min_val":
-            agg_exprs.append(pl.col(col).min().alias(dv))
+            agg_exprs.append(pl.col(col).filter(in_window).min().alias(dv))
         elif agg == "abs_peak_velocity":
             # peak velocity: max of |diff/dt|, dt=0.01s (100Hz)
-            agg_exprs.append((pl.col(col).diff().abs() / 0.01).max().alias(dv))
+            agg_exprs.append((pl.col(col).filter(in_window).diff().abs() / 0.01).max().alias(dv))
+        elif agg == "value_at_event":
+            event_col = spec.get("event_col")
+            if not event_col:
+                raise ValueError(f"Missing event_col in spec for DV: {dv}")
+            agg_exprs.append(
+                pl.col(col)
+                .filter(pl.col("MocapFrame") == pl.col(event_col))
+                .drop_nulls()
+                .first()
+                .alias(dv)
+            )
+        else:
+            raise ValueError(f"Unsupported aggregation type: {agg}")
 
-    result = df_win.group_by(TRIAL_KEYS).agg(agg_exprs).sort(TRIAL_KEYS)
-    return result
+    return df_valid.group_by(TRIAL_KEYS).agg(agg_exprs).sort(TRIAL_KEYS)
 
 
 def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFrame:
@@ -534,6 +577,46 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
     end_pl = pl.from_pandas(end_frames[TRIAL_KEYS + ["end_frame"]])
     df = df.join(end_pl, on=TRIAL_KEYS, how="left")
 
+    print("  Building xCOM/BOS event features (platform_onset, steponset/300ms)...")
+    df = df.with_columns(
+        pl.col("platform_onset_local")
+        .cast(pl.Int64, strict=False)
+        .alias("platform_eval_frame"),
+        pl.when(pl.col("step_TF") == "step")
+        .then(pl.col("end_frame").cast(pl.Int64, strict=False))
+        .otherwise((pl.col("platform_onset_local") + FIXED_300MS_FRAMES).cast(pl.Int64, strict=False))
+        .alias("steponset_eval_frame"),
+        pl.when((pl.col("BOS_maxX") - pl.col("BOS_minX")) > 0)
+        .then((pl.col("xCOM_X") - pl.col("BOS_minX")) / (pl.col("BOS_maxX") - pl.col("BOS_minX")))
+        .otherwise(None)
+        .alias("xCOM_BOS_norm_frame"),
+    )
+
+    event_bounds = (
+        df.filter(pl.col("end_frame").is_not_null())
+        .group_by(TRIAL_KEYS)
+        .agg(
+            pl.col("MocapFrame").min().alias("frame_min"),
+            pl.col("MocapFrame").max().alias("frame_max"),
+            pl.col("platform_eval_frame").drop_nulls().first().alias("platform_eval_frame"),
+            pl.col("steponset_eval_frame").drop_nulls().first().alias("steponset_eval_frame"),
+        )
+    )
+    n_platform_oob = event_bounds.filter(
+        (pl.col("platform_eval_frame") < pl.col("frame_min"))
+        | (pl.col("platform_eval_frame") > pl.col("frame_max"))
+    ).height
+    n_step_oob = event_bounds.filter(
+        (pl.col("steponset_eval_frame") < pl.col("frame_min"))
+        | (pl.col("steponset_eval_frame") > pl.col("frame_max"))
+    ).height
+    if n_platform_oob > 0 or n_step_oob > 0:
+        raise ValueError(
+            "Event frame out of trial range: "
+            f"platform={n_platform_oob}, steponset={n_step_oob}"
+        )
+    print(f"  Event frame range validation passed: platform_oob={n_platform_oob}, steponset_oob={n_step_oob}")
+
     print("  Aggregating to trial-level features [platform_onset, step_onset] window...")
     trial_pl = aggregate_trial_features(df, specs)
     trial_df = trial_pl.to_pandas()
@@ -557,6 +640,10 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
 
     print(f"  Frames: {n_frames} → filtered & aggregated")
     print(f"  Trials: {n_trials} (step={n_step}, nonstep={n_nonstep})")
+    for dv_name in ("xCOM_BOS_platformonset", "xCOM_BOS_steponset"):
+        if dv_name in trial_df.columns:
+            missing = int(trial_df[dv_name].isna().sum())
+            print(f"  {dv_name} missing: {missing}")
 
     return trial_df
 
@@ -957,15 +1044,18 @@ def main() -> None:
     print_results_table(results)
 
     # --- Milestone 3 ---
-    print("\n[M3] Generating figures...")
-    fig1_forest(results, out_dir, dpi)
-    print("  fig1_lmm_forest_plot.png")
+    if args.no_figures:
+        print("\n[M3] Skipping figure generation (--no-figures).")
+    else:
+        print("\n[M3] Generating figures...")
+        fig1_forest(results, out_dir, dpi)
+        print("  fig1_lmm_forest_plot.png")
 
-    fig2_violin(trial_df, results, out_dir, dpi)
-    print("  fig2_violin_significant.png")
+        fig2_violin(trial_df, results, out_dir, dpi)
+        print("  fig2_violin_significant.png")
 
-    fig3_heatmap(results, out_dir, dpi)
-    print("  fig3_descriptive_heatmap.png")
+        fig3_heatmap(results, out_dir, dpi)
+        print("  fig3_descriptive_heatmap.png")
 
     print("\n" + "=" * 60)
     print("Analysis complete.")

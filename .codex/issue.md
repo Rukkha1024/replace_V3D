@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-23
 
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm`에서 Van Wouwe 2021의 `xCOM/BOS_300ms ↔ htrunk,max` subject-specific regression을 현재 파이프라인의 step/nonstep pooled LMM으로 직접 치환할 수 없어, 변수명이 유사해도 통계적 해석 단위(개인별 기울기 vs 집단 평균 차이)가 불일치하는 문제가 있음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm`의 nonstep `end_frame` 보정에서 `(subject, velocity)` step 정보가 없을 때 전체 step global 평균을 사용하면, 타 subject/타 velocity 정보가 유입되어 trial window 기준이 교차 오염될 수 있었음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py`의 관절각 DV 정의가 `Hip_R/Knee_R/Ankle_R` 고정이라, `step_R/step_L`가 혼재한 데이터에서도 기능적 stance limb 비교가 아닌 우측 고정 비교로 집계되어 side 해석이 왜곡될 수 있었음.
 - [FORCEPLATE] `scripts/run_batch_all_timeseries_csv.py`의 forceplate 관성 제거 단계에서 C3D Stage01 변환 신호와 `shared_files` 템플릿 부호 기준이 어긋나 onset 이후 `GRF/GRM/COP` 대오차(상수 오프셋 포함)가 발생했음.
