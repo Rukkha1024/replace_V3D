@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-23
 
+- [ANALYSIS] `analysis/initial_posture_strategy_lmm`에서 `platform_onset` 단일시점 비교를 수행할 때, 배치 CSV의 onset-zero export 특성 때문에 각도/GRF/토크/COP_onset0 계열이 구조적으로 0 상수가 되어 LMM에서 \"비유의\"가 아니라 \"검정불가\"로 분리 처리해야 하는 문제가 발생함.
 - [DOC] `analysis/step_vs_nonstep_lmm/report.md`에서 Van Wouwe 관련 설명이 여러 섹션으로 분산되면, 방법/결과/비교 대응을 한 화면에서 추적하기 어려워 해석 전달력이 떨어지는 문제가 있음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm`에서 Van Wouwe 2021의 `xCOM/BOS_300ms ↔ htrunk,max` subject-specific regression을 현재 파이프라인의 step/nonstep pooled LMM으로 직접 치환할 수 없어, 변수명이 유사해도 통계적 해석 단위(개인별 기울기 vs 집단 평균 차이)가 불일치하는 문제가 있음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm`의 nonstep `end_frame` 보정에서 `(subject, velocity)` step 정보가 없을 때 전체 step global 평균을 사용하면, 타 subject/타 velocity 정보가 유입되어 trial window 기준이 교차 오염될 수 있었음.
