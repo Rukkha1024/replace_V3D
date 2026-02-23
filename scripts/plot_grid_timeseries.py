@@ -1,8 +1,18 @@
 """Grid-plot visualization of biomechanical time-series.
 
-Reads all_trials_timeseries.csv and generates per subject×velocity grid figures.
+Reads all_trials_timeseries.csv and generates grid figures for subject/subject_velocity/total_mean modes.
 Supports --sample preview, --group_by mode, and --no-x_piecewise for raw time axis.
 Output: output/figures/grid_timeseries/
+
+# 전체파일 생성 command. 
+```
+conda run -n module python scripts/plot_grid_timeseries.py \
+  --group_by subject \
+  --csv output/all_trials_timeseries.csv \
+  --config config.yaml \
+  --out_dir output/figures/grid_timeseries
+```
+
 """
 
 from __future__ import annotations
@@ -51,9 +61,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--group_by",
-        choices=["subject_velocity", "subject"],
+        choices=["subject_velocity", "subject", "total_mean"],
         default="subject_velocity",
-        help="Render one figure per grouping unit (default: subject_velocity)",
+        help="Render one figure per grouping unit (default: subject_velocity; supports total_mean)",
     )
     parser.add_argument(
         "--only_subjects",
@@ -719,7 +729,7 @@ def plot_lr_overlay(
 
 
 def build_trial_list(subject_df: pl.DataFrame) -> list[pl.DataFrame]:
-    trials = subject_df.select(TRIAL_KEYS).unique().sort(["velocity", "trial"])
+    trials = subject_df.select(TRIAL_KEYS).unique().sort(TRIAL_KEYS)
     return [
         subject_df.filter(
             (pl.col("subject") == row["subject"])
@@ -745,6 +755,206 @@ def split_trials_by_step(trials: list[pl.DataFrame]) -> tuple[list[pl.DataFrame]
         else:
             nonstep_trials.append(trial_df)
     return step_trials, nonstep_trials
+
+
+def compute_mean_curve(
+    trials: list[pl.DataFrame],
+    col_name: str,
+    x_plot: np.ndarray,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
+) -> tuple[np.ndarray | None, int]:
+    if not trials:
+        return None, 0
+
+    curves: list[np.ndarray] = []
+    for trial_df in trials:
+        if col_name not in trial_df.columns:
+            continue
+        y_vals = resample_trial_column(
+            trial_df=trial_df,
+            col_name=col_name,
+            x_grid=x_plot,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+        )
+        if y_zero_onset:
+            y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=0.0)
+        if np.isfinite(y_vals).any():
+            curves.append(y_vals)
+
+    if not curves:
+        return None, 0
+
+    stacked = np.vstack(curves)
+    valid = np.isfinite(stacked)
+    valid_counts = np.sum(valid, axis=0)
+    sums = np.sum(np.where(valid, stacked, 0.0), axis=0)
+    mean_vals = np.divide(
+        sums,
+        valid_counts,
+        out=np.full(x_plot.shape, np.nan, dtype=float),
+        where=valid_counts > 0,
+    )
+    return mean_vals, len(curves)
+
+
+def draw_mean_events(
+    ax: plt.Axes,
+    trials_for_platform: list[pl.DataFrame],
+    trials_for_step: list[pl.DataFrame],
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
+) -> None:
+    event_alpha = 1.0
+    if trials_for_platform:
+        draw_events(
+            ax,
+            trials_for_platform[0],
+            alpha=event_alpha,
+            label_once=True,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+            draw_platform=True,
+            draw_step=False,
+        )
+    if trials_for_step:
+        draw_events(
+            ax,
+            trials_for_step[0],
+            alpha=event_alpha,
+            label_once=True,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+            draw_platform=False,
+            draw_step=True,
+        )
+
+
+def plot_single_col_mean(
+    ax: plt.Axes,
+    step_trials: list[pl.DataFrame],
+    nonstep_trials: list[pl.DataFrame],
+    col_name: str,
+    step_group: str,
+    x_plot: np.ndarray,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
+) -> None:
+    groups: list[tuple[str, str, list[pl.DataFrame]]] = []
+    if step_group in {"all", "step"}:
+        groups.append(("step", STEP_COLOR, step_trials))
+    if step_group in {"all", "nonstep"}:
+        groups.append(("nonstep", NONSTEP_COLOR, nonstep_trials))
+
+    active_trials: list[pl.DataFrame] = []
+    for _, _, group_trials in groups:
+        active_trials.extend(group_trials)
+    if not active_trials:
+        ax.text(0.5, 0.5, "No trials", transform=ax.transAxes, ha="center", va="center")
+        return
+
+    draw_mean_events(
+        ax=ax,
+        trials_for_platform=active_trials,
+        trials_for_step=step_trials if step_group in {"all", "step"} else [],
+        x_mode=x_mode,
+        piecewise_mid_duration_s=piecewise_mid_duration_s,
+    )
+
+    line_width = 2.0
+    line_alpha = 0.95
+    plotted = False
+    for label, color, group_trials in groups:
+        y_mean, _ = compute_mean_curve(
+            trials=group_trials,
+            col_name=col_name,
+            x_plot=x_plot,
+            x_mode=x_mode,
+            piecewise_mid_duration_s=piecewise_mid_duration_s,
+            y_zero_onset=y_zero_onset,
+        )
+        if y_mean is None:
+            continue
+        ax.plot(
+            x_plot,
+            y_mean,
+            color=color,
+            linewidth=line_width,
+            alpha=line_alpha,
+            label=label,
+        )
+        plotted = True
+
+    if not plotted:
+        ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
+
+
+def plot_lr_overlay_mean(
+    ax: plt.Axes,
+    step_trials: list[pl.DataFrame],
+    nonstep_trials: list[pl.DataFrame],
+    col_specs: list[tuple[str, str, str]],
+    step_group: str,
+    x_plot: np.ndarray,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
+) -> None:
+    groups: list[tuple[str, str, list[pl.DataFrame]]] = []
+    if step_group in {"all", "step"}:
+        groups.append(("step", STEP_COLOR, step_trials))
+    if step_group in {"all", "nonstep"}:
+        groups.append(("nonstep", NONSTEP_COLOR, nonstep_trials))
+
+    active_trials: list[pl.DataFrame] = []
+    for _, _, group_trials in groups:
+        active_trials.extend(group_trials)
+    if not active_trials:
+        ax.text(0.5, 0.5, "No trials", transform=ax.transAxes, ha="center", va="center")
+        return
+
+    draw_mean_events(
+        ax=ax,
+        trials_for_platform=active_trials,
+        trials_for_step=step_trials if step_group in {"all", "step"} else [],
+        x_mode=x_mode,
+        piecewise_mid_duration_s=piecewise_mid_duration_s,
+    )
+
+    line_width = 2.0
+    line_alpha = 0.95
+    plotted = False
+    for label, color, group_trials in groups:
+        label_drawn = False
+        for col_name, side, style in col_specs:
+            _ = side
+            y_mean, _ = compute_mean_curve(
+                trials=group_trials,
+                col_name=col_name,
+                x_plot=x_plot,
+                x_mode=x_mode,
+                piecewise_mid_duration_s=piecewise_mid_duration_s,
+                y_zero_onset=y_zero_onset,
+            )
+            if y_mean is None:
+                continue
+            ax.plot(
+                x_plot,
+                y_mean,
+                color=color,
+                linestyle=style,
+                linewidth=line_width,
+                alpha=line_alpha,
+                label=label if not label_drawn else None,
+            )
+            label_drawn = True
+            plotted = True
+
+    if not plotted and col_specs:
+        ax.text(0.5, 0.5, f"Missing: {col_specs[0][0]}", transform=ax.transAxes, ha="center", va="center")
 
 
 def plot_subject_category(
@@ -887,6 +1097,115 @@ def plot_subject_category(
     return out_path
 
 
+def plot_total_mean_category(
+    total_df: pl.DataFrame,
+    spec: dict,
+    out_dir: Path,
+    sample: bool,
+    dpi: int,
+    x_plot: np.ndarray,
+    x_ticks: np.ndarray,
+    x_axis_label: str,
+    x_mode: str,
+    piecewise_mid_duration_s: float | None,
+    y_zero_onset: bool,
+    step_group: str = "all",
+) -> Path | None:
+    nrows, ncols = spec["nrows"], spec["ncols"]
+    fig, axes = plt.subplots(nrows, ncols, figsize=spec["figsize"], squeeze=False)
+
+    all_trials = build_trial_list(total_df)
+    step_trials, nonstep_trials = split_trials_by_step(all_trials)
+    if step_group == "all":
+        active_step_trials = step_trials
+        active_nonstep_trials = nonstep_trials
+    elif step_group == "step":
+        active_step_trials = step_trials
+        active_nonstep_trials = []
+    else:
+        active_step_trials = []
+        active_nonstep_trials = nonstep_trials
+    trial_count = len(active_step_trials) + len(active_nonstep_trials)
+    if trial_count == 0:
+        plt.close(fig)
+        return None
+
+    for subplot in spec["subplots"]:
+        r, c = subplot[0], subplot[1]
+        col_spec = subplot[2]
+        ylabel = subplot[3]
+        ax = axes[r][c]
+
+        if isinstance(col_spec, str):
+            plot_single_col_mean(
+                ax=ax,
+                step_trials=active_step_trials,
+                nonstep_trials=active_nonstep_trials,
+                col_name=col_spec,
+                step_group=step_group,
+                x_plot=x_plot,
+                x_mode=x_mode,
+                piecewise_mid_duration_s=piecewise_mid_duration_s,
+                y_zero_onset=y_zero_onset,
+            )
+        else:
+            plot_lr_overlay_mean(
+                ax=ax,
+                step_trials=active_step_trials,
+                nonstep_trials=active_nonstep_trials,
+                col_specs=col_spec,
+                step_group=step_group,
+                x_plot=x_plot,
+                x_mode=x_mode,
+                piecewise_mid_duration_s=piecewise_mid_duration_s,
+                y_zero_onset=y_zero_onset,
+            )
+
+        ax.set_title(ylabel, fontsize=9)
+        ax.grid(True, linewidth=0.35, alpha=0.5)
+        x_left = float(x_plot[0])
+        x_right = float(x_plot[-1])
+        if np.isclose(x_left, x_right):
+            x_left -= 0.5
+            x_right += 0.5
+        ax.set_xlim(x_left, x_right)
+        ax.set_xticks(x_ticks)
+        ax.margins(x=0.0)
+        if r == nrows - 1:
+            ax.set_xlabel(x_axis_label, fontsize=8)
+        else:
+            ax.tick_params(labelbottom=False)
+        ax.legend(loc="best", fontsize=7, frameon=True)
+
+    total_axes = nrows * ncols
+    used_axes = len(spec["subplots"])
+    for idx in range(used_axes, total_axes):
+        rr = idx // ncols
+        cc = idx % ncols
+        axes[rr][cc].axis("off")
+
+    mode_label = "sample" if sample else "all"
+    step_count = len(active_step_trials)
+    nonstep_count = len(active_nonstep_trials)
+    if step_group == "all":
+        group_label = f"step={step_count}, nonstep={nonstep_count}"
+    else:
+        group_label = f"{step_group} only ({trial_count} trials)"
+    suptitle = (
+        f"{spec['title']} | total mean | {group_label} | "
+        f"mean overlay ({trial_count} trials) | {mode_label}"
+    )
+    fig.suptitle(suptitle, fontsize=11, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    suffix = f"__{step_group}" if step_group != "all" else ""
+    out_name = f"{spec['tag']}__total_mean{suffix}__{mode_label}.png"
+    out_path = out_dir / out_name
+    save_figure_with_overwrite(fig, out_path, dpi=dpi)
+    plt.close(fig)
+    return out_path
+
+
 def save_figure_with_overwrite(fig: plt.Figure, out_path: Path, dpi: int) -> None:
     if out_path.exists():
         out_path.unlink()
@@ -900,6 +1219,8 @@ def main() -> None:
     if args.out_dir is None:
         args.out_dir = config_out_dir if config_out_dir is not None else DEFAULT_OUT
     args.out_dir = resolve_repo_path(args.out_dir)
+    if args.group_by == "total_mean":
+        args.out_dir = args.out_dir / "total_mean"
     args.csv = resolve_repo_path(args.csv)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1030,7 +1351,7 @@ def main() -> None:
                     )
                     if out_path is not None:
                         print(f"Saved: {out_path}")
-    else:
+    elif args.group_by == "subject_velocity":
         if args.sample and args.sample_velocities <= 0:
             raise ValueError("--sample_velocities must be >= 1 (sample mode)")
         for subject_value in subjects:
@@ -1086,6 +1407,52 @@ def main() -> None:
                         )
                         if out_path is not None:
                             print(f"Saved: {out_path}")
+    else:
+        if args.sample:
+            total_df = df.filter(pl.col("subject").is_in(subjects))
+        else:
+            total_df = df
+        total_trials = total_df.select(TRIAL_KEYS).unique().height
+        print(
+            f"Total mean scope rows: {total_df.height}, "
+            f"trials: {total_trials}, subjects: {len(subjects)}"
+        )
+        for spec in categories:
+            if args.separate_step_nonstep:
+                for step_group in ["step", "nonstep"]:
+                    out_path = plot_total_mean_category(
+                        total_df=total_df,
+                        spec=spec,
+                        out_dir=args.out_dir,
+                        sample=args.sample,
+                        dpi=args.dpi,
+                        x_plot=x_plot,
+                        x_ticks=x_ticks,
+                        x_axis_label=x_axis_label,
+                        x_mode=x_mode,
+                        piecewise_mid_duration_s=piecewise_mid_duration_s,
+                        y_zero_onset=bool(args.y_zero_onset),
+                        step_group=step_group,
+                    )
+                    if out_path is not None:
+                        print(f"Saved: {out_path}")
+            else:
+                out_path = plot_total_mean_category(
+                    total_df=total_df,
+                    spec=spec,
+                    out_dir=args.out_dir,
+                    sample=args.sample,
+                    dpi=args.dpi,
+                    x_plot=x_plot,
+                    x_ticks=x_ticks,
+                    x_axis_label=x_axis_label,
+                    x_mode=x_mode,
+                    piecewise_mid_duration_s=piecewise_mid_duration_s,
+                    y_zero_onset=bool(args.y_zero_onset),
+                    step_group="all",
+                )
+                if out_path is not None:
+                    print(f"Saved: {out_path}")
 
     print("Done.")
 
