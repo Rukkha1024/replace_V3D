@@ -44,7 +44,7 @@ from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
-from replace_v3d.torque.cop import compute_cop_lab
+from replace_v3d.torque.cop import compute_cop_lab_xy
 from replace_v3d.torque.forceplate import (
     choose_active_force_platform,
     extract_platform_wrenches_lab,
@@ -331,7 +331,7 @@ def _compute_ankle_torque_payload(
     idx = fp.channel_indices_0based.astype(int)
     F_plate = analog_used[:, idx[0:3]]
     M_plate = analog_used[:, idx[3:6]]
-    COP_lab = compute_cop_lab(
+    COP_lab_xy = compute_cop_lab_xy(
         F_plate=F_plate,
         M_plate=M_plate,
         fp_origin_lab=fp.origin_lab,
@@ -345,7 +345,6 @@ def _compute_ankle_torque_payload(
     res = compute_ankle_torque_from_net_wrench(
         F_lab=F_lab,
         M_lab_at_fp_origin=M_lab,
-        COP_lab=COP_lab,
         fp_origin_lab=fp.origin_lab,
         ankle_L=ankle_L,
         ankle_R=ankle_R,
@@ -370,9 +369,8 @@ def _compute_ankle_torque_payload(
         "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
         "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
         "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-        "COP_X_m": res.COP_lab[:end, 0],
-        "COP_Y_m": res.COP_lab[:end, 1],
-        "COP_Z_m": res.COP_lab[:end, 2],
+        "COP_X_m": COP_lab_xy[:end, 0],
+        "COP_Y_m": COP_lab_xy[:end, 1],
         "FP_origin_X_m": np.full(end, float(res.fp_origin_lab[0])),
         "FP_origin_Y_m": np.full(end, float(res.fp_origin_lab[1])),
         "FP_origin_Z_m": np.full(end, float(res.fp_origin_lab[2])),
@@ -416,7 +414,7 @@ def _compute_ankle_torque_payload(
             payload[key] = subtract_baseline_at_index(payload[key], onset0)
 
     # Keep absolute COP_*_m, but add onset-zeroed COP columns for displacement use-cases.
-    for key in ("COP_X_m", "COP_Y_m", "COP_Z_m"):
+    for key in ("COP_X_m", "COP_Y_m"):
         if key in payload:
             payload[f"{key}_onset0"] = subtract_baseline_at_index(payload[key], onset0)
 

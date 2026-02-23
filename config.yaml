@@ -302,8 +302,3 @@ plot_grid_timeseries:
           ylabel: "COP Y (m)"
           series:
             - col: COP_Y_m
-        - row: 1
-          col: 2
-          ylabel: "COP Z (m)"
-          series:
-            - col: COP_Z_m

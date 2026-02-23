@@ -5,6 +5,10 @@ Policy:
 - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
 
 ---
+## 2026-02-23
+
+- [PIPELINE] `main.py --overwrite` full batch 실행이 `data/all_data/251128_방주원_perturb_200_005.c3d`의 `T10` 마커 누락으로 중단되어, 변경 검증(출력 재생성/MD5 비교)이 기본 설정만으로는 완료되지 않음.
+
 ## 2026-02-22
 
 - [ANALYSIS] `analysis/analysis.ipynb` 코드가 경로 탐색/전처리/집계/출력이 단일 셀에 직렬로 결합돼 있어, 재사용·검증·수정 시 변경 영향 범위를 빠르게 파악하기 어려웠음.
