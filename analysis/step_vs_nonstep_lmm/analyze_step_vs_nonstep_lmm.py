@@ -241,18 +241,40 @@ def load_csv(path: Path) -> pl.DataFrame:
 
 def load_platform_sheet(path: Path) -> pd.DataFrame:
     df = pd.read_excel(str(path), sheet_name="platform")
-    required = {"subject", "velocity", "trial", "step_TF", "state", "mixed"}
+    required = {
+        "subject",
+        "velocity",
+        "trial",
+        "step_TF",
+        "state",
+        "mixed",
+        "platform_onset",
+        "step_onset",
+    }
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"platform sheet missing required columns: {missing}")
 
-    out = df[["subject", "velocity", "trial", "step_TF", "state", "mixed"]].copy()
+    out = df[
+        [
+            "subject",
+            "velocity",
+            "trial",
+            "step_TF",
+            "state",
+            "mixed",
+            "platform_onset",
+            "step_onset",
+        ]
+    ].copy()
     out["subject"] = out["subject"].astype(str).str.strip()
     out["velocity"] = pd.to_numeric(out["velocity"], errors="coerce")
     out["trial"] = pd.to_numeric(out["trial"], errors="coerce").astype("Int64")
     out["step_TF"] = out["step_TF"].astype(str).str.strip().str.lower()
     out["state"] = out["state"].astype(str).str.strip().str.lower()
     out["mixed"] = pd.to_numeric(out["mixed"], errors="coerce")
+    out["platform_onset"] = pd.to_numeric(out["platform_onset"], errors="coerce")
+    out["step_onset"] = pd.to_numeric(out["step_onset"], errors="coerce")
     return out
 
 
@@ -374,8 +396,8 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
     - step trials: end_frame = step_onset_local (actual step onset)
     - nonstep trials: end_frame = mean(step_onset_local) of step trials
       in the same (subject, velocity) group
-    - nonstep fallback: if subject-velocity mean is unavailable, use global
-      mean(step_onset_local) across all step trials
+    - nonstep fallback: if above is unavailable, use prefilter platform
+      subject-velocity mean of step_onset_local reconstructed from raw events
 
     Returns a pandas DataFrame with [subject, velocity, trial, end_frame].
     """
@@ -409,8 +431,44 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
         .rename(columns={"step_onset_local": "mean_step_onset"})
     )
 
+    # Infer local platform onset reference (normally 101) from CSV, then
+    # reconstruct prefilter-local step_onset from platform raw events.
+    platform_onset_local_ref = (
+        df.select(
+            pl.col("platform_onset_local")
+            .cast(pl.Float64, strict=False)
+            .drop_nulls()
+            .round(0)
+            .cast(pl.Int64)
+            .alias("platform_onset_local")
+        )
+        .to_series()
+        .to_list()
+    )
+    if platform_onset_local_ref:
+        platform_onset_local_ref = int(pd.Series(platform_onset_local_ref).mode().iloc[0])
+    else:
+        platform_onset_local_ref = 101
+
+    prefilter_step_means = (
+        platform.loc[
+            (platform["step_TF"] == "step")
+            & platform["step_onset"].notna()
+            & platform["platform_onset"].notna(),
+            ["subject", "velocity", "step_onset", "platform_onset"],
+        ]
+        .assign(
+            step_onset_local_prefilter_sv=lambda x: (
+                x["step_onset"] - x["platform_onset"] + float(platform_onset_local_ref)
+            )
+        )
+        .groupby(["subject", "velocity"])["step_onset_local_prefilter_sv"]
+        .mean()
+        .reset_index()
+    )
+
     filled_sv_mean = 0
-    filled_global_mean = 0
+    filled_prefilter_sv = 0
     needs_end = trials["end_frame"].isna()
     if needs_end.any():
         trials = trials.merge(step_means, on=["subject", "velocity"], how="left")
@@ -418,22 +476,26 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
         trials.loc[fill_mask_sv, "end_frame"] = trials.loc[fill_mask_sv, "mean_step_onset"]
         filled_sv_mean = int(fill_mask_sv.sum())
 
-        # Global fallback applies only to nonstep rows still missing end_frame.
-        global_step_mean = trials.loc[step_mask, "step_onset_local"].mean()
-        fill_mask_global = (
+        trials = trials.merge(prefilter_step_means, on=["subject", "velocity"], how="left")
+        fill_mask_prefilter_sv = (
             trials["end_frame"].isna()
             & (trials["step_TF"] == "nonstep")
-            & pd.notna(global_step_mean)
+            & trials["step_onset_local_prefilter_sv"].notna()
         )
-        trials.loc[fill_mask_global, "end_frame"] = global_step_mean
-        filled_global_mean = int(fill_mask_global.sum())
+        trials.loc[fill_mask_prefilter_sv, "end_frame"] = trials.loc[
+            fill_mask_prefilter_sv, "step_onset_local_prefilter_sv"
+        ]
+        filled_prefilter_sv = int(fill_mask_prefilter_sv.sum())
 
-        trials.drop(columns=["mean_step_onset"], inplace=True)
+        trials.drop(
+            columns=["mean_step_onset", "step_onset_local_prefilter_sv"],
+            inplace=True,
+        )
 
     trials["end_frame"] = trials["end_frame"].round().astype("Int64")
 
     print(f"  end_frame fill (subject-velocity mean): {filled_sv_mean}")
-    print(f"  end_frame fill (global step mean): {filled_global_mean}")
+    print(f"  end_frame fill (prefilter platform subject-velocity mean): {filled_prefilter_sv}")
     n_missing = trials["end_frame"].isna().sum()
     if n_missing > 0:
         print(f"  Warning: {n_missing} trials with no computable end_frame (dropped)")

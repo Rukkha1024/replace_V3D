@@ -1,0 +1,13 @@
+platform_onset_local_ref=101
+nonstep_trials=72
+stage1_missing_count=5
+stage2_filled_count=5
+residual_missing_count=0
+stage1_missing_rows:
+subject  velocity  trial  mean_step_onset_current  step_onset_local_prefilter_sv
+    권유영      35.0      2                      NaN                     142.666667
+    김종철     135.0      3                      NaN                     117.500000
+    김종철     135.0      4                      NaN                     117.500000
+    방주원     200.0      3                      NaN                     164.666667
+    방주원     200.0      4                      NaN                     164.666667
+
