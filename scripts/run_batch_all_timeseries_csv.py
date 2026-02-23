@@ -310,11 +310,17 @@ def _compute_ankle_torque_payload(
     analog_stage01[:, idx[0:3]] = F_stage01_raw
     analog_stage01[:, idx[3:6]] = M_stage01_raw
 
-    analog_used = analog_stage01
+    # Align channel sign to shared_files Stage01 diagnostics/templates before subtract.
+    # shared_files stores force/moment channels in the opposite sign of the C3D-mapped Stage01 raw.
+    analog_shared_sign = analog_stage01.copy()
+    analog_shared_sign[:, idx[0:3]] *= -1.0
+    analog_shared_sign[:, idx[3:6]] *= -1.0
+
+    analog_used = analog_shared_sign
     onset0 = int(platform_onset_local) - 1
     offset0 = int(platform_offset_local) - 1
     analog_used, inertial_info = apply_forceplate_inertial_subtract(
-        analog_stage01,
+        analog_shared_sign,
         fp,
         velocity=float(velocity),
         onset0=int(onset0),
@@ -339,10 +345,9 @@ def _compute_ankle_torque_payload(
             raise ValueError(msg)
         print(msg)
 
-    # Normalize to shared_files Stage01 sign convention for force/moment channels.
-    # COP ratio is unaffected by a global sign flip, but GRF/GRM parity requires it.
-    F_stage01 = -analog_used[:, idx[0:3]]
-    M_stage01 = -analog_used[:, idx[3:6]]
+    # `analog_used` is already aligned to shared_files Stage01 sign convention.
+    F_stage01 = analog_used[:, idx[0:3]]
+    M_stage01 = analog_used[:, idx[3:6]]
     COP_stage01_xy = compute_cop_stage01_xy(
         F_stage01=F_stage01,
         M_stage01=M_stage01,

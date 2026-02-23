@@ -7,6 +7,8 @@ Policy:
 ---
 ## 2026-02-23
 
+- [FORCEPLATE] `scripts/run_batch_all_timeseries_csv.py`의 forceplate 관성 제거 단계에서 C3D Stage01 변환 신호와 `shared_files` 템플릿 부호 기준이 어긋나 onset 이후 `GRF/GRM/COP` 대오차(상수 오프셋 포함)가 발생했음.
+- [VERIFY] 위 부호 정렬 수정 후에도 `scripts/verify_forceplate_stage01_parity.py --round_decimals 9 --abs_tol 1e-9` 기준에서는 미세 수치 차(`~1e-6` 수준, COP 일부 `~1e-3`)로 `mismatch_total`/`md5_equal` 엄격 조건을 만족하지 못함.
 - [PIPELINE] `main.py --overwrite` full batch 실행이 `data/all_data/251128_방주원_perturb_200_005.c3d`의 `T10` 마커 누락으로 중단되어, 변경 검증(출력 재생성/MD5 비교)이 기본 설정만으로는 완료되지 않음.
 - [FORCEPLATE] `shared_files` Stage01 대비 `replace_V3D` 배치 출력에서 COP 축 부호 해석이 반대로 나타나(`COP_X/COP_Y` sign inversion) 좌표 해석 및 보고서 방향성(`+X anterior`, `+Y left`)과 수치 결과 간 불일치가 발생함.
 
