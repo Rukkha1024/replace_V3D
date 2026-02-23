@@ -57,8 +57,7 @@ After generating `output/all_trials_timeseries.csv`, you can render grid plots f
 - Plot files with the same output filename are always overwritten when re-rendering.
 - Default x-axis is **piecewise-normalized** for readability (plot-only; does not change CSV outputs):
   - `[onset-frames, onset]` is linearly warped to a fixed length (= `frames`)
-  - `[onset, offset]` is linearly warped to a fixed length (= `frames`)
-  - `[offset, offset+frames]` is linearly warped to a fixed length (= `frames`)
+  - `[onset, post-window]` is linearly warped to a fixed length (= `frames`)
   - Disable with `--no-x_piecewise` to plot raw seconds from platform onset.
   - Window size can be changed via `--segment_frames` (default: `100`).
 - Default y-axis is **onset-zeroed** for readability (plot-only):

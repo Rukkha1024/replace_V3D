@@ -116,8 +116,8 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help=(
             "Piecewise-normalize the displayed x-axis (default: enabled). "
-            "Segments: [onset-frames, onset] (raw), [onset, offset] (normalized), "
-            "[offset, offset+frames] (raw). Disable with --no-x_piecewise."
+            "Segments: [onset-frames, onset] (normalized), [onset, post-window] (normalized). "
+            "Disable with --no-x_piecewise."
         ),
     )
     parser.add_argument(
@@ -349,13 +349,10 @@ def piecewise_warp_times(
     t_raw_s: np.ndarray,
     *,
     pre_start_s: float,
-    offset_time_s: float,
     post_end_s: float,
     segment_window_s: float,
 ) -> np.ndarray:
     out = np.asarray(t_raw_s, dtype=float).copy()
-    if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
-        return out
     if not np.isfinite(segment_window_s) or segment_window_s <= 0.0:
         return out
 
@@ -369,21 +366,15 @@ def piecewise_warp_times(
     segment_window_s = float(segment_window_s)
 
     pre_mask = out < 0.0
-    mid_mask = (out >= 0.0) & (out <= offset_time_s)
-    post_mask = out > offset_time_s
+    post_mask = out >= 0.0
 
     pre_span = 0.0 - pre_start_s
     if np.isfinite(pre_span) and pre_span > 0.0:
         out[pre_mask] = ((out[pre_mask] - pre_start_s) / pre_span) * segment_window_s - segment_window_s
 
-    out[mid_mask] = (out[mid_mask] / offset_time_s) * segment_window_s
-
-    post_span = post_end_s - float(offset_time_s)
+    post_span = post_end_s - 0.0
     if np.isfinite(post_span) and post_span > 0.0:
-        out[post_mask] = (
-            segment_window_s
-            + ((out[post_mask] - float(offset_time_s)) / post_span) * segment_window_s
-        )
+        out[post_mask] = (out[post_mask] / post_span) * segment_window_s
     return out
 
 
@@ -391,21 +382,18 @@ def piecewise_warp_scalar(
     t_raw_s: float,
     *,
     pre_start_s: float,
-    offset_time_s: float,
     post_end_s: float,
     segment_window_s: float,
 ) -> float:
     if not np.isfinite(t_raw_s):
         return float("nan")
-    if not np.isfinite(offset_time_s) or offset_time_s <= 0.0:
-        return float(t_raw_s)
     if not np.isfinite(segment_window_s) or segment_window_s <= 0.0:
         return float(t_raw_s)
 
     if not np.isfinite(pre_start_s):
         pre_start_s = float(t_raw_s) - float(segment_window_s)
     if not np.isfinite(post_end_s):
-        post_end_s = float(offset_time_s) + float(segment_window_s)
+        post_end_s = float(segment_window_s)
 
     pre_start_s = float(pre_start_s)
     post_end_s = float(post_end_s)
@@ -416,12 +404,10 @@ def piecewise_warp_scalar(
         if not np.isfinite(pre_span) or pre_span <= 0.0:
             return float(t_raw_s)
         return float(((t_raw_s - pre_start_s) / pre_span) * segment_window_s - segment_window_s)
-    if t_raw_s <= offset_time_s:
-        return float((t_raw_s / offset_time_s) * segment_window_s)
-    post_span = post_end_s - float(offset_time_s)
+    post_span = post_end_s - 0.0
     if not np.isfinite(post_span) or post_span <= 0.0:
-        return float(segment_window_s)
-    return float(segment_window_s + ((t_raw_s - float(offset_time_s)) / post_span) * segment_window_s)
+        return float(t_raw_s)
+    return float((t_raw_s / post_span) * segment_window_s)
 
 
 def get_trial_scalar(trial_df: pl.DataFrame, col_name: str) -> float | None:
@@ -471,14 +457,12 @@ def resample_trial_column(
     x_raw = np.asarray(trial_df.get_column(TIME_COL).to_list(), dtype=float)
     y_raw = np.asarray(trial_df.get_column(col_name).to_list(), dtype=float)
     if x_mode == "piecewise":
-        offset_time_s = get_trial_scalar(trial_df, "platform_offset_time_s")
         bounds = get_trial_time_bounds(trial_df)
-        if offset_time_s is not None and bounds is not None and piecewise_mid_duration_s is not None:
+        if bounds is not None and piecewise_mid_duration_s is not None:
             segment_window_s = float(piecewise_mid_duration_s)
             x_raw = piecewise_warp_times(
                 x_raw,
                 pre_start_s=float(bounds[0]),
-                offset_time_s=float(offset_time_s),
                 post_end_s=float(bounds[1]),
                 segment_window_s=segment_window_s,
             )
@@ -533,16 +517,15 @@ def draw_events(
     trial_bounds = get_trial_time_bounds(trial_df) if x_mode == "piecewise" else None
 
     def map_time(t_raw_s: float) -> float:
-        if x_mode == "piecewise" and offset_time_s is not None and segment_window_s > 0.0:
+        if x_mode == "piecewise" and segment_window_s > 0.0:
             pre_start_s = -segment_window_s
-            post_end_s = float(offset_time_s) + segment_window_s
+            post_end_s = segment_window_s
             if trial_bounds is not None:
                 pre_start_s = float(trial_bounds[0])
                 post_end_s = float(trial_bounds[1])
             return piecewise_warp_scalar(
                 t_raw_s,
                 pre_start_s=float(pre_start_s),
-                offset_time_s=float(offset_time_s),
                 post_end_s=float(post_end_s),
                 segment_window_s=float(segment_window_s),
             )
@@ -1273,7 +1256,7 @@ def main() -> None:
         piecewise_mid_duration_s = segment_window_s
         step = 1.0 / float(args.resample_hz)
         x_min = -segment_window_s
-        x_max = piecewise_mid_duration_s + segment_window_s
+        x_max = segment_window_s
         x_grid = np.arange(x_min, x_max + (step * 0.5), step, dtype=float)
         x_plot = x_grid
         x_ticks = build_common_xticks(x_grid, args.xtick_sec)

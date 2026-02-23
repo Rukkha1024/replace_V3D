@@ -18,6 +18,7 @@ Policy:
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py`가 `Rscript.exe` Windows 절대경로 고정에 의존해 WSL에서 직접 실행 시 LMM 단계가 실패(`FileNotFoundError`)하고, 최신 `output/all_trials_timeseries.csv` 기준 재분석 결과를 재현할 수 없었음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/report.md`의 정량 결과가 현재 입력(`output/all_trials_timeseries.csv`)과 불일치한 상태(예: 184 trial, 13/32 유의)로 남아 있어, 실행 산출(figures/stdout)과 문서 해석 간 정합성이 깨져 있었음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm`의 nonstep-only `(subject, velocity)` 그룹에서는 `step_onset_local` 평균을 만들 수 없어 `end_frame`가 결측이 되었고, 그 결과 5 nonstep trials(3 subjects)가 분석 표본에서 제외되어 subject 수(24→21)가 축소되는 문제가 있었음.
+- [VIZ] `scripts/plot_grid_timeseries.py`의 기본 piecewise x축이 `onset 전 / onset~offset / offset 이후` 3구간 워핑을 연속 적용해, total_mean 기준에서는 신호 모양이 과도하게 압축/신장되어 시각적 왜곡(비교성 저하)이 발생했음.
 
 ## 2026-02-22
 
