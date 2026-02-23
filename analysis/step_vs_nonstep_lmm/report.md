@@ -107,10 +107,10 @@
 ### 결과 해석
 
 **Balance/Stability (9/17 유의)**
-- **AP 방향 (Y축) 변수 집중 유의**: COP_Y_range, COP_Y_path_length, COP_Y_peak_velocity, vCOM_Y_peak 모두 step > nonstep. step 전략 시 전후 방향 균형 조절이 더 크다.
+- **ML 방향 (Y축) 변수 집중 유의**: COP_Y_range, COP_Y_path_length, COP_Y_peak_velocity, vCOM_Y_peak 모두 step > nonstep. step 전략 시 내외측 방향 균형 조절이 더 크다 (stepping은 본질적으로 ML 전략).
 - **MoS 감소**: MOS_minDist_signed_min, MOS_AP_v3d_min, MOS_ML_v3d_min 모두 step < nonstep (음수 estimate). step 전략은 stability margin이 더 적다.
-- **xCOM/BOS**: platform onset과 step onset 시점 모두 step < nonstep. step 전략에서 xCOM이 BOS 내에서 상대적으로 전방에 위치(값이 작음).
-- **ML 방향 (X축) 변수**: COM_X, COP_X 관련 변수는 모두 비유의. 전후 방향이 주요 차이 방향.
+- **xCOM/BOS (AP)**: platform onset과 step onset 시점 모두 step < nonstep. step 전략에서 xCOM이 BOS 내에서 상대적으로 전방에 위치(값이 작음).
+- **AP 방향 (X축) 변수**: COM_X, COP_X 관련 변수는 모두 비유의. 내외측 방향이 주요 차이 방향.
 
 **Joint Angles (2/10 유의)**
 - **Hip만 유의**: Hip_stance_ROM, Hip_stance_peak 모두 step > nonstep. Hip 전략 사용이 step에서 더 크다.
