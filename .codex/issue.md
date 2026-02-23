@@ -15,6 +15,7 @@ Policy:
 - [SCHEMA] 배치 payload에 legacy alias(`MOS_*_dir`) 경로가 남아 있으면 canonical-only 결과 컬럼 정책과 충돌해, 동일 지표의 과거 명칭이 코드 경로에 잔존하게 됨.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py`가 `Rscript.exe` Windows 절대경로 고정에 의존해 WSL에서 직접 실행 시 LMM 단계가 실패(`FileNotFoundError`)하고, 최신 `output/all_trials_timeseries.csv` 기준 재분석 결과를 재현할 수 없었음.
 - [ANALYSIS] `analysis/step_vs_nonstep_lmm/report.md`의 정량 결과가 현재 입력(`output/all_trials_timeseries.csv`)과 불일치한 상태(예: 184 trial, 13/32 유의)로 남아 있어, 실행 산출(figures/stdout)과 문서 해석 간 정합성이 깨져 있었음.
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm`의 nonstep-only `(subject, velocity)` 그룹에서는 `step_onset_local` 평균을 만들 수 없어 `end_frame`가 결측이 되었고, 그 결과 5 nonstep trials(3 subjects)가 분석 표본에서 제외되어 subject 수(24→21)가 축소되는 문제가 있었음.
 
 ## 2026-02-22
 

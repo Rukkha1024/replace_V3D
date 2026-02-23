@@ -291,6 +291,8 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
     - step trials: end_frame = step_onset_local (actual step onset)
     - nonstep trials: end_frame = mean(step_onset_local) of step trials
       in the same (subject, velocity) group
+    - nonstep fallback: if subject-velocity mean is unavailable, use global
+      mean(step_onset_local) across all step trials
 
     Returns a pandas DataFrame with [subject, velocity, trial, end_frame].
     """
@@ -324,15 +326,31 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
         .rename(columns={"step_onset_local": "mean_step_onset"})
     )
 
+    filled_sv_mean = 0
+    filled_global_mean = 0
     needs_end = trials["end_frame"].isna()
     if needs_end.any():
         trials = trials.merge(step_means, on=["subject", "velocity"], how="left")
-        fill_mask = needs_end & trials["mean_step_onset"].notna()
-        trials.loc[fill_mask, "end_frame"] = trials.loc[fill_mask, "mean_step_onset"]
+        fill_mask_sv = needs_end & trials["mean_step_onset"].notna()
+        trials.loc[fill_mask_sv, "end_frame"] = trials.loc[fill_mask_sv, "mean_step_onset"]
+        filled_sv_mean = int(fill_mask_sv.sum())
+
+        # Global fallback applies only to nonstep rows still missing end_frame.
+        global_step_mean = trials.loc[step_mask, "step_onset_local"].mean()
+        fill_mask_global = (
+            trials["end_frame"].isna()
+            & (trials["step_TF"] == "nonstep")
+            & pd.notna(global_step_mean)
+        )
+        trials.loc[fill_mask_global, "end_frame"] = global_step_mean
+        filled_global_mean = int(fill_mask_global.sum())
+
         trials.drop(columns=["mean_step_onset"], inplace=True)
 
     trials["end_frame"] = trials["end_frame"].round().astype("Int64")
 
+    print(f"  end_frame fill (subject-velocity mean): {filled_sv_mean}")
+    print(f"  end_frame fill (global step mean): {filled_global_mean}")
     n_missing = trials["end_frame"].isna().sum()
     if n_missing > 0:
         print(f"  Warning: {n_missing} trials with no computable end_frame (dropped)")
