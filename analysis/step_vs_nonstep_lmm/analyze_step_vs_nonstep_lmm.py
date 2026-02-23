@@ -24,6 +24,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -64,22 +65,94 @@ TRIAL_KEYS = ["subject", "velocity", "trial"]
 # ---------------------------------------------------------------------------
 # R configuration (subprocess-based, bypasses broken rpy2 on Windows)
 # ---------------------------------------------------------------------------
-R_HOME = Path(r"C:\Users\Alice\miniconda3\envs\module\lib\R")
-R_BIN = R_HOME / "bin" / "x64"
-RSCRIPT = str(R_BIN / "Rscript.exe")
+WINDOWS_R_HOME = Path(r"C:\Users\Alice\miniconda3\envs\module\lib\R")
+WINDOWS_RSCRIPT = WINDOWS_R_HOME / "bin" / "x64" / "Rscript.exe"
 
 
-def _r_env() -> dict:
-    """Build environment dict with R paths for subprocess calls."""
+def _candidate_rscripts() -> list[Path]:
+    """Return candidate Rscript paths in priority order."""
+    candidates: list[Path] = []
+
+    which_r = shutil.which("Rscript")
+    if which_r:
+        candidates.append(Path(which_r))
+
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        cp = Path(conda_prefix)
+        candidates.extend([
+            cp / "bin" / "Rscript",
+            cp / "Scripts" / "Rscript.exe",
+            cp / "lib" / "R" / "bin" / "Rscript",
+            cp / "lib" / "R" / "bin" / "x64" / "Rscript.exe",
+        ])
+
+    # Windows fallback is only meaningful on Windows runtime.
+    if os.name == "nt":
+        candidates.append(WINDOWS_RSCRIPT)
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(path)
+    return deduped
+
+
+def _infer_r_home(rscript_path: Path) -> Path | None:
+    """Best-effort inference for R_HOME from runtime paths."""
+    env_r_home = os.environ.get("R_HOME")
+    if env_r_home:
+        candidate = Path(env_r_home)
+        if candidate.exists():
+            return candidate
+
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        candidate = Path(conda_prefix) / "lib" / "R"
+        if candidate.exists():
+            return candidate
+
+    # Typical layout: .../lib/R/bin/Rscript or .../lib/R/bin/x64/Rscript.exe
+    if rscript_path.parent.name.lower() == "x64":
+        candidate = rscript_path.parent.parent.parent
+        if (candidate / "bin").exists():
+            return candidate
+
+    candidate = rscript_path.parent.parent
+    if (candidate / "bin").exists():
+        return candidate
+
+    if os.name == "nt" and rscript_path == WINDOWS_RSCRIPT:
+        return WINDOWS_R_HOME
+    return None
+
+
+def resolve_r_runtime() -> tuple[str, dict]:
+    """Resolve an executable Rscript path and compatible environment."""
+    candidates = _candidate_rscripts()
+    resolved: Path | None = None
+    for candidate in candidates:
+        if candidate.exists():
+            resolved = candidate
+            break
+
+    if resolved is None:
+        tried = ", ".join(str(p) for p in candidates) if candidates else "(no candidates)"
+        raise FileNotFoundError(
+            "Rscript executable not found. "
+            f"Tried: {tried}. Install R in env 'module' or ensure Rscript is on PATH."
+        )
+
     env = os.environ.copy()
-    extra = [
-        str(R_BIN),
-        r"C:\Users\Alice\miniconda3\envs\module\Library\bin",
-        r"C:\Users\Alice\miniconda3\envs\module\Library\mingw-w64\bin",
-    ]
-    env["PATH"] = os.pathsep.join(extra) + os.pathsep + env.get("PATH", "")
-    env["R_HOME"] = str(R_HOME)
-    return env
+    env["PATH"] = str(resolved.parent) + os.pathsep + env.get("PATH", "")
+    r_home = _infer_r_home(resolved)
+    if r_home is not None:
+        env["R_HOME"] = str(r_home)
+    return str(resolved), env
 
 
 # ---------------------------------------------------------------------------
@@ -425,10 +498,12 @@ def fit_lmm_all(trial_df: pd.DataFrame, specs: list[dict]) -> pd.DataFrame:
         r_script = f.name
 
     try:
+        rscript_cmd, r_env = resolve_r_runtime()
         print("  Running Rscript for LMM fitting...")
+        print(f"  Using Rscript: {rscript_cmd}")
         proc = subprocess.run(
-            [RSCRIPT, r_script],
-            capture_output=True, text=True, timeout=600, env=_r_env(),
+            [rscript_cmd, r_script],
+            capture_output=True, text=True, timeout=600, env=r_env,
         )
         if proc.returncode != 0:
             print(f"  R stderr: {proc.stderr[:1000]}")

@@ -13,6 +13,8 @@ Policy:
 - [FORCEPLATE] `shared_files` Stage01 대비 `replace_V3D` 배치 출력에서 COP 축 부호 해석이 반대로 나타나(`COP_X/COP_Y` sign inversion) 좌표 해석 및 보고서 방향성(`+X anterior`, `+Y left`)과 수치 결과 간 불일치가 발생함.
 - [VIZ] `scripts/plot_grid_timeseries.py`의 기본 `--y_zero_onset=True` 적용 시 `MOS_*`/`BOS_*`까지 onset-zeroing 되어, MoS 부호 해석(경계 내/외)과 BoS 절대면적 해석이 시각화에서 왜곡됨.
 - [SCHEMA] 배치 payload에 legacy alias(`MOS_*_dir`) 경로가 남아 있으면 canonical-only 결과 컬럼 정책과 충돌해, 동일 지표의 과거 명칭이 코드 경로에 잔존하게 됨.
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py`가 `Rscript.exe` Windows 절대경로 고정에 의존해 WSL에서 직접 실행 시 LMM 단계가 실패(`FileNotFoundError`)하고, 최신 `output/all_trials_timeseries.csv` 기준 재분석 결과를 재현할 수 없었음.
+- [ANALYSIS] `analysis/step_vs_nonstep_lmm/report.md`의 정량 결과가 현재 입력(`output/all_trials_timeseries.csv`)과 불일치한 상태(예: 184 trial, 13/32 유의)로 남아 있어, 실행 산출(figures/stdout)과 문서 해석 간 정합성이 깨져 있었음.
 
 ## 2026-02-22
 

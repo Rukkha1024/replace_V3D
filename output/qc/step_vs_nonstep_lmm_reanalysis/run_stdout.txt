@@ -1,0 +1,91 @@
+============================================================
+Step vs. Non-step Biomechanical LMM Analysis
+============================================================
+
+[M1] Loading and aggregating data...
+  Loading CSV...
+  Loading platform sheet...
+  Computing per-trial end_frame [platform_onset → step_onset]...
+  Warning: 5 trials with no computable end_frame (dropped)
+  Aggregating to trial-level features [platform_onset, step_onset] window...
+  Frames: 29038 → filtered & aggregated
+  Trials: 120 (step=53, nonstep=67)
+  DVs: 32 variables
+
+[M2] Fitting LMMs...
+  Running Rscript for LMM fitting...
+  Using Rscript: /home/alice/miniconda3/envs/module/bin/Rscript
+  R: LMM fitting complete: 32 models
+
+==========================================================================================
+LMM Results: DV ~ step_TF + (1|subject), REML
+Sig rule: BH-FDR by family, alpha=0.05
+==========================================================================================
+DV                             Family                Estimate       SE        t   Sig
+------------------------------------------------------------------------------------------
+COM_X_range                    Balance/Stability      -0.0015   0.0016   -0.980  n.s.
+COM_X_path_length              Balance/Stability       0.0005   0.0016    0.297  n.s.
+vCOM_X_peak                    Balance/Stability       0.0006   0.0044    0.134  n.s.
+COM_Y_range                    Balance/Stability       0.0008   0.0012    0.654  n.s.
+COM_Y_path_length              Balance/Stability       0.0010   0.0012    0.901  n.s.
+vCOM_Y_peak                    Balance/Stability       0.0219   0.0048    4.558   ***
+COP_X_range                    Balance/Stability       0.0111   0.0208    0.535  n.s.
+COP_X_path_length              Balance/Stability       0.0365   0.0424    0.862  n.s.
+COP_X_peak_velocity            Balance/Stability       2.3470   2.1095    1.113  n.s.
+COP_Y_range                    Balance/Stability       0.0587   0.0061    9.649   ***
+COP_Y_path_length              Balance/Stability       0.0682   0.0090    7.613   ***
+COP_Y_peak_velocity            Balance/Stability       0.7228   0.1347    5.365   ***
+MOS_minDist_signed_min         Balance/Stability      -0.0141   0.0027   -5.197   ***
+MOS_AP_v3d_min                 Balance/Stability      -0.0137   0.0027   -4.974   ***
+MOS_ML_v3d_min                 Balance/Stability      -0.0048   0.0023   -2.117  n.s.
+------------------------------------------------------------------------------------------
+Hip_R_ROM                      Joint Angles            1.9376   0.4151    4.668   ***
+Hip_R_peak                     Joint Angles            2.0972   0.3814    5.499   ***
+Knee_R_ROM                     Joint Angles            3.4939   0.5488    6.366   ***
+Knee_R_peak                    Joint Angles            3.2863   0.5510    5.965   ***
+Ankle_R_ROM                    Joint Angles            1.4424   0.5008    2.880    **
+Ankle_R_peak                   Joint Angles            1.2312   0.4748    2.593     *
+Trunk_ROM                      Joint Angles            0.7933   0.5151    1.540  n.s.
+Trunk_peak                     Joint Angles            0.5835   0.5076    1.150  n.s.
+Neck_ROM                       Joint Angles            2.5418   1.0634    2.390     *
+Neck_peak                      Joint Angles            2.4535   1.0750    2.282     *
+------------------------------------------------------------------------------------------
+GRF_X_peak                     Force/Torque            2.5601   9.5551    0.268  n.s.
+GRF_X_range                    Force/Torque           15.3460  19.9507    0.769  n.s.
+GRF_Y_peak                     Force/Torque           26.0046   3.6419    7.140   ***
+GRF_Y_range                    Force/Torque           38.8564   4.5151    8.606   ***
+GRF_Z_peak                     Force/Torque           24.9397  17.0580    1.462  n.s.
+GRF_Z_range                    Force/Torque           24.4697  18.8332    1.299  n.s.
+AnkleTorqueMid_Y_peak          Force/Torque           -0.0648   0.0334   -1.938  n.s.
+------------------------------------------------------------------------------------------
+
+FDR significant: 16/32 variables
+
+--- Significant Variables (BH-FDR Sig, alpha=0.05) ---
+  COP_Y_range: step=0.1034±0.0409, nonstep=0.0497±0.0362, sig=***
+  GRF_Y_range: step=70.4857±38.3969, nonstep=34.5583±19.4009, sig=***
+  COP_Y_path_length: step=0.1535±0.0709, nonstep=0.0973±0.0704, sig=***
+  GRF_Y_peak: step=51.0308±29.5295, nonstep=26.3621±15.3231, sig=***
+  Knee_R_ROM: step=12.1091±7.3416, nonstep=10.3808±5.3044, sig=***
+  Knee_R_peak: step=11.0859±7.1514, nonstep=9.4878±5.0010, sig=***
+  Hip_R_peak: step=8.7473±3.6535, nonstep=7.4293±3.1197, sig=***
+  COP_Y_peak_velocity: step=1.6746±0.9534, nonstep=1.1580±1.0651, sig=***
+  MOS_minDist_signed_min: step=0.0335±0.0282, nonstep=0.0489±0.0120, sig=***
+  MOS_AP_v3d_min: step=0.0383±0.0282, nonstep=0.0534±0.0126, sig=***
+  Hip_R_ROM: step=8.8818±3.6268, nonstep=7.9508±4.1245, sig=***
+  vCOM_Y_peak: step=0.0561±0.0294, nonstep=0.0352±0.0243, sig=***
+  Ankle_R_ROM: step=9.9153±5.8061, nonstep=8.7890±4.7526, sig=**
+  Ankle_R_peak: step=8.0364±4.9096, nonstep=6.9020±4.0388, sig=*
+  Neck_ROM: step=10.1496±10.9637, nonstep=10.0586±9.0681, sig=*
+  Neck_peak: step=9.8476±10.9712, nonstep=9.8751±9.0646, sig=*
+
+[M3] Generating figures...
+  fig1_lmm_forest_plot.png
+  fig2_violin_significant.png
+  fig3_descriptive_heatmap.png
+
+============================================================
+Analysis complete.
+Output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/analysis/step_vs_nonstep_lmm
+============================================================
+
