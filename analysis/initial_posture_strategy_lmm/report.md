@@ -78,6 +78,35 @@
 | Force/Torque (`GRF_*`, `AnkleTorque*`) | 축 방향 힘/토크 부호 | 본 CSV는 onset-zero export라 onset 프레임 값은 0으로 고정 가능 |
 | COP onset0 | onset 대비 변위 | 정의상 onset 프레임에서 0 |
 
+### Analyzed Variables (Full Set, n=24)
+
+| Variable | Family | Testability at onset | Result status |
+|---|---|---|---|
+| `COM_X` | Balance | testable | n.s. |
+| `COM_Y` | Balance | testable | n.s. |
+| `vCOM_X` | Balance | testable | ** |
+| `vCOM_Y` | Balance | testable | n.s. |
+| `MOS_minDist_signed` | Balance | testable | *** |
+| `MOS_AP_v3d` | Balance | testable | *** |
+| `MOS_ML_v3d` | Balance | testable | n.s. |
+| `xCOM_BOS_norm_onset` | Balance | testable | *** |
+| `Hip_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Knee_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Ankle_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Trunk_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Neck_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Hip_stance_X_deg` | Joint_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `Knee_stance_X_deg` | Joint_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `Ankle_stance_X_deg` | Joint_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `Trunk_X_deg` | Joint_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `Neck_X_deg` | Joint_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `COP_X_m_onset0` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `COP_Y_m_onset0` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `GRF_X_N` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `GRF_Y_N` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `GRF_Z_N` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+| `AnkleTorqueMid_int_Y_Nm_per_kg` | Force_onset_zeroed | untestable (`constant_zero`) | untestable |
+
 ## Results
 
 ### Hypothesis Verdict (strict)
@@ -134,4 +163,3 @@ conda run --no-capture-output -n module python analysis/initial_posture_strategy
 ## Figures
 
 - 이번 분석은 사용자 요청에 따라 **figure를 생성하지 않음**.
-
