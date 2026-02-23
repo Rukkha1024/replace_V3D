@@ -8,6 +8,7 @@ Policy:
 ## 2026-02-23
 
 - [PIPELINE] `main.py --overwrite` full batch 실행이 `data/all_data/251128_방주원_perturb_200_005.c3d`의 `T10` 마커 누락으로 중단되어, 변경 검증(출력 재생성/MD5 비교)이 기본 설정만으로는 완료되지 않음.
+- [FORCEPLATE] `shared_files` Stage01 대비 `replace_V3D` 배치 출력에서 COP 축 부호 해석이 반대로 나타나(`COP_X/COP_Y` sign inversion) 좌표 해석 및 보고서 방향성(`+X anterior`, `+Y left`)과 수치 결과 간 불일치가 발생함.
 
 ## 2026-02-22
 

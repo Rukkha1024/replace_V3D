@@ -44,16 +44,16 @@ from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
-from replace_v3d.torque.cop import compute_cop_lab_xy
+from replace_v3d.torque.cop import compute_cop_stage01_xy
 from replace_v3d.torque.forceplate import (
     choose_active_force_platform,
-    extract_platform_wrenches_lab,
     read_force_platforms,
 )
 from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
     load_forceplate_inertial_templates,
 )
+from replace_v3d.torque.stage01_axis import transform_force_moment_to_stage01
 
 
 def _load_meta_with_age_group(event_xlsm: Path) -> pl.DataFrame:
@@ -298,11 +298,23 @@ def _compute_ankle_torque_payload(
     else:
         fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
 
-    analog_used = analog_avg
+    idx = fp.channel_indices_0based.astype(int)
+    F_raw = analog_avg[:, idx[0:3]]
+    M_raw = analog_avg[:, idx[3:6]]
+    F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
+        F_in=F_raw,
+        M_in=M_raw,
+    )
+
+    analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
+    analog_stage01[:, idx[0:3]] = F_stage01_raw
+    analog_stage01[:, idx[3:6]] = M_stage01_raw
+
+    analog_used = analog_stage01
     onset0 = int(platform_onset_local) - 1
     offset0 = int(platform_offset_local) - 1
     analog_used, inertial_info = apply_forceplate_inertial_subtract(
-        analog_avg,
+        analog_stage01,
         fp,
         velocity=float(velocity),
         onset0=int(onset0),
@@ -327,15 +339,13 @@ def _compute_ankle_torque_payload(
             raise ValueError(msg)
         print(msg)
 
-    F_lab, M_lab = extract_platform_wrenches_lab(analog_used, fp)
-    idx = fp.channel_indices_0based.astype(int)
-    F_plate = analog_used[:, idx[0:3]]
-    M_plate = analog_used[:, idx[3:6]]
-    COP_lab_xy = compute_cop_lab_xy(
-        F_plate=F_plate,
-        M_plate=M_plate,
-        fp_origin_lab=fp.origin_lab,
-        R_pl2lab=fp.R_pl2lab,
+    # Normalize to shared_files Stage01 sign convention for force/moment channels.
+    # COP ratio is unaffected by a global sign flip, but GRF/GRM parity requires it.
+    F_stage01 = -analog_used[:, idx[0:3]]
+    M_stage01 = -analog_used[:, idx[3:6]]
+    COP_stage01_xy = compute_cop_stage01_xy(
+        F_stage01=F_stage01,
+        M_stage01=M_stage01,
     )
 
     jc = compute_joint_centers(points, labels)
@@ -343,8 +353,8 @@ def _compute_ankle_torque_payload(
     ankle_R = jc["ankle_R"]
 
     res = compute_ankle_torque_from_net_wrench(
-        F_lab=F_lab,
-        M_lab_at_fp_origin=M_lab,
+        F_lab=F_stage01,
+        M_lab_at_fp_origin=M_stage01,
         fp_origin_lab=fp.origin_lab,
         ankle_L=ankle_L,
         ankle_R=ankle_R,
@@ -369,8 +379,9 @@ def _compute_ankle_torque_payload(
         "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
         "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
         "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-        "COP_X_m": COP_lab_xy[:end, 0],
-        "COP_Y_m": COP_lab_xy[:end, 1],
+        # NOTE: COP_X_m/COP_Y_m now follow shared_files Stage01 Cx/Cy semantics.
+        "COP_X_m": COP_stage01_xy[:end, 0],
+        "COP_Y_m": COP_stage01_xy[:end, 1],
         "FP_origin_X_m": np.full(end, float(res.fp_origin_lab[0])),
         "FP_origin_Y_m": np.full(end, float(res.fp_origin_lab[1])),
         "FP_origin_Z_m": np.full(end, float(res.fp_origin_lab[2])),

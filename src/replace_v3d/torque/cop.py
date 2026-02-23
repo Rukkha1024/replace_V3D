@@ -8,29 +8,29 @@ def safe_div(num: np.ndarray, den: np.ndarray, eps: float = 1e-12) -> np.ndarray
     return num / den2
 
 
-def compute_cop_lab_xy(
+def compute_cop_stage01_xy(
     *,
-    F_plate: np.ndarray,
-    M_plate: np.ndarray,
-    fp_origin_lab: np.ndarray,
-    R_pl2lab: np.ndarray,
+    F_stage01: np.ndarray,
+    M_stage01: np.ndarray,
     eps: float = 1e-12,
 ) -> np.ndarray:
-    """Compute COP X/Y in lab coordinates.
+    """Compute Stage01 COP columns (Cx/Cy) from transformed force/moment.
 
-    COP is defined on the force-plate plane, so only X/Y are returned.
+    After Stage01 axis transform:
+      Cx = -My / Fz
+      Cy =  Mx / Fz
     """
 
-    F_plate = np.asarray(F_plate, dtype=float)
-    M_plate = np.asarray(M_plate, dtype=float)
-    fp_origin_lab = np.asarray(fp_origin_lab, dtype=float).reshape(3)
-    R_pl2lab = np.asarray(R_pl2lab, dtype=float).reshape(3, 3)
-    Fz = F_plate[:, 2]
-    cop_x = safe_div(-M_plate[:, 1], Fz, eps=eps)
-    cop_y = safe_div(M_plate[:, 0], Fz, eps=eps)
+    F_arr = np.asarray(F_stage01, dtype=float)
+    M_arr = np.asarray(M_stage01, dtype=float)
+    if F_arr.ndim != 2 or F_arr.shape[1] != 3:
+        raise ValueError(f"F_stage01 must be shape (T,3), got {F_arr.shape}")
+    if M_arr.ndim != 2 or M_arr.shape[1] != 3:
+        raise ValueError(f"M_stage01 must be shape (T,3), got {M_arr.shape}")
+    if F_arr.shape[0] != M_arr.shape[0]:
+        raise ValueError(f"F_stage01/M_stage01 length mismatch: {F_arr.shape[0]} vs {M_arr.shape[0]}")
 
-    # row-vector convention: v_lab = v_plate @ R^T
-    # with v_plate = [cop_x, cop_y, 0], only lab X/Y are needed.
-    lab_x = fp_origin_lab[0] + (cop_x * R_pl2lab[0, 0]) + (cop_y * R_pl2lab[0, 1])
-    lab_y = fp_origin_lab[1] + (cop_x * R_pl2lab[1, 0]) + (cop_y * R_pl2lab[1, 1])
-    return np.column_stack([lab_x, lab_y])
+    Fz = F_arr[:, 2]
+    cop_x = safe_div(-M_arr[:, 1], Fz, eps=eps)
+    cop_y = safe_div(M_arr[:, 0], Fz, eps=eps)
+    return np.column_stack([cop_x, cop_y])
