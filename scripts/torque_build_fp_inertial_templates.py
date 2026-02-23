@@ -333,7 +333,7 @@ def main() -> None:
         "--axis_transform",
         choices=["shared_files_default", "none"],
         default="shared_files_default",
-        help="Apply the same axis transform used in shared_files Stage01 (default) or none.",
+        help="Apply the repository Stage01 axis transform (shared_files_default name kept for compatibility) or none.",
     )
     ap.add_argument(
         "--out_npz",

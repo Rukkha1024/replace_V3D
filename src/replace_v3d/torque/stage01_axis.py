@@ -8,9 +8,9 @@ def transform_force_moment_to_stage01(
     F_in: np.ndarray,
     M_in: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Apply shared_files Stage01 axis transform to force/moment channels.
+    """Apply the repository Stage01 axis transform to force/moment channels.
 
-    Stage01 mapping (shared_files/config.yaml):
+    Stage01 mapping:
       Fx <- +Fy
       Fy <- +Fx
       Fz <- -Fz
@@ -51,4 +51,3 @@ def transform_force_moment_to_stage01(
         ]
     )
     return F_out, M_out
-

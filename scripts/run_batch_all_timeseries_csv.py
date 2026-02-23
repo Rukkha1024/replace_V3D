@@ -310,8 +310,8 @@ def _compute_ankle_torque_payload(
     analog_stage01[:, idx[0:3]] = F_stage01_raw
     analog_stage01[:, idx[3:6]] = M_stage01_raw
 
-    # Align channel sign to shared_files Stage01 diagnostics/templates before subtract.
-    # shared_files stores force/moment channels in the opposite sign of the C3D-mapped Stage01 raw.
+    # Align channel sign to the repository Stage01 template convention before subtract.
+    # Stage01 templates use the opposite sign of the direct C3D-mapped Stage01 raw.
     analog_shared_sign = analog_stage01.copy()
     analog_shared_sign[:, idx[0:3]] *= -1.0
     analog_shared_sign[:, idx[3:6]] *= -1.0
@@ -345,7 +345,7 @@ def _compute_ankle_torque_payload(
             raise ValueError(msg)
         print(msg)
 
-    # `analog_used` is already aligned to shared_files Stage01 sign convention.
+    # `analog_used` is already aligned to the Stage01 template sign convention.
     F_stage01 = analog_used[:, idx[0:3]]
     M_stage01 = analog_used[:, idx[3:6]]
     COP_stage01_xy = compute_cop_stage01_xy(
@@ -384,7 +384,7 @@ def _compute_ankle_torque_payload(
         "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
         "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
         "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-        # NOTE: COP_X_m/COP_Y_m now follow shared_files Stage01 Cx/Cy semantics.
+        # NOTE: COP_X_m/COP_Y_m follow Stage01 Cx/Cy semantics.
         "COP_X_m": COP_stage01_xy[:end, 0],
         "COP_Y_m": COP_stage01_xy[:end, 1],
         "FP_origin_X_m": np.full(end, float(res.fp_origin_lab[0])),

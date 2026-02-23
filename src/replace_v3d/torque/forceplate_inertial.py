@@ -17,7 +17,7 @@ MissingVelocityPolicy = Literal["skip", "nearest", "interpolate"]
 class ForceplateInertialTemplate:
     """Per-velocity inertial (unloaded) template at mocap rate (typically 100 Hz).
 
-    This mirrors Stage01's direct-subtract logic in `shared_files/stages/01_build_dataset.py`:
+    This mirrors the repository Stage01 direct-subtract logic:
     - A per-velocity template is built from unloaded trials (forceplate_3.csv)
     - Each channel is baseline-shifted so template[0] == 0
     - At application time, the template is aligned to platform onset, then the last
