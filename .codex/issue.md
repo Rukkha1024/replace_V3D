@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-23
 
+- [ANALYSIS] `analysis/initial_posture_strategy_lmm/analyze_initial_posture_strategy_lmm.py`에서 force 절대 onset 재계산 경로 적용 시, forceplate inertial subtraction QC가 4 trial에서 실패 경고(`non-strict`)를 출력해 force 변수 해석 시 trial-level 품질 확인이 필요해졌음.
 - [DOC] `analysis/initial_posture_strategy_lmm/report.md`에서 유의 변수만 표시할 때, 분석 대상 전체 변수 목록(검정 가능/불가능 포함)이 누락되면 결과 해석의 기준집합이 불명확해지는 문제가 있었음.
 - [ANALYSIS] `analysis/initial_posture_strategy_lmm`에서 `platform_onset` 단일시점 비교를 수행할 때, 배치 CSV의 onset-zero export 특성 때문에 각도/GRF/토크/COP_onset0 계열이 구조적으로 0 상수가 되어 LMM에서 \"비유의\"가 아니라 \"검정불가\"로 분리 처리해야 하는 문제가 발생함.
 - [DOC] `analysis/step_vs_nonstep_lmm/report.md`에서 Van Wouwe 관련 설명이 여러 섹션으로 분산되면, 방법/결과/비교 대응을 한 화면에서 추적하기 어려워 해석 전달력이 떨어지는 문제가 있음.

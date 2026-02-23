@@ -51,11 +51,21 @@ from statsmodels.stats.multitest import multipletests
 
 from replace_v3d.io.c3d_reader import read_c3d_points
 from replace_v3d.io.events_excel import (
+    load_subject_body_mass_kg,
     load_trial_events,
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
 )
+from replace_v3d.com import compute_joint_centers
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
+from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
+from replace_v3d.torque.cop import compute_cop_stage01_xy
+from replace_v3d.torque.forceplate import choose_active_force_platform, read_force_platforms
+from replace_v3d.torque.forceplate_inertial import (
+    apply_forceplate_inertial_subtract,
+    load_forceplate_inertial_templates,
+)
+from replace_v3d.torque.stage01_axis import transform_force_moment_to_stage01
 
 # Required display config by repo rule
 pl.Config.set_tbl_rows(999)
@@ -65,6 +75,7 @@ pl.Config.set_tbl_width_chars(120)
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
 DEFAULT_PLATFORM_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
+DEFAULT_FP_INERTIAL_TEMPLATES = REPO_ROOT / "src" / "replace_v3d" / "torque" / "assets" / "fp_inertial_templates.npz"
 DEFAULT_OUT_DIR = SCRIPT_DIR
 
 TRIAL_KEYS = ["subject", "velocity", "trial"]
@@ -78,6 +89,16 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     ap.add_argument("--platform_xlsm", type=Path, default=DEFAULT_PLATFORM_XLSM)
     ap.add_argument("--c3d_dir", type=Path, default=DEFAULT_C3D_DIR)
+    ap.add_argument("--fp_inertial_templates", type=Path, default=DEFAULT_FP_INERTIAL_TEMPLATES)
+    ap.add_argument(
+        "--fp_inertial_policy",
+        choices=["skip", "nearest", "interpolate"],
+        default="skip",
+        help="Missing template policy for force inertial subtraction.",
+    )
+    ap.add_argument("--fp_inertial_qc_fz_threshold", type=float, default=20.0)
+    ap.add_argument("--fp_inertial_qc_margin_m", type=float, default=0.0)
+    ap.add_argument("--fp_inertial_qc_strict", action="store_true")
     ap.add_argument("--out_dir", type=Path, default=DEFAULT_OUT_DIR)
     ap.add_argument("--dry-run", action="store_true", help="Only run loading/matching/audit; skip LMM.")
     ap.add_argument(
@@ -382,12 +403,19 @@ def _build_c3d_key_map(c3d_dir: Path, platform_xlsm: Path, trial_keys: set[tuple
     return key_to_file
 
 
-def compute_absolute_onset_angles(
+def compute_absolute_onset_features(
     trial_meta: pd.DataFrame,
     platform_xlsm: Path,
     c3d_dir: Path,
     major_side: pd.DataFrame,
+    fp_inertial_templates_path: Path,
+    fp_inertial_policy: str,
+    fp_inertial_qc_fz_threshold: float,
+    fp_inertial_qc_margin_m: float,
+    fp_inertial_qc_strict: bool,
 ) -> pd.DataFrame:
+    templates = load_forceplate_inertial_templates(fp_inertial_templates_path)
+
     keys = set(
         (str(r.subject).strip(), float(r.velocity), int(r.trial))
         for r in trial_meta.itertuples(index=False)
@@ -405,10 +433,12 @@ def compute_absolute_onset_angles(
     trial_lookup = trial_meta.set_index(TRIAL_KEYS)[["step_TF", "state"]].to_dict("index")
 
     rows: list[dict[str, Any]] = []
+    qc_warn_count = 0
 
     for key in sorted(keys):
         subject, velocity, trial = key
-        c3d = read_c3d_points(key_to_file[key])
+        c3d_file = key_to_file[key]
+        c3d = read_c3d_points(c3d_file)
         events = load_trial_events(
             event_xlsm=platform_xlsm,
             subject=subject,
@@ -455,19 +485,118 @@ def compute_absolute_onset_angles(
         row["Knee_stance_X_abs_onset"] = _pick_stance_value(s, "Knee_L_X_abs_onset", "Knee_R_X_abs_onset")
         row["Ankle_stance_X_abs_onset"] = _pick_stance_value(s, "Ankle_L_X_abs_onset", "Ankle_R_X_abs_onset")
 
+        fp_coll = read_force_platforms(c3d_file)
+        analog_avg = fp_coll.analog.values
+        n_frames = int(c3d.points.shape[0])
+        if analog_avg.shape[0] != n_frames:
+            raise ValueError(
+                f"Analog frames ({analog_avg.shape[0]}) != point frames ({n_frames}) for {c3d_file.name}"
+            )
+        fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
+        idx = fp.channel_indices_0based.astype(int)
+
+        F_raw = analog_avg[:, idx[0:3]]
+        M_raw = analog_avg[:, idx[3:6]]
+        F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
+            F_in=F_raw,
+            M_in=M_raw,
+        )
+        analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
+        analog_stage01[:, idx[0:3]] = F_stage01_raw
+        analog_stage01[:, idx[3:6]] = M_stage01_raw
+
+        # Align sign to repository Stage01 inertial-template convention.
+        analog_shared_sign = analog_stage01.copy()
+        analog_shared_sign[:, idx[0:3]] *= -1.0
+        analog_shared_sign[:, idx[3:6]] *= -1.0
+
+        offset0 = int(events.platform_offset_local) - 1
+        analog_used, inertial_info = apply_forceplate_inertial_subtract(
+            analog_shared_sign,
+            fp,
+            velocity=float(velocity),
+            onset0=int(idx0),
+            offset0=int(offset0),
+            templates=templates,
+            missing_policy=str(fp_inertial_policy),
+            qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold),
+            qc_margin_m=float(fp_inertial_qc_margin_m),
+        )
+        if not inertial_info.get("applied"):
+            raise ValueError(
+                "Forceplate inertial subtract did not apply for "
+                f"{c3d_file.name} (reason={inertial_info.get('reason')}, "
+                f"policy={inertial_info.get('missing_policy')})."
+            )
+        if inertial_info.get("qc_failed"):
+            msg = (
+                "Forceplate inertial subtract QC failed "
+                f"for {c3d_file.name} (COP in-bounds after="
+                f"{inertial_info.get('after_qc_cop_in_bounds_frac')})."
+            )
+            if fp_inertial_qc_strict:
+                raise ValueError(msg)
+            qc_warn_count += 1
+
+        F_stage01 = analog_used[:, idx[0:3]]
+        M_stage01 = analog_used[:, idx[3:6]]
+        COP_stage01_xy = compute_cop_stage01_xy(
+            F_stage01=F_stage01,
+            M_stage01=M_stage01,
+        )
+        jc = compute_joint_centers(c3d.points, c3d.labels)
+        body_mass_kg = load_subject_body_mass_kg(platform_xlsm, subject)
+        torque_res = compute_ankle_torque_from_net_wrench(
+            F_lab=F_stage01,
+            M_lab_at_fp_origin=M_stage01,
+            fp_origin_lab=fp.origin_lab,
+            ankle_L=jc["ankle_L"],
+            ankle_R=jc["ankle_R"],
+            body_mass_kg=body_mass_kg,
+        )
+
+        row["GRF_X_abs_onset"] = float(F_stage01[idx0, 0])
+        row["GRF_Y_abs_onset"] = float(F_stage01[idx0, 1])
+        row["GRF_Z_abs_onset"] = float(F_stage01[idx0, 2])
+        row["COP_X_abs_onset"] = float(COP_stage01_xy[idx0, 0])
+        row["COP_Y_abs_onset"] = float(COP_stage01_xy[idx0, 1])
+        row["AnkleTorqueMid_Y_perkg_abs_onset"] = (
+            float(np.nan)
+            if torque_res.torque_mid_int_Y_Nm_per_kg is None
+            else float(torque_res.torque_mid_int_Y_Nm_per_kg[idx0])
+        )
+
         rows.append(row)
 
     out = pd.DataFrame(rows)
+    if qc_warn_count > 0:
+        print(f"  Warning: force inertial subtract QC failed in {qc_warn_count} trials (non-strict mode).")
+
     return out[TRIAL_KEYS + [
         "Hip_stance_X_abs_onset",
         "Knee_stance_X_abs_onset",
         "Ankle_stance_X_abs_onset",
         "Trunk_X_abs_onset",
         "Neck_X_abs_onset",
+        "GRF_X_abs_onset",
+        "GRF_Y_abs_onset",
+        "GRF_Z_abs_onset",
+        "COP_X_abs_onset",
+        "COP_Y_abs_onset",
+        "AnkleTorqueMid_Y_perkg_abs_onset",
     ]]
 
 
-def build_analysis_dataframe(csv_path: Path, platform_xlsm: Path, c3d_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def build_analysis_dataframe(
+    csv_path: Path,
+    platform_xlsm: Path,
+    c3d_dir: Path,
+    fp_inertial_templates_path: Path,
+    fp_inertial_policy: str,
+    fp_inertial_qc_fz_threshold: float,
+    fp_inertial_qc_margin_m: float,
+    fp_inertial_qc_strict: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     print("  Loading CSV...")
     df = load_csv(csv_path)
     print(f"  Frames: {df.height}, Columns: {df.width}")
@@ -499,17 +628,6 @@ def build_analysis_dataframe(csv_path: Path, platform_xlsm: Path, c3d_dir: Path)
         "MOS_AP_v3d",
         "MOS_ML_v3d",
         "xCOM_BOS_norm_onset",
-        "Hip_stance_X_deg",
-        "Knee_stance_X_deg",
-        "Ankle_stance_X_deg",
-        "Trunk_X_deg",
-        "Neck_X_deg",
-        "COP_X_m_onset0",
-        "COP_Y_m_onset0",
-        "GRF_X_N",
-        "GRF_Y_N",
-        "GRF_Z_N",
-        "AnkleTorqueMid_int_Y_Nm_per_kg",
     ]
     missing_cols = sorted(set(keep_cols) - set(onset_df.columns))
     if missing_cols:
@@ -517,25 +635,36 @@ def build_analysis_dataframe(csv_path: Path, platform_xlsm: Path, c3d_dir: Path)
 
     onset_df = onset_df[keep_cols].copy()
 
-    print("  Recomputing absolute onset angles from C3D...")
-    abs_angles = compute_absolute_onset_angles(
+    print("  Recomputing absolute onset angles/forces from C3D...")
+    abs_features = compute_absolute_onset_features(
         trial_meta=trial_meta,
         platform_xlsm=platform_xlsm,
         c3d_dir=c3d_dir,
         major_side=major_side,
+        fp_inertial_templates_path=fp_inertial_templates_path,
+        fp_inertial_policy=fp_inertial_policy,
+        fp_inertial_qc_fz_threshold=fp_inertial_qc_fz_threshold,
+        fp_inertial_qc_margin_m=fp_inertial_qc_margin_m,
+        fp_inertial_qc_strict=fp_inertial_qc_strict,
     )
 
-    analysis_df = onset_df.merge(abs_angles, on=TRIAL_KEYS, how="left")
+    analysis_df = onset_df.merge(abs_features, on=TRIAL_KEYS, how="left")
     if analysis_df[[
         "Hip_stance_X_abs_onset",
         "Knee_stance_X_abs_onset",
         "Ankle_stance_X_abs_onset",
         "Trunk_X_abs_onset",
         "Neck_X_abs_onset",
+        "GRF_X_abs_onset",
+        "GRF_Y_abs_onset",
+        "GRF_Z_abs_onset",
+        "COP_X_abs_onset",
+        "COP_Y_abs_onset",
+        "AnkleTorqueMid_Y_perkg_abs_onset",
     ]].isna().any().any():
-        raise ValueError("Missing absolute onset angle values after merge.")
+        raise ValueError("Missing absolute onset feature values after merge.")
 
-    return analysis_df, trial_meta, abs_angles
+    return analysis_df, trial_meta, abs_features
 
 
 def variable_catalog() -> list[dict[str, str]]:
@@ -548,22 +677,17 @@ def variable_catalog() -> list[dict[str, str]]:
         {"dv": "MOS_AP_v3d", "family": "Balance"},
         {"dv": "MOS_ML_v3d", "family": "Balance"},
         {"dv": "xCOM_BOS_norm_onset", "family": "Balance"},
-        {"dv": "Hip_stance_X_deg", "family": "Joint_onset_zeroed"},
-        {"dv": "Knee_stance_X_deg", "family": "Joint_onset_zeroed"},
-        {"dv": "Ankle_stance_X_deg", "family": "Joint_onset_zeroed"},
-        {"dv": "Trunk_X_deg", "family": "Joint_onset_zeroed"},
-        {"dv": "Neck_X_deg", "family": "Joint_onset_zeroed"},
-        {"dv": "COP_X_m_onset0", "family": "Force_onset_zeroed"},
-        {"dv": "COP_Y_m_onset0", "family": "Force_onset_zeroed"},
-        {"dv": "GRF_X_N", "family": "Force_onset_zeroed"},
-        {"dv": "GRF_Y_N", "family": "Force_onset_zeroed"},
-        {"dv": "GRF_Z_N", "family": "Force_onset_zeroed"},
-        {"dv": "AnkleTorqueMid_int_Y_Nm_per_kg", "family": "Force_onset_zeroed"},
         {"dv": "Hip_stance_X_abs_onset", "family": "Joint_absolute"},
         {"dv": "Knee_stance_X_abs_onset", "family": "Joint_absolute"},
         {"dv": "Ankle_stance_X_abs_onset", "family": "Joint_absolute"},
         {"dv": "Trunk_X_abs_onset", "family": "Joint_absolute"},
         {"dv": "Neck_X_abs_onset", "family": "Joint_absolute"},
+        {"dv": "COP_X_abs_onset", "family": "Force_absolute"},
+        {"dv": "COP_Y_abs_onset", "family": "Force_absolute"},
+        {"dv": "GRF_X_abs_onset", "family": "Force_absolute"},
+        {"dv": "GRF_Y_abs_onset", "family": "Force_absolute"},
+        {"dv": "GRF_Z_abs_onset", "family": "Force_absolute"},
+        {"dv": "AnkleTorqueMid_Y_perkg_abs_onset", "family": "Force_absolute"},
     ]
 
 
@@ -791,6 +915,11 @@ def main() -> None:
         csv_path=args.csv,
         platform_xlsm=args.platform_xlsm,
         c3d_dir=args.c3d_dir,
+        fp_inertial_templates_path=args.fp_inertial_templates,
+        fp_inertial_policy=args.fp_inertial_policy,
+        fp_inertial_qc_fz_threshold=args.fp_inertial_qc_fz_threshold,
+        fp_inertial_qc_margin_m=args.fp_inertial_qc_margin_m,
+        fp_inertial_qc_strict=args.fp_inertial_qc_strict,
     )
 
     specs = variable_catalog()
