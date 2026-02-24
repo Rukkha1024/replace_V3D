@@ -25,7 +25,6 @@ Do not use this skill when:
 This skill only targets analysis folders with:
 - `analyze_*.py`
 - `report.md`
-- optional `fig*.png`
 
 Default scope is one folder unless the user explicitly asks for multiple folders.
 
@@ -95,7 +94,7 @@ Each finding must include:
 
 - Always run Python as: `conda run -n module python ...`
 - Prefer `polars` then `pandas`
-- Keep analysis outputs as figures + stdout (no Excel/CSV unless user explicitly asks)
+- Keep analysis outputs as stdout + `report.md` (no Excel/CSV unless user explicitly asks)
 - Do not modify unrelated files
 - Do not rewrite `report.md` unless explicitly requested
 

@@ -1,6 +1,6 @@
 ---
 name: analysis-report
-description: "Create self-contained analysis workflows under analysis/. Each folder bundles a script (.py), report (report.md), and figures (.png). No Excel/CSV output. Produces a report with research question, methodology, results, interpretation structure."
+description: "Create self-contained analysis workflows under analysis/. Each folder bundles a script (.py) and report (report.md). No Excel/CSV output. Produces a report with research question, methodology, results, interpretation structure."
 ---
 
 # Analysis Report Workflow
@@ -9,7 +9,7 @@ description: "Create self-contained analysis workflows under analysis/. Each fol
 
 - Starting a new analysis topic (research question, exploratory analysis)
 - Requests to work under the `analysis/` folder
-- Need to bundle statistics + visualization into a single self-contained folder
+- Need to bundle statistics + reporting into a single self-contained folder
 - Standalone analyses independent of the main pipeline (`scripts/`)
 
 ## Non-Negotiable Rules
@@ -20,20 +20,15 @@ description: "Create self-contained analysis workflows under analysis/. Each fol
 analysis/<topic>/
   analyze_<topic>.py      # single entry point
   report.md               # research report
-  fig1_<desc>.png         # figures (numbered + descriptive)
-  fig2_<desc>.png
-  ...
 ```
 
 - Folder name: `snake_case`, descriptive of the analysis topic
 - Script: `analyze_<topic>.py` (single entry point)
 - Report: `report.md` (always present)
-- Figures: `fig<N>_<short_desc>.png` (numbered sequentially)
 
 ### Output Constraints
 
-- **No Excel/CSV generation** — only reproducible figures (.png) and stdout statistics
-- `DEFAULT_OUT_DIR = SCRIPT_DIR` — figures saved alongside the script
+- **No Excel/CSV generation** — use stdout statistics and `report.md` for reproducible outputs
 - If intermediate data is needed, process in memory; do not export to files
 
 ### Reporting Conventions (default)
@@ -59,11 +54,9 @@ analysis/<topic>/
 
 - **No `_bootstrap` module** — use direct `sys.path` setup (see `templates/script_boilerplate.py`)
 - Prefer `polars`; use `pandas` when stats APIs require it (pingouin, scipy) **or** for R subprocess CSV I/O
-- `matplotlib.use("Agg")` is mandatory (headless rendering)
-- Korean font support code must be included
 - Use `argparse` to allow input path overrides
 - **`--dry-run` flag is mandatory** — loads data and prints summary without running analysis
-- Milestone-based `main()` structure: `[M1] Load → [M2] Stats → [M3] Figures`
+- Milestone-based `main()` structure: `[M1] Load → [M2] Stats`
 - Use `templates/script_boilerplate.py` as the starting point for every new script
 
 ### Environment Notes
@@ -73,17 +66,6 @@ analysis/<topic>/
   conda run --no-capture-output -n module python analysis/<topic>/analyze_<topic>.py
   ```
 - **R subprocess (when needed)**: `rpy2` is broken on Windows conda (R not built as shared library). Use `Rscript.exe` via `subprocess.run()` with explicit `R_HOME`/`PATH` env vars. See `analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py` lines 62-82 for the pattern.
-- **PNG files are gitignored**: Commit figures with `git add -f analysis/<topic>/*.png`
-
-### Color Conventions
-
-| Purpose | Key | Color |
-|---------|-----|-------|
-| Step group | `step` | `#E74C3C` (red) |
-| Non-step group | `nonstep` | `#3498DB` (blue) |
-| Balance/Stability family | — | `#2ecc71` (green) |
-| Joint Angles family | — | `#e67e22` (orange) |
-| Force/Torque family | — | `#9b59b6` (purple) |
 
 ## Templates
 
@@ -99,20 +81,19 @@ analysis/<topic>/
 1. **Define research question** — Confirm core question, hypotheses, and required data with the user
 2. **Create folder** — Create `analysis/<topic>/` directory
 3. **Write script** — Copy `templates/script_boilerplate.py` → `analyze_<topic>.py`, then customize
-   - Data loading → preprocessing → statistics → visualization → stdout output
+   - Data loading → preprocessing → statistics → stdout output
 4. **Dry-run verify** — `conda run --no-capture-output -n module python analysis/<topic>/analyze_<topic>.py --dry-run`
    - Confirm data loads correctly, trial counts match expectations
-5. **Full run & verify** — Remove `--dry-run` flag, confirm all figures are generated
+5. **Full run & verify** — Remove `--dry-run` flag and confirm statistics are produced as expected
 6. **Write report** — Use `templates/report_template.md` as starting point for `report.md`
-   - Research question → data summary → **analysis methodology (including the 3 Coordinate & sign convention tables)** → results → interpretation → reproduction → figures
-7. **Commit** — `git add -f analysis/<topic>/*.png` then commit the entire folder
+   - Research question → data summary → **analysis methodology (including the 3 Coordinate & sign convention tables)** → results → interpretation → reproduction
+7. **Commit** — commit the entire analysis folder
 
 ## Validation
 
 - `analyze_<topic>.py --dry-run` succeeds (data loading OK)
 - `analyze_<topic>.py` full run completes without errors
-- All `fig*.png` files are generated in `analysis/<topic>/`
-- `report.md` exists with required sections: Research Question, Data Summary, **Analysis Methodology**, Results, Interpretation, Reproduction, Figures
+- `report.md` exists with required sections: Research Question, Data Summary, **Analysis Methodology**, Results, Interpretation, Reproduction
 - Key statistics printed to stdout match report.md content
 - No Excel/CSV files generated
 - User-facing report tables follow `Sig-only` convention (no numeric `p`/`df` columns unless user explicitly requests)
@@ -125,9 +106,7 @@ analysis/<topic>/
 - [ ] `analysis/<topic>/` folder exists
 - [ ] `analyze_<topic>.py --dry-run` succeeds
 - [ ] `analyze_<topic>.py` full run completes without errors
-- [ ] All figure files generated
 - [ ] `report.md` complete (all required sections present, including Analysis Methodology)
 - [ ] stdout statistics match report.md content
 - [ ] No Excel/CSV files present
-- [ ] Figures force-added: `git add -f analysis/<topic>/*.png`
 - [ ] Committed
