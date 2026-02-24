@@ -3,7 +3,7 @@ cssclass: clean-embeds
 date created: 2026-01-19. 00.31
 ---
 
-# 3. results 
+# results 
 
 
 ## plot으로 확인했을 때 
@@ -36,13 +36,13 @@ date created: 2026-01-19. 00.31
 - DV1 절대거리 정의(cm): `DV1_abs_cm = (xCOM_hof - BOS_rear) * 100`
 
 - platform onset
-	- Step (M±SD, cm): `12.9101±1.6174`
-	- Nonstep (M±SD, cm): `14.4410±1.6178`
-	- `step_TFstep` Estimate (cm): `-1.1025` (`***`)
+	- Step (M±SD, cm): `12.91±1.62`
+	- Nonstep (M±SD, cm): `14.44±1.62`
+	- `step_TFstep` Estimate (cm): `-1.10` (`***`)
 - step onset
-	- Step (M±SD, cm): `5.9532±4.4525`
-	- Nonstep (M±SD, cm): `8.1855±2.6058`
-	- `step_TFstep` Estimate (cm): `-2.2864` (`***`)
+	- Step (M±SD, cm): `5.95±4.45`
+	- Nonstep (M±SD, cm): `8.19±2.61`
+	- `step_TFstep` Estimate (cm): `-2.29` (`***`)
 
 - 방향 해석
 	- DV1_abs_cm가 작을수록 BOS rear 대비 xCOM이 더 후방.
@@ -52,8 +52,8 @@ date created: 2026-01-19. 00.31
 # 3. 결론 
 
 - DV1 기준으로 보면, step이 nonstep보다 **더 앞**에 있는 게 아니라 오히려 **더 뒤(후방)**에 있음. 
-	- platform onset: step < nonstep (`12.9101 cm` vs `14.4410 cm`, Estimate `-1.1025 cm`, `***`)
-	- step onset: step < nonstep (`5.9532 cm` vs `8.1855 cm`, Estimate `-2.2864 cm`, `***`)
+	- platform onset: step < nonstep (`12.91 cm` vs `14.44 cm`, Estimate `-1.10 cm`, `***`)
+	- step onset: step < nonstep (`5.95 cm` vs `8.19 cm`, Estimate `-2.29 cm`, `***`)
 - 즉 platform onset 시점의 초기 xCOM-BOS 상대 위치 차이가 strategy(step vs nonstep)와 연관되어 있음. 
 
 
