@@ -38,9 +38,9 @@
 | Joshi 위치 지표 `(COM-BOS)/foot_length` | `DV2 = (COM_X - BOS_minX)/foot_length` | XCOM 대신 COM 위치항만 분리해 위치항 기여를 명시적으로 확인 |
 | Joshi 속도 지표 `(vCOM-vBOS)/sqrt(g*h)` | `DV3 = (vCOM_X - vBOSrear)/sqrt(g*height)` | CSV에 BOS rear 속도가 직접 없으므로 `BOS_minX` 차분(100 Hz)으로 계산 |
 | 논문 이벤트(lift-off/touchdown, onset, 300ms) | `platform onset`, `step onset` 2개 이벤트로 고정 | 사용자 확정 요구사항에 따라 이벤트 수를 2개로 제한 |
-| 통계 모델 | `DV ~ step_TF * velocity_c + (1|subject)` | 반복측정 구조(24명, 125 trial)를 반영하기 위해 LMM 유지 + velocity 중심화 |
+| 통계 모델 | `DV ~ step_TF + (1|subject)` | 반복측정 구조(24명, 125 trial)를 반영하면서 변수별 step/nonstep 유의성을 직접 검정 |
 
-**Summary**: 본 분석은 Van Wouwe/Salot/Joshi 계열 공식을 현재 데이터에 맞게 통합(`DV1~DV3`)하고, `platform onset`/`step onset` 이벤트에서 step/nonstep 차이를 상호작용 LMM으로 검정했다.
+**Summary**: 본 분석은 Van Wouwe/Salot/Joshi 계열 공식을 현재 데이터에 맞게 통합(`DV1~DV3`)하고, `platform onset`/`step onset` 이벤트에서 각 변수의 step/nonstep 차이를 독립 LMM으로 검정했다.
 
 ## Data Summary
 
@@ -60,8 +60,8 @@
   - step: `step_onset_local`
   - missing step onset: same `(subject, velocity)` mean
   - residual fallback: prefilter `platform` event 기반 subject-velocity mean
-- **Statistical model**: `DV ~ step_TF * velocity_c + (1|subject)` (REML, `lmerTest`)
-- **Multiple comparison correction**: BH-FDR, term별 분리 보정(`main_step_effect`, `interaction_step_x_velocity`)
+- **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
+- **Multiple comparison correction**: BH-FDR, 6개 DV 전체 일괄 보정(`main_step_effect`)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`, alpha=0.05)
 - **Normalization inputs**:
   - `foot_len_m = ((발길이_왼 + 발길이_오른)/2) / 1000`
@@ -94,14 +94,14 @@
 
 ### Analyzed Variables (Full Set)
 
-| Variable | Formula family | Event | Result status (main / interaction) |
+| Variable | Formula family | Event | Result status (main) |
 |---|---|---|---|
-| `DV1_xcom_hof_rear_over_foot_platformonset` | VanWouwe+Salot+Patel+Bhatt | platform_onset | `*** / n.s.` |
-| `DV1_xcom_hof_rear_over_foot_steponset` | VanWouwe+Salot+Patel+Bhatt | step_onset | `*** / n.s.` |
-| `DV2_com_rear_over_foot_platformonset` | Joshi_position | platform_onset | `*** / n.s.` |
-| `DV2_com_rear_over_foot_steponset` | Joshi_position | step_onset | `** / n.s.` |
-| `DV3_vcom_rel_over_sqrtgh_platformonset` | Joshi_velocity | platform_onset | `n.s. / n.s.` |
-| `DV3_vcom_rel_over_sqrtgh_steponset` | Joshi_velocity | step_onset | `*** / n.s.` |
+| `DV1_xcom_hof_rear_over_foot_platformonset` | VanWouwe+Salot+Patel+Bhatt | platform_onset | `***` |
+| `DV1_xcom_hof_rear_over_foot_steponset` | VanWouwe+Salot+Patel+Bhatt | step_onset | `***` |
+| `DV2_com_rear_over_foot_platformonset` | Joshi_position | platform_onset | `***` |
+| `DV2_com_rear_over_foot_steponset` | Joshi_position | step_onset | `*` |
+| `DV3_vcom_rel_over_sqrtgh_platformonset` | Joshi_velocity | platform_onset | `n.s.` |
+| `DV3_vcom_rel_over_sqrtgh_steponset` | Joshi_velocity | step_onset | `***` |
 
 ## Results
 
@@ -109,50 +109,36 @@
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
 |---|---:|---:|---:|---|
-| `DV1_xcom_hof_rear_over_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | -0.0453 | *** |
-| `DV1_xcom_hof_rear_over_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | -0.0945 | *** |
-| `DV2_com_rear_over_foot_platformonset` | 0.4976±0.0583 | 0.5525±0.0627 | -0.0411 | *** |
-| `DV2_com_rear_over_foot_steponset` | 0.2648±0.1109 | 0.2872±0.0745 | -0.0257 | ** |
-| `DV3_vcom_rel_over_sqrtgh_platformonset` | -0.0245±0.0159 | -0.0291±0.0195 | -0.0002 | n.s. |
-| `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | -0.0039±0.0184 | 0.0712 | *** |
+| `DV1_xcom_hof_rear_over_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | -0.0440 | *** |
+| `DV1_xcom_hof_rear_over_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | -0.0893 | *** |
+| `DV2_com_rear_over_foot_platformonset` | 0.4976±0.0583 | 0.5525±0.0627 | -0.0395 | *** |
+| `DV2_com_rear_over_foot_steponset` | 0.2648±0.1109 | 0.2872±0.0745 | -0.0225 | * |
+| `DV3_vcom_rel_over_sqrtgh_platformonset` | -0.0245±0.0159 | -0.0291±0.0195 | -0.0001 | n.s. |
+| `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | -0.0039±0.0184 | 0.0715 | *** |
 
 - Main effect 유의 계수: **5/6**
 
-### 2. Interaction Effect (`step_TFstep:velocity_c`) Results
+### 2. Overall
 
-| Variable | Interaction Estimate | Sig |
-|---|---:|---|
-| `DV1_xcom_hof_rear_over_foot_platformonset` | -0.0004 | n.s. |
-| `DV1_xcom_hof_rear_over_foot_steponset` | -0.0006 | n.s. |
-| `DV2_com_rear_over_foot_platformonset` | -0.0004 | n.s. |
-| `DV2_com_rear_over_foot_steponset` | -0.0005 | n.s. |
-| `DV3_vcom_rel_over_sqrtgh_platformonset` | 0.0000 | n.s. |
-| `DV3_vcom_rel_over_sqrtgh_steponset` | -0.0001 | n.s. |
-
-- Interaction 유의 계수: **0/6**
-
-### 3. Overall
-
-- 전체 계수 기준 FDR 유의: **5/12**
-- 유의성은 대부분 `main_step_effect`에서 관찰되었고, `step×velocity` 상호작용은 본 데이터에서 유의하지 않았다.
+- 전체 DV 기준 FDR 유의: **5/6**
+- 유의성은 `main_step_effect` 기준으로 DV1, DV2(2개 이벤트), DV3(step onset)에서 관찰되었다.
 
 ## Comparison with Prior Studies
 
 | Comparison Item | Prior Study Result | Current Result | Verdict |
 |---|---|---|---|
 | Hof 기반 XCOM/BOS 지표의 전략 구분력 | onset/early 시점 안정성 지표로 유효 | DV1이 onset/step_onset 모두 유의(`***`) | Consistent |
-| COM 위치항 정규화의 차이 | 위치항 정규화(`(COM-BOS)/foot`) 사용 보고 | DV2가 두 이벤트 모두 유의(`***`, `**`) | Consistent |
+| COM 위치항 정규화의 차이 | 위치항 정규화(`(COM-BOS)/foot`) 사용 보고 | DV2가 두 이벤트 모두 유의(`***`, `*`) | Consistent |
 | 속도 정규화 항의 분리 해석 | `VCOM/BOS`를 별도 지표로 해석 | DV3는 step_onset에서만 유의(`***`), onset은 n.s. | Partially consistent |
-| 속도 조건과의 상호작용 | 논문별로 task/intensity 영향 보고 | `step_TF*velocity_c`는 6개 모두 n.s. | Inconsistent |
 | 이벤트 정의 일치성 | lift-off/touchdown, 300ms 등 다양 | 사용자 요구로 onset/step_onset 2개로 제한 | Not tested |
 
-`Inconsistent`/`Not tested` 항목은 이벤트 정의와 실험 설계(원문 vs 현재 데이터)의 차이에서 발생했을 가능성이 높다.
+`Not tested` 항목은 이벤트 정의와 실험 설계(원문 vs 현재 데이터)의 차이에서 발생했을 가능성이 높다.
 
 ## Interpretation & Conclusion
 
 1. `methods_list` 기반 xCOM/BOS 계열 통합식은 본 데이터에서 step/nonstep 전략 차이를 통계적으로 구분했다. 특히 DV1, DV2는 두 이벤트 모두 유의했다.
 2. 속도 정규화 지표(DV3)는 step onset에서만 유의하여, 전략 분리는 이벤트 시점 의존성이 크다.
-3. 상호작용(`step×velocity`)은 유의하지 않아, 현재 표본에서는 속도 변화가 step/nonstep 차이를 추가적으로 증폭/완화한다는 근거가 부족했다.
+3. 본 분석 목적(변수별 step/nonstep 유의성 확인)에 맞춰 단일 고정효과 LMM을 사용했으며, 결과 해석은 각 DV의 `step_TFstep` 계수 유의성에 집중한다.
 
 ## Limitations
 
@@ -169,12 +155,11 @@ conda run --no-capture-output -n module python analysis/xCOM&BOS_normalization/a
 ```
 
 - Input: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`
-- Output: figure 3개 + 콘솔 LMM 결과
+- Output: figure 2개 + 콘솔 LMM 결과
 
 ## Figures
 
 | File | Description |
 |---|---|
 | `fig1_main_effect_forest.png` | `step_TFstep` 주효과 계수 forest plot |
-| `fig2_interaction_forest.png` | `step_TFstep:velocity_c` 상호작용 계수 forest plot |
 | `fig3_violin_significant.png` | 유의(또는 top-p) DV의 step/nonstep 분포 violin/strip |

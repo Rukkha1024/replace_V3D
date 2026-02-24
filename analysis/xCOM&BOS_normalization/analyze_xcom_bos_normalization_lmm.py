@@ -5,8 +5,8 @@ Answers:
 (statistically consolidated) distinguish step vs nonstep strategies?"
 
 Statistical method: Linear Mixed Model (LMM) with lmerTest inference
-  Model: DV ~ step_TF * velocity_c + (1|subject)
-  Multiple comparison: Benjamini-Hochberg FDR by term
+  Model: DV ~ step_TF + (1|subject)
+  Multiple comparison: Benjamini-Hochberg FDR across DVs
   Analysis events: platform onset and step onset
 
 Produces:
@@ -583,8 +583,6 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, dv_specs: list[dict]) -> t
     )
 
     trial_df = trial_df[trial_df["step_TF"].isin(["step", "nonstep"])].reset_index(drop=True)
-    trial_df["velocity_c"] = trial_df["velocity"] - trial_df["velocity"].mean()
-
     if trial_df[TRIAL_KEYS].isna().any().any():
         raise ValueError("Null key values detected in trial-level table.")
 
@@ -617,7 +615,7 @@ data <- read.csv("{csv_path}", stringsAsFactors = FALSE)
 data$subject <- as.factor(data$subject)
 data$step_TF <- factor(data$step_TF, levels = c("nonstep", "step"))
 
-dv_cols <- colnames(data)[!colnames(data) %in% c("subject", "velocity", "velocity_c", "trial", "step_TF")]
+dv_cols <- colnames(data)[!colnames(data) %in% c("subject", "velocity", "trial", "step_TF")]
 
 results <- data.frame(
   dv = character(),
@@ -658,8 +656,8 @@ append_row <- function(dv, term, est, se, df_val, t_val, p_val, m_s, sd_s, m_ns,
 }}
 
 for (dv in dv_cols) {{
-  formula_str <- paste0("`", dv, "` ~ step_TF * velocity_c + (1|subject)")
-  sub <- data[!is.na(data[[dv]]) & !is.na(data$velocity_c) & !is.na(data$step_TF), ]
+  formula_str <- paste0("`", dv, "` ~ step_TF + (1|subject)")
+  sub <- data[!is.na(data[[dv]]) & !is.na(data$step_TF), ]
 
   n_s <- sum(sub$step_TF == "step")
   n_ns <- sum(sub$step_TF == "nonstep")
@@ -674,7 +672,6 @@ for (dv in dv_cols) {{
     rn <- rownames(co)
 
     row_main <- if ("step_TFstep" %in% rn) "step_TFstep" else NA
-    row_int <- if ("step_TFstep:velocity_c" %in% rn) "step_TFstep:velocity_c" else if ("velocity_c:step_TFstep" %in% rn) "velocity_c:step_TFstep" else NA
 
     if (!is.na(row_main)) {{
       append_row(
@@ -689,23 +686,8 @@ for (dv in dv_cols) {{
     }} else {{
       append_row(dv, "main_step_effect", NA, NA, NA, NA, NA, m_s, sd_s, m_ns, sd_ns, n_s, n_ns, FALSE)
     }}
-
-    if (!is.na(row_int)) {{
-      append_row(
-        dv, "interaction_step_x_velocity",
-        co[row_int, "Estimate"],
-        co[row_int, "Std. Error"],
-        co[row_int, "df"],
-        co[row_int, "t value"],
-        co[row_int, "Pr(>|t|)"],
-        m_s, sd_s, m_ns, sd_ns, n_s, n_ns, TRUE
-      )
-    }} else {{
-      append_row(dv, "interaction_step_x_velocity", NA, NA, NA, NA, NA, m_s, sd_s, m_ns, sd_ns, n_s, n_ns, FALSE)
-    }}
   }}, error = function(e) {{
     append_row(dv, "main_step_effect", NA, NA, NA, NA, NA, m_s, sd_s, m_ns, sd_ns, n_s, n_ns, FALSE)
-    append_row(dv, "interaction_step_x_velocity", NA, NA, NA, NA, NA, m_s, sd_s, m_ns, sd_ns, n_s, n_ns, FALSE)
   }})
 }}
 
@@ -716,7 +698,7 @@ cat("LMM fitting complete:", nrow(results), "rows\\n")
 
 def fit_lmm_all(trial_df: pd.DataFrame, dv_specs: list[dict]) -> pd.DataFrame:
     dv_names = [x["dv"] for x in dv_specs]
-    export_cols = ["subject", "velocity", "trial", "step_TF", "velocity_c"] + dv_names
+    export_cols = ["subject", "velocity", "trial", "step_TF"] + dv_names
     export_df = trial_df[export_cols].copy()
 
     with tempfile.NamedTemporaryFile(
@@ -739,7 +721,7 @@ def fit_lmm_all(trial_df: pd.DataFrame, dv_specs: list[dict]) -> pd.DataFrame:
 
     try:
         rscript_cmd, r_env = resolve_r_runtime()
-        print("  Running Rscript for interaction LMM fitting...")
+        print("  Running Rscript for step-effect LMM fitting...")
         print(f"  Using Rscript: {rscript_cmd}")
         proc = subprocess.run(
             [rscript_cmd, r_script],
@@ -812,14 +794,14 @@ def _metric_label(metric: str) -> str:
 
 def print_results_table(results: pd.DataFrame) -> None:
     print("\n" + "=" * 96)
-    print("LMM Results: DV ~ step_TF * velocity_c + (1|subject), REML")
-    print("FDR: BH by term (main vs interaction) across all DVs")
+    print("LMM Results: DV ~ step_TF + (1|subject), REML")
+    print("FDR: BH across all DVs")
     print("=" * 96)
     fmt = "{:<44s} {:<28s} {:>10s} {:>9s} {:>8s} {:>6s}"
     print(fmt.format("DV", "Term", "Estimate", "SE", "t", "Sig"))
     print("-" * 96)
 
-    for term in ["main_step_effect", "interaction_step_x_velocity"]:
+    for term in ["main_step_effect"]:
         sub = results[results["term"] == term].copy()
         sub = sub.sort_values(["metric", "event", "dv"]).reset_index(drop=True)
         for _, row in sub.iterrows():
@@ -967,11 +949,8 @@ def fig3_violin_significant(
 
         rows = results[results["dv"] == dv]
         sig_main = rows.loc[rows["term"] == "main_step_effect", "sig"]
-        sig_int = rows.loc[rows["term"] == "interaction_step_x_velocity", "sig"]
         main_txt = sig_main.iloc[0] if len(sig_main) > 0 and sig_main.iloc[0] else "n.s."
-        int_txt = sig_int.iloc[0] if len(sig_int) > 0 and sig_int.iloc[0] else "n.s."
-
-        ax.set_title(f"{dv}\nmain={main_txt}, interaction={int_txt}", fontsize=9, fontweight="bold")
+        ax.set_title(f"{dv}\nmain={main_txt}", fontsize=9, fontweight="bold")
         ax.set_xlabel("")
         ax.set_ylabel("value", fontsize=8)
 
@@ -980,7 +959,7 @@ def fig3_violin_significant(
         axes[r][c].set_visible(False)
 
     fig.suptitle(
-        "Significant (or top-p) DVs: step vs nonstep distributions",
+        "Significant (or top-p) DVs: step vs nonstep",
         fontsize=12,
         fontweight="bold",
         y=1.02,
@@ -998,7 +977,7 @@ def main() -> None:
     dv_specs = build_dv_specs()
 
     print("=" * 72)
-    print("xCOM/BOS Normalization Step-vs-Nonstep Interaction LMM")
+    print("xCOM/BOS Normalization Step-vs-Nonstep LMM")
     print("=" * 72)
 
     print("\n[M1] Load and prepare data...")
@@ -1024,17 +1003,14 @@ def main() -> None:
             results,
             term="main_step_effect",
             out_path=out_dir / "fig1_main_effect_forest.png",
-            title="Main effect: step_TFstep (velocity centered)",
+            title="Main effect: step_TFstep",
         )
         print("  fig1_main_effect_forest.png")
 
-        _forest_plot(
-            results,
-            term="interaction_step_x_velocity",
-            out_path=out_dir / "fig2_interaction_forest.png",
-            title="Interaction effect: step_TFstep:velocity_c",
-        )
-        print("  fig2_interaction_forest.png")
+        legacy_interaction_fig = out_dir / "fig2_interaction_forest.png"
+        if legacy_interaction_fig.exists():
+            legacy_interaction_fig.unlink()
+            print("  removed legacy fig2_interaction_forest.png")
 
         fig3_violin_significant(
             trial_df,

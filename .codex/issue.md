@@ -7,6 +7,7 @@ Policy:
 ---
 ## 2026-02-24
 
+- [ANALYSIS] `analysis/xCOM&BOS_normalization`에서 통계모델이 `DV ~ step_TF * velocity_c + (1|subject)`로 고정되어 있어, 사용자 요구사항인 "변수별 step/nonstep 유의성만 확인"과 직접적으로 일치하지 않고 결과 해석이 상호작용 중심으로 분산되는 문제가 있었음.
 - [DOC] `.codex/skills/analysis-report/SKILL.md`와 `.codex/skills/analysis-reviewer/SKILL.md`가 figure/visualization 생성 및 PNG 커밋 절차를 기본 강제해, "visualization 불필요" 요구와 충돌하는 문서 정책 문제가 있었음.
 - [ANALYSIS] `analysis/xCOM&BOS_normalization` 신규 분석에서 anthropometric 입력을 `transpose_meta`에서 직접 읽으면 일부 분석 대상(subject 누락, 0값)에서 `foot length/height` 분모가 비정상(`0` 또는 결측)으로 되어 xCOM/BOS 정규화식이 붕괴되는 문제가 있었음.
 - [ANALYSIS] `analysis/xCOM&BOS_normalization`의 `step_onset` 이벤트 구성 시, step trial 1건(`조민석-30-1`)은 원본 이벤트 시트의 `step_onset`이 비어 있어 trial-level `step_onset_eval`이 결측으로 남고 표본 수가 `125 -> 124`로 축소되는 문제가 발생함.
