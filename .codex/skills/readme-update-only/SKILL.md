@@ -1,21 +1,27 @@
 ---
 name: readme-update-only
-description: 현재 저장소의 README.md 내용만 업데이트한다. 사용자가 README 수정, 보완, 정리, 최신화 요청을 할 때 사용한다. 외부 자료 탐색 없이 README.md 단일 파일만 편집하고 다른 파일은 수정하지 않는다.
+description: Update only the current repository README.md. Use when the user asks to revise, refresh, reorganize, or maintain README content, or when the user explicitly types `$readme-update-only` (or `${skill_name}` for this skill). If the prompt is only `$readme-update-only`, immediately perform a README-only update using the current README content as the source of truth, without touching any other file.
 ---
 
-# README 전용 업데이트
+# README-Only Update
 
-## 작업 원칙
+## Rules
 
-- `README.md` 단일 파일만 수정한다.
-- 현재 `README.md`에 이미 있는 구조와 용어를 기준으로 갱신한다.
-- 사용자가 명시하지 않은 새 범위(새 문서, 새 스크립트 설명, 새 데이터 출처)를 임의 추가하지 않는다.
-- 다른 파일을 수정하지 않는다.
+- Edit only `README.md`.
+- Treat the current `README.md` as the source of truth unless the user provides explicit new content.
+- Do not fetch external references or infer new scope.
+- Do not modify or create any other files.
+- Keep existing structure, terminology, and tone unless the user asks to change them.
 
-## 편집 절차
+## Trigger Behavior
 
-1. `README.md`의 현재 제목 체계, 표기 방식, 용어를 먼저 확인한다.
-2. 사용자 요청과 직접 관련된 구간만 최소 범위로 수정한다.
-3. 기존 문체와 형식을 유지한다.
-4. 필요한 정보가 README 내부와 사용자 요청에 없으면 추측하지 않고 사용자에게 확인한다.
-5. 변경 후 수정된 핵심 항목만 간단히 보고한다.
+1. If the prompt includes `$readme-update-only`, activate this workflow immediately.
+2. If the prompt is only `$readme-update-only`, perform a direct README maintenance update with minimal safe edits (clarity, consistency, and formatting) based only on the current `README.md`.
+3. If requested changes are ambiguous, ask focused clarification questions before editing.
+
+## Editing Procedure
+
+1. Read `README.md` and map heading structure, terms, and formatting patterns.
+2. Apply only request-relevant edits in the smallest possible scope.
+3. Preserve style and section order unless the user requests reorganization.
+4. Report only key changes after editing.
