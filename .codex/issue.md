@@ -5,6 +5,11 @@ Policy:
 - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
 
 ---
+## 2026-02-24
+
+- [ANALYSIS] `analysis/xCOM&BOS_normalization` 신규 분석에서 anthropometric 입력을 `transpose_meta`에서 직접 읽으면 일부 분석 대상(subject 누락, 0값)에서 `foot length/height` 분모가 비정상(`0` 또는 결측)으로 되어 xCOM/BOS 정규화식이 붕괴되는 문제가 있었음.
+- [ANALYSIS] `analysis/xCOM&BOS_normalization`의 `step_onset` 이벤트 구성 시, step trial 1건(`조민석-30-1`)은 원본 이벤트 시트의 `step_onset`이 비어 있어 trial-level `step_onset_eval`이 결측으로 남고 표본 수가 `125 -> 124`로 축소되는 문제가 발생함.
+
 ## 2026-02-23
 
 - [ANALYSIS] `analysis/initial_posture_strategy_lmm/analyze_initial_posture_strategy_lmm.py`에서 force 절대 onset 재계산 경로 적용 시, forceplate inertial subtraction QC가 4 trial에서 실패 경고(`non-strict`)를 출력해 force 변수 해석 시 trial-level 품질 확인이 필요해졌음.
