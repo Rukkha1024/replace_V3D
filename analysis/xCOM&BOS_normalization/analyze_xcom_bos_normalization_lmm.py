@@ -408,18 +408,18 @@ def _compute_trial_event_frames(
 def build_dv_specs() -> list[dict]:
     return [
         {
-            "dv": "DV1_xcom_hof_rear_over_foot_platformonset",
-            "frame_col": "dv1_xcom_hof_rear_over_foot",
+            "dv": "DV1_xcom_bos_rear_abs_cm_platformonset",
+            "frame_col": "dv1_xcom_bos_rear_abs_cm",
             "event_col": "platform_eval_frame",
-            "metric": "DV1_xcom_hof_rear_over_foot",
+            "metric": "DV1_xcom_bos_rear_abs_cm",
             "event": "platform_onset",
             "paper_group": "VanWouwe+Salot+Patel+Bhatt",
         },
         {
-            "dv": "DV1_xcom_hof_rear_over_foot_steponset",
-            "frame_col": "dv1_xcom_hof_rear_over_foot",
+            "dv": "DV1_xcom_bos_rear_abs_cm_steponset",
+            "frame_col": "dv1_xcom_bos_rear_abs_cm",
             "event_col": "step_onset_eval",
-            "metric": "DV1_xcom_hof_rear_over_foot",
+            "metric": "DV1_xcom_bos_rear_abs_cm",
             "event": "step_onset",
             "paper_group": "VanWouwe+Salot+Patel+Bhatt",
         },
@@ -547,10 +547,8 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, dv_specs: list[dict]) -> t
             pl.col("BOS_minX").alias("bos_rear"),
         )
         .with_columns(
-            pl.when(pl.col("foot_len_m") > 0)
-            .then((pl.col("xcom_hof") - pl.col("bos_rear")) / pl.col("foot_len_m"))
-            .otherwise(None)
-            .alias("dv1_xcom_hof_rear_over_foot"),
+            ((pl.col("xcom_hof") - pl.col("bos_rear")) * 100.0)
+            .alias("dv1_xcom_bos_rear_abs_cm"),
             pl.when(pl.col("foot_len_m") > 0)
             .then((pl.col("COM_X") - pl.col("bos_rear")) / pl.col("foot_len_m"))
             .otherwise(None)
@@ -785,7 +783,7 @@ def _event_label(v: str) -> str:
 
 def _metric_label(metric: str) -> str:
     mapping = {
-        "DV1_xcom_hof_rear_over_foot": "DV1 xCOM_hof-rear / foot_len",
+        "DV1_xcom_bos_rear_abs_cm": "DV1 xCOM_hof - BOS_rear (cm)",
         "DV2_com_rear_over_foot": "DV2 COM-rear / foot_len",
         "DV3_vcom_rel_over_sqrtgh": "DV3 (vCOM-vBOSrear) / sqrt(g*h)",
     }

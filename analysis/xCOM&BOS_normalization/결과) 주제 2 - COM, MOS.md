@@ -32,8 +32,45 @@ date created: 2026-01-19. 00.31
 
 ## DV1 통계결과 (LMM)
 
-- 모델: `DV1_abs_cm ~ step_TF + (1|subject)`  
-- DV1 절대거리 정의(cm): `DV1_abs_cm = (xCOM_hof - BOS_rear) * 100`
+### DV1 산출 방법
+
+DV1은 **"특정 이벤트 시점에서 xCOM이 발 뒤꿈치(BOS 뒤 경계)보다 얼마나 앞에 있는가"**를 cm로 나타낸 값.
+
+**재료 ①: `xCOM_hof` (Hof, 2005)**
+
+- extrapolated COM(xCOM)의 AP 위치.
+- 공식: `xCOM_hof = COM_X + vCOM_X / ω₀`
+	- `COM_X`: 무게중심(COM)의 AP 위치 (m)
+	- `vCOM_X`: COM의 AP 속도 (m/s)
+	- `ω₀ = sqrt(g / 신장)`, g = 9.81 m/s²  →  신장이 클수록 ω₀가 작고, 같은 속도라도 xCOM이 더 앞으로 나감.
+
+**재료 ②: `BOS_rear`**
+
+- 지지면(BOS)의 AP 최솟값, 즉 발 뒤꿈치 위치 (m).
+- 값이 클수록 발이 앞쪽에 있다는 뜻.
+
+**계산**
+
+```
+DV1_xcom_bos_rear_abs_cm = (xCOM_hof - BOS_rear) × 100   [cm]
+```
+
+- 뺄셈 결과가 양수 → xCOM이 발 뒤꿈치보다 앞에 있음 (안정적).
+- 값이 작을수록 xCOM이 발 뒤꿈치에 가까움 (불안정 방향).
+
+**값 추출 시점**
+
+trial 전체 시계열 중에서 이벤트 프레임(1개) 시점의 값만 뽑아 trial당 1개 값으로 만든 뒤 LMM에 투입.
+
+- `platform_onset` 버전: 플랫폼이 움직이기 시작한 프레임
+- `step_onset` 버전: stepping이 시작된 프레임
+
+---
+
+### LMM 결과
+
+- 모델: `DV1_xcom_bos_rear_abs_cm ~ step_TF + (1|subject)`
+- 참조: nonstep (즉, `step_TFstep` Estimate = step − nonstep 차이)
 
 - platform onset
 	- Step (M±SD, cm): `12.91±1.62`
@@ -45,7 +82,7 @@ date created: 2026-01-19. 00.31
 	- `step_TFstep` Estimate (cm): `-2.29` (`***`)
 
 - 방향 해석
-	- DV1_abs_cm가 작을수록 BOS rear 대비 xCOM이 더 후방.
+	- `DV1_xcom_bos_rear_abs_cm`가 작을수록 BOS rear 대비 xCOM이 더 후방.
 	- 따라서 두 이벤트 모두 step군이 nonstep군보다 상대적으로 후방 위치.
 
 
