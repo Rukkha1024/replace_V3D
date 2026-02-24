@@ -1,323 +1,278 @@
 # replace_V3D
 
-A pure-Python biomechanical analysis pipeline for computing center of mass (COM), extrapolated center of mass (xCOM), base of support (BoS), margin of stability (MoS), three-dimensional joint angles, ground reaction forces (GRF), center of pressure (COP), and ankle torque from motion capture and force plate data. This pipeline was developed as a replacement for Visual3D, processing OptiTrack Conventional 39-marker set data acquired during a posterior support-surface translation perturbation task.
+모션 캡처 및 포스 플레이트 데이터로부터 신체중심(COM), 외삽 신체중심(xCOM), 지지면(BoS), 안정성 여유(MoS), 3차원 관절 각도, 지면반력(GRF), 압력중심(COP), 발목 토크를 산출하는 순수 Python 생체역학 분석 파이프라인이다. 본 파이프라인은 Visual3D를 대체하기 위해 개발되었으며, 후방 지지면 이동 섭동(posterior support-surface translation perturbation) 과제 중 수집된 OptiTrack Conventional 39-marker set 데이터를 처리한다.
 
-## 1. Participants and Experimental Protocol
+## 1. 참가자 및 실험 프로토콜
 
-Twenty-four healthy young adults participated in the study. Each participant stood on a moveable platform that delivered unexpected posterior translations at velocities ranging from 60 to 135 cm/s, presented in a mixed order. Postural responses were classified into two categories based on the recovery strategy employed: **step** trials (53 trials), in which participants took a compensatory step, and **non-step** trials (72 trials), in which balance was recovered without stepping. A total of 125 trials were included after applying the following inclusion criteria:
+24명의 건강한 젊은 성인이 연구에 참여하였다. 각 참가자는 이동 가능한 플랫폼 위에 서서 60~135 cm/s 범위의 속도로 예기치 않은 후방 이동 섭동을 받았으며, 속도는 혼합 순서(mixed order)로 제시되었다. 자세 반응은 회복 전략에 따라 두 범주로 분류되었다: 보상적 발디딤(compensatory step)이 나타난 **step** 시행(53회)과 발디딤 없이 균형을 회복한 **non-step** 시행(72회). 다음의 포함 기준을 적용한 결과 총 125회 시행이 분석에 포함되었다:
 
-- Mixed velocity condition only (`mixed = 1`)
-- Young adult participants (`age_group = young`)
-- Step trials restricted to ipsilateral stepping (i.e., right-dominant participants stepping right, left-dominant stepping left)
-- All non-step trials included regardless of dominance
+- 혼합 속도 조건만 포함 (`mixed = 1`)
+- 젊은 성인 참가자만 포함 (`age_group = young`)
+- Step 시행은 동측 발디딤(ipsilateral stepping)만 포함 (오른손잡이는 오른발, 왼손잡이는 왼발)
+- Non-step 시행은 우세측에 관계없이 모두 포함
 
-Trial metadata including perturbation velocity, response classification, and participant demographics were recorded in `perturb_inform.xlsm`.
+시행 메타데이터(섭동 속도, 반응 분류, 참가자 인구통계학적 정보)는 `perturb_inform.xlsm`에 기록되었다.
 
-## 2. Data Acquisition
+## 2. 데이터 수집
 
-Whole-body kinematics were captured using an OptiTrack motion capture system with the **Conventional 39-marker set** at a sampling rate of 100 Hz. Analog signals (forces and moments) were recorded simultaneously at 1000 Hz via embedded force plates. All data were stored in C3D format.
+전신 운동학 데이터는 OptiTrack 모션 캡처 시스템과 **Conventional 39-marker set**를 사용하여 100 Hz 샘플링 속도로 수집되었다. 아날로그 신호(힘 및 모멘트)는 내장 포스 플레이트를 통해 1000 Hz로 동시 기록되었다. 모든 데이터는 C3D 형식으로 저장되었다.
 
-Each C3D file was pre-trimmed to a window of `[platform_onset - 100, platform_offset + 100]` frames in 100 Hz mocap time prior to processing. Event timings (platform onset, platform offset, step onset) were manually annotated and stored in an Excel workbook (`perturb_inform.xlsm`).
+각 C3D 파일은 처리 전에 100 Hz 모캡 시간 기준으로 `[platform_onset - 100, platform_offset + 100]` 프레임 구간으로 사전 트리밍되었다. 이벤트 타이밍(platform onset, platform offset, step onset)은 수동으로 표기되어 Excel 워크북(`perturb_inform.xlsm`)에 저장되었다.
 
-## 3. Data Processing Pipeline
+## 3. 데이터 처리 파이프라인
 
-### 3.1 C3D Reading and Marker Extraction
+### 3.1 C3D 읽기 및 마커 추출
 
-Marker trajectories were extracted from C3D files using a Python-based reader (`src/replace_v3d/io/c3d_reader.py`). Both raw OptiTrack labels (e.g., `251112_KUO_LASI`) and stripped labels (e.g., `LASI`) were supported through automatic label normalization.
+마커 궤적은 Python 기반 리더(`src/replace_v3d/io/c3d_reader.py`)를 사용하여 C3D 파일에서 추출되었다. 원본 OptiTrack 라벨(예: `251112_KUO_LASI`)과 단순화된 라벨(예: `LASI`) 모두 자동 라벨 정규화를 통해 지원되었다.
 
-### 3.2 Joint Center Estimation
+### 3.2 관절 중심 추정
 
-Joint centers were estimated from marker positions as follows:
+관절 중심은 마커 위치로부터 다음과 같이 추정되었다:
 
-| Joint | Method |
-|-------|--------|
-| Hip | Harrington et al. (2007) regression from pelvis width and depth |
-| Knee | Midpoint of lateral (LKNE/RKNE) and medial (LShin_3/RShin_3) markers |
-| Ankle | Midpoint of lateral (LANK/RANK) and medial (LFoot_3/RFoot_3) markers |
-| Elbow | Midpoint of lateral (LELB/RELB) and medial (LUArm_3/RUArm_3) markers |
-| Wrist | Midpoint of LWRA/RWRA and LWRB/RWRB |
+| 관절 | 방법 |
+|------|------|
+| 고관절(Hip) | Harrington et al. (2007) 회귀식 — 골반 너비 및 깊이 기반 |
+| 슬관절(Knee) | 외측(LKNE/RKNE)과 내측(LShin_3/RShin_3) 마커의 중간점 |
+| 족관절(Ankle) | 외측(LANK/RANK)과 내측(LFoot_3/RFoot_3) 마커의 중간점 |
+| 주관절(Elbow) | 외측(LELB/RELB)과 내측(LUArm_3/RUArm_3) 마커의 중간점 |
+| 완관절(Wrist) | LWRA/RWRA와 LWRB/RWRB의 중간점 |
 
-Hip joint centers were estimated using the Harrington (2007) regression equations, in which pelvis width (PW, the distance between RASI and LASI) and pelvis depth (PD, the distance between the pelvis origin and the midpoint of the posterior superior iliac spines) served as predictors.
+고관절 중심은 Harrington (2007) 회귀 방정식을 사용하여 추정되었으며, 골반 너비(PW, RASI와 LASI 사이의 거리)와 골반 깊이(PD, 골반 원점과 후상장골극 중간점 사이의 거리)가 예측 변수로 사용되었다.
 
-### 3.3 Whole-Body Center of Mass
+### 3.3 전신 신체중심
 
-The whole-body COM was computed as the weighted sum of 14 segment COMs using the mass fractions and COM placement ratios of De Leva (1996):
+전신 COM은 De Leva (1996)의 질량 분율 및 COM 배치 비율을 사용하여 14개 분절 COM의 가중합으로 산출되었다:
 
 `COM = sum(m_i * COM_i)`
 
-where `m_i` denotes the mass fraction and `COM_i` denotes the position of each segment's center of mass, estimated as an interpolated point between the proximal and distal joint centers at a segment-specific fraction.
+여기서 `m_i`는 질량 분율, `COM_i`는 각 분절의 근위-원위 관절 중심 사이에서 분절별 비율로 보간된 점으로 추정된 신체중심 위치를 나타낸다.
 
-| Segment | Mass Fraction | COM Fraction (prox to dist) |
-|---------|--------------|----------------------------|
-| Head | 0.0694 | (via C7 + head center) |
-| Trunk | 0.4346 | 0.797 (pelvis origin to thorax ref) |
-| Upper arm (x2) | 0.0271 | 0.436 |
-| Forearm (x2) | 0.0162 | 0.430 |
-| Hand (x2) | 0.0061 | 0.506 |
-| Thigh (x2) | 0.1416 | 0.433 |
-| Shank (x2) | 0.0433 | 0.433 |
-| Foot (x2) | 0.0137 | 0.500 |
+| 분절 | 질량 분율 | COM 비율 (근위→원위) |
+|------|----------|---------------------|
+| 머리(Head) | 0.0694 | (C7 + 머리 중심 경유) |
+| 몸통(Trunk) | 0.4346 | 0.797 (골반 원점 → 흉부 기준점) |
+| 상완(Upper arm, ×2) | 0.0271 | 0.436 |
+| 전완(Forearm, ×2) | 0.0162 | 0.430 |
+| 손(Hand, ×2) | 0.0061 | 0.506 |
+| 대퇴(Thigh, ×2) | 0.1416 | 0.433 |
+| 하퇴(Shank, ×2) | 0.0433 | 0.433 |
+| 발(Foot, ×2) | 0.0137 | 0.500 |
 
-The thorax reference point was defined as a weighted combination of C7 and the sternum marker: `thorax_ref = 0.56 * C7 + 0.44 * STRN`. Trunk COM was placed at 79.7% of the distance from the pelvis origin to this thorax reference. Head COM was located at 100% of the distance from C7 to the head center (average of LFHD, RFHD, LBHD, RBHD).
+흉부 기준점은 C7과 흉골 마커의 가중 조합으로 정의되었다: `thorax_ref = 0.56 * C7 + 0.44 * STRN`. 몸통 COM은 골반 원점에서 이 흉부 기준점까지 거리의 79.7% 지점에 배치되었다. 머리 COM은 C7에서 머리 중심(LFHD, RFHD, LBHD, RBHD의 평균)까지 거리의 100% 지점에 위치하였다.
 
-The resulting COM trajectory was low-pass filtered using a 4th-order zero-phase Butterworth filter with a cutoff frequency of 6 Hz.
+산출된 COM 궤적은 차단 주파수 6 Hz의 4차 영위상(zero-phase) Butterworth 저역통과 필터로 필터링되었다.
 
-### 3.4 COM Velocity and Extrapolated Center of Mass
+### 3.4 COM 속도 및 외삽 신체중심
 
-COM velocity (vCOM) was computed as the central-difference derivative of the filtered COM position:
+COM 속도(vCOM)는 필터링된 COM 위치의 중앙차분 미분으로 산출되었다:
 
 `vCOM = d(COM) / dt`
 
-The extrapolated center of mass (xCOM) was computed following Hof et al. (2005):
+외삽 신체중심(xCOM)은 Hof et al. (2005)의 방법에 따라 산출되었다:
 
 `xCOM = COM + vCOM / sqrt(g / l)`
 
-where `g = 9.81 m/s^2` and `l` denotes participant leg length obtained from the metadata file.
+여기서 `g = 9.81 m/s^2`이며, `l`은 메타데이터 파일에서 얻은 참가자의 다리 길이를 나타낸다.
 
-### 3.5 Base of Support
+### 3.5 지지면
 
-The BoS was defined at each frame as the convex hull of eight foot landmark markers projected onto the ground plane (XY):
+지지면(BoS)은 각 프레임에서 8개의 발 랜드마크 마커를 지면(XY 평면)에 투영한 볼록 껍질(convex hull)로 정의되었다:
 
 `LHEE, LTOE, LANK, LFoot_3, RHEE, RTOE, RANK, RFoot_3`
 
-No anthropometric foot expansion was applied; the BoS boundary was determined solely by the marker positions. Axis-aligned bounds (minX, maxX, minY, maxY) and polygon area were extracted from the convex hull at each frame.
+인체측정학적 발 확장(foot expansion)은 적용하지 않았으며, BoS 경계는 마커 위치만으로 결정되었다. 각 프레임에서 축 정렬 경계(minX, maxX, minY, maxY)와 다각형 면적이 볼록 껍질로부터 추출되었다.
 
-### 3.6 Margin of Stability
+### 3.6 안정성 여유
 
-Three MoS definitions were computed:
+세 가지 MoS 정의가 산출되었다:
 
-| Variable | Definition |
-|----------|-----------|
-| `MOS_minDist_signed` | Signed minimum distance from xCOM to the BoS polygon boundary; positive indicates xCOM inside the BoS, negative indicates outside |
-| `MOS_AP_v3d` | Distance to the closest anterior-posterior BoS bound: `min(xCOM_X - minX, maxX - xCOM_X)` |
-| `MOS_ML_v3d` | Distance to the closest mediolateral BoS bound: `min(xCOM_Y - minY, maxY - xCOM_Y)` |
+| 변수 | 정의 |
+|------|------|
+| `MOS_minDist_signed` | xCOM에서 BoS 다각형 경계까지의 부호 있는 최소 거리. 양수는 xCOM이 BoS 내부, 음수는 외부를 나타냄 |
+| `MOS_AP_v3d` | 가장 가까운 전후방(AP) BoS 경계까지의 거리: `min(xCOM_X - minX, maxX - xCOM_X)` |
+| `MOS_ML_v3d` | 가장 가까운 내외측(ML) BoS 경계까지의 거리: `min(xCOM_Y - minY, maxY - xCOM_Y)` |
 
-The `MOS_AP_v3d` and `MOS_ML_v3d` definitions follow the closest-bound approach described in the Visual3D documentation. An overall closest-boundary variable (`MOS_v3d = min(MOS_AP_v3d, MOS_ML_v3d)`) was also computed.
+`MOS_AP_v3d` 및 `MOS_ML_v3d` 정의는 Visual3D 문서에 기술된 최근접 경계(closest-bound) 접근법을 따랐다. 전체 최근접 경계 변수(`MOS_v3d = min(MOS_AP_v3d, MOS_ML_v3d)`)도 함께 산출되었다.
 
-### 3.7 Joint Angles
+### 3.7 관절 각도
 
-Three-dimensional joint angles were computed for five joints (hip, knee, ankle, trunk, neck), bilaterally where applicable, using an intrinsic XYZ (Cardan) decomposition. Segment coordinate systems were constructed from anatomical marker clusters using a right-handed frame convention.
+3차원 관절 각도는 5개 관절(고관절, 슬관절, 족관절, 몸통, 목)에 대해, 해당되는 경우 양측으로 산출되었으며, 내재적(intrinsic) XYZ Cardan 분해를 사용하였다. 분절 좌표계는 해부학적 마커 클러스터로부터 오른손 좌표계 규칙에 따라 구성되었다.
 
-All joint angle time series were expressed as change from platform onset (onset-zeroed).
+모든 관절 각도 시계열은 platform onset 시점 값으로부터의 변화량(onset-zeroed)으로 표현되었다.
 
-### 3.8 Kinetic Variables
+### 3.8 운동역학 변수
 
-Ground reaction forces (GRF) and moments (GRM) were extracted from the C3D force platform metadata and analog channels. The active force plate was identified based on the maximum vertical force criterion. Force and moment data were transformed to the Stage01 biomechanical coordinate system (Z-up, subject-centered horizontal axes).
+지면반력(GRF)과 지면반력 모멘트(GRM)는 C3D 포스 플레이트 메타데이터 및 아날로그 채널에서 추출되었다. 활성 포스 플레이트는 최대 수직력 기준으로 식별되었다. 힘 및 모멘트 데이터는 Stage01 생체역학 좌표계(Z축 상방, 피험자 중심 수평축)로 변환되었다.
 
-**Center of pressure** was computed from the transformed force and moment data:
+**압력중심(COP)**은 변환된 힘 및 모멘트 데이터로부터 산출되었다:
 
 `COP_X = -M_Y / F_Z` , `COP_Y = M_X / F_Z`
 
-**Ankle torque** was computed by transferring the net ground reaction moment from the force plate origin to the ankle joint center:
+**발목 토크**는 포스 플레이트 원점에서의 순 지면반력 모멘트를 족관절 중심으로 전달하여 산출되었다:
 
 `M_ankle = M_origin + (r_origin - r_ankle) x F`
 
-where internal torque was defined as the negation of the external moment. Mid-ankle (average of left and right ankle centers), left ankle, and right ankle reference points were used. Body-mass-normalized sagittal ankle torque (Nm/kg) was also computed.
+여기서 내부 토크(internal torque)는 외부 모멘트의 부호 반전으로 정의되었다. 중간 족관절(좌·우 족관절 중심의 평균), 좌측 족관절, 우측 족관절 기준점이 사용되었다. 체질량 정규화된 시상면 발목 토크(Nm/kg)도 함께 산출되었다.
 
-An inertial correction procedure was applied using pre-computed quiet-standing templates to subtract platform-acceleration artifacts from the measured forces and moments.
+관성 보정(inertial correction) 절차가 적용되어, 사전 산출된 정적 기립 템플릿(quiet-standing template)을 이용하여 측정된 힘과 모멘트에서 플랫폼 가속도 아티팩트를 제거하였다.
 
-All kinetic variables (GRF, COP displacement, GRM, ankle torque) were expressed as change from platform onset (onset-zeroed). COP was additionally exported in absolute coordinates.
+모든 운동역학 변수(GRF, COP 변위, GRM, 발목 토크)는 platform onset 시점 값으로부터의 변화량(onset-zeroed)으로 표현되었다. COP는 절대 좌표로도 추가 출력되었다.
 
-### 3.9 Signal Processing Summary
+### 3.9 신호처리 요약
 
-| Parameter | Value |
-|-----------|-------|
-| Mocap sampling rate | 100 Hz |
-| Analog sampling rate | 1000 Hz |
-| COM low-pass filter | 6 Hz, 4th-order Butterworth, zero-phase |
-| Derivative method | Central difference |
-| Joint angle decomposition | Intrinsic XYZ Cardan |
-| Onset zeroing | Subtract value at platform onset frame |
+| 파라미터 | 값 |
+|---------|-----|
+| 모캡 샘플링 속도 | 100 Hz |
+| 아날로그 샘플링 속도 | 1000 Hz |
+| COM 저역통과 필터 | 6 Hz, 4차 Butterworth, 영위상 |
+| 미분 방법 | 중앙차분(Central difference) |
+| 관절 각도 분해 | 내재적 XYZ Cardan |
+| Onset zeroing | Platform onset 프레임에서의 값을 차감 |
 
-## 4. Coordinate System and Sign Conventions
+## 4. 좌표계 및 부호 규약
 
-All variables were expressed in the following laboratory coordinate system:
+모든 변수는 다음의 실험실 좌표계로 표현되었다:
 
-| Axis | Direction | Positive (+) | Negative (-) |
-|------|-----------|-------------|-------------|
-| X | Anteroposterior (AP) | Anterior (forward) | Posterior (backward) |
-| Y | Mediolateral (ML) | Right (lateral) | Left (medial) |
-| Z | Vertical | Upward | Downward |
+| 축 | 방향 | 양수 (+) | 음수 (-) |
+|----|------|---------|---------|
+| X | 전후방(AP) | 전방(Anterior) | 후방(Posterior) |
+| Y | 내외측(ML) | 우측(Right) | 좌측(Left) |
+| Z | 수직 | 상방(Upward) | 하방(Downward) |
 
-Joint angle sign conventions:
+관절 각도 부호 규약:
 
-| Joint | X-axis (+/-)  | Y-axis (+/-) | Z-axis (+/-) |
-|-------|--------------|-------------|-------------|
-| Hip | Flexion / Extension | Adduction / Abduction | Internal rot. / External rot. |
-| Knee | Flexion / Extension | Adduction / Abduction | Internal rot. / External rot. |
-| Ankle | Dorsiflexion / Plantarflexion | Adduction / Abduction | Internal rot. / External rot. |
-| Trunk | Flexion / Extension | Adduction / Abduction | Internal rot. / External rot. |
-| Neck | Flexion / Extension | Adduction / Abduction | Internal rot. / External rot. |
+| 관절 | X축 (+/-) | Y축 (+/-) | Z축 (+/-) |
+|------|----------|----------|----------|
+| 고관절(Hip) | 굴곡 / 신전 | 내전 / 외전 | 내회전 / 외회전 |
+| 슬관절(Knee) | 굴곡 / 신전 | 내전 / 외전 | 내회전 / 외회전 |
+| 족관절(Ankle) | 배굴 / 저굴 | 내전 / 외전 | 내회전 / 외회전 |
+| 몸통(Trunk) | 굴곡 / 신전 | 내전 / 외전 | 내회전 / 외회전 |
+| 목(Neck) | 굴곡 / 신전 | 내전 / 외전 | 내회전 / 외회전 |
 
-## 5. Time Axis and Normalization
+## 5. 시간축 및 정규화
 
-Two time representations were maintained:
+두 가지 시간 표현이 유지되었다:
 
-- **MocapFrame** (100 Hz): sequential frame index within the trimmed C3D file
-- **original_DeviceFrame** (1000 Hz): absolute device frame number, preserved as provenance
+- **MocapFrame** (100 Hz): 트리밍된 C3D 파일 내의 순차적 프레임 인덱스
+- **original_DeviceFrame** (1000 Hz): 절대 장치 프레임 번호, 출처 추적용으로 보존
 
-Exported CSV files retain the raw time axis (`MocapFrame`, `time_from_platform_onset_s`). Piecewise time normalization was applied only for visualization (grid plots), in which the pre-onset and post-onset segments were each linearly warped to a fixed number of frames. This normalization did not affect the exported data.
+출력 CSV 파일은 원시 시간축(`MocapFrame`, `time_from_platform_onset_s`)을 유지한다. 구간별 시간 정규화(piecewise time normalization)는 시각화(grid plot)에만 적용되었으며, onset 전·후 구간이 각각 고정된 프레임 수로 선형 워핑되었다. 이 정규화는 출력 데이터에 영향을 미치지 않았다.
 
-## 6. Statistical Analysis
+## 6. 통계 분석
 
-### 6.1 Step vs. Non-Step Comparison (Pre-Step Window)
+### 6.1 Step vs. Non-Step 비교 (발디딤 전 구간)
 
-To examine whether pre-step biomechanical responses differed between stepping and non-stepping strategies, linear mixed models (LMMs) were fitted for 34 dependent variables across three categories:
+발디딤 전 생체역학적 반응이 step과 non-step 전략 간에 차이가 있는지 검정하기 위하여, 세 범주에 걸쳐 34개 종속변수에 대해 선형 혼합 모형(LMM)을 적합하였다:
 
-**Balance and stability (17 DVs):** COM range and path length (AP, ML), vCOM peak (AP, ML), COP range, path length, and peak velocity (AP, ML), MoS minimum values (`MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`), and xCOM-to-BoS distance at platform onset and step onset.
+**균형 및 안정성 (17개 종속변수):** COM 범위 및 경로 길이(AP, ML), vCOM 최댓값(AP, ML), COP 범위·경로 길이·최대 속도(AP, ML), MoS 최솟값(`MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`), platform onset 및 step onset 시점의 xCOM-BoS 거리.
 
-**Joint angles (10 DVs):** Range of motion and peak values for hip, knee, ankle (stance-equivalent side), trunk, and neck in the sagittal plane.
+**관절 각도 (10개 종속변수):** 고관절, 슬관절, 족관절(지지측), 몸통, 목의 시상면 운동 범위 및 최댓값.
 
-**Force and torque (7 DVs):** GRF peak and range (AP, ML, vertical) and sagittal ankle torque peak.
+**힘 및 토크 (7개 종속변수):** GRF 최댓값 및 범위(AP, ML, 수직), 시상면 발목 토크 최댓값.
 
-The analysis window was defined as `[platform_onset, step_onset]`. For step trials, the actual step onset frame was used. For non-step trials, the mean step onset of the corresponding subject-velocity group was substituted.
+분석 구간은 `[platform_onset, step_onset]`으로 정의되었다. Step 시행의 경우 실제 step onset 프레임이 사용되었고, non-step 시행의 경우 해당 피험자-속도 그룹의 평균 step onset이 대입되었다.
 
-Each model took the form: `DV ~ step_TF + (1 | subject)`, estimated with REML. Multiple comparisons were corrected using the Benjamini-Hochberg false discovery rate (BH-FDR) procedure at alpha = 0.05.
+각 모형은 `DV ~ step_TF + (1 | subject)` 형태로, REML 추정을 사용하였다. 다중 비교 보정은 Benjamini-Hochberg FDR(BH-FDR) 방법으로 유의수준 alpha = 0.05에서 수행되었다.
 
-### 6.2 Initial Posture Strategy Analysis (Onset Frame)
+### 6.2 초기 자세 전략 분석 (Onset 프레임)
 
-To assess whether body configuration at the moment of perturbation onset predicted the subsequent balance recovery strategy, LMMs were fitted for 19 dependent variables extracted at the single platform-onset frame:
+섭동 onset 시점의 신체 배치(body configuration)가 이후의 균형 회복 전략을 예측하는지 평가하기 위하여, platform onset 단일 프레임에서 추출된 19개 종속변수에 대해 LMM을 적합하였다:
 
-**Balance (8 DVs):** COM position (AP, ML), vCOM (AP, ML), MoS (`MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`), and normalized xCOM-to-BoS distance.
+**균형 (8개 종속변수):** COM 위치(AP, ML), vCOM(AP, ML), MoS(`MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`), 정규화된 xCOM-BoS 거리.
 
-**Joint angles at onset (5 DVs):** Absolute (non-onset-zeroed) sagittal-plane angles for hip, knee, ankle (stance-equivalent side), trunk, and neck.
+**Onset 시점 관절 각도 (5개 종속변수):** 고관절, 슬관절, 족관절(지지측), 몸통, 목의 절대값(non-onset-zeroed) 시상면 각도.
 
-**Force variables at onset (6 DVs):** Absolute COP position (AP, ML), GRF (AP, ML, vertical), and body-mass-normalized sagittal ankle torque.
+**Onset 시점 힘 변수 (6개 종속변수):** 절대 COP 위치(AP, ML), GRF(AP, ML, 수직), 체질량 정규화 시상면 발목 토크.
 
-Each model took the same form: `DV ~ step_TF + (1 | subject)`, with BH-FDR correction at alpha = 0.05.
+각 모형은 동일한 형태(`DV ~ step_TF + (1 | subject)`)로, BH-FDR 보정(alpha = 0.05)을 적용하였다.
 
-## 7. Pipeline Execution
+## 7. 파이프라인 실행
 
-All scripts were executed within the `module` conda environment:
+모든 스크립트는 `module` conda 환경에서 실행되었다:
 
 ```bash
 conda run -n module python <script>
 ```
 
-### 7.1 Batch Export
+### 7.1 일괄 내보내기
 
-The full pipeline (marker extraction, joint center estimation, COM/xCOM/BoS/MoS computation, joint angles, GRF/COP/torque) was executed as a single batch process:
+전체 파이프라인(마커 추출, 관절 중심 추정, COM/xCOM/BoS/MoS 산출, 관절 각도, GRF/COP/토크)이 단일 일괄 프로세스로 실행되었다:
 
 ```bash
 conda run -n module python main.py --overwrite
 ```
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--c3d_dir` | `data/all_data` | Directory containing trimmed C3D files |
-| `--event_xlsm` | `data/perturb_inform.xlsm` | Event metadata Excel workbook |
-| `--out_csv` | `output/all_trials_timeseries.csv` | Output CSV path |
-| `--overwrite` | (flag) | Overwrite existing output CSV |
-| `--skip_unmatched` | (flag) | Skip trials with unresolved subject/event mapping |
-| `--pre_frames` | `100` | Frame buffer for local-absolute conversion |
-| `--encoding` | `utf-8-sig` | CSV encoding (BOM for Korean Excel compatibility) |
-| `--on_error` | `continue` | Error handling: `continue` or `abort` |
-| `--md5_reference_dir` | (none) | Reference directory for MD5 checksum validation |
+| 인자 | 기본값 | 설명 |
+|------|-------|------|
+| `--c3d_dir` | `data/all_data` | 트리밍된 C3D 파일 디렉토리 |
+| `--event_xlsm` | `data/perturb_inform.xlsm` | 이벤트 메타데이터 Excel 워크북 |
+| `--out_csv` | `output/all_trials_timeseries.csv` | 출력 CSV 경로 |
+| `--overwrite` | (플래그) | 기존 출력 CSV 덮어쓰기 |
+| `--skip_unmatched` | (플래그) | 피험자/이벤트 매핑 미해결 시행 건너뛰기 |
+| `--pre_frames` | `100` | local-absolute 변환을 위한 프레임 버퍼 |
+| `--encoding` | `utf-8-sig` | CSV 인코딩 (한국어 Excel 호환 BOM) |
+| `--on_error` | `continue` | 오류 처리 방식: `continue` 또는 `abort` |
+| `--md5_reference_dir` | (없음) | MD5 체크섬 검증용 참조 디렉토리 |
 
-### 7.2 Grid Visualization
+### 7.2 격자 시각화
 
-Time-series grid plots (subject x velocity x variable category) were generated from the exported CSV:
+내보낸 CSV로부터 시계열 격자 플롯(피험자 × 속도 × 변수 범주)이 생성되었다:
 
 ```bash
-# Sample preview (3 subjects, 2 velocities)
+# 샘플 미리보기 (3명 피험자, 2개 속도)
 conda run -n module python scripts/plot_grid_timeseries.py --sample
 
-# All subject-velocity groups
+# 전체 피험자-속도 그룹
 conda run -n module python scripts/plot_grid_timeseries.py --group_by subject_velocity
 
-# Subject-wise overlay
+# 피험자별 오버레이
 conda run -n module python scripts/plot_grid_timeseries.py --group_by subject
 
-# Filtered subsets
+# 필터링된 하위 집합
 conda run -n module python scripts/plot_grid_timeseries.py \
   --only_subjects subject1,subject2 \
   --only_velocities 60,70
 ```
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--group_by` | `subject_velocity` | Grouping mode: `subject_velocity`, `subject`, or `total_mean` |
-| `--sample` | (flag) | Generate preview only (3 subjects, 2 velocities) |
-| `--dpi` | `300` | Figure resolution |
-| `--segment_frames` | `100` | Window size around event (frames) |
-| `--x_piecewise` | enabled | Piecewise time normalization for display |
-| `--y_zero_onset` | enabled | Subtract value at platform onset per trial |
-| `--separate_step_nonstep` | disabled | Separate figures for step vs. non-step |
+| 인자 | 기본값 | 설명 |
+|------|-------|------|
+| `--group_by` | `subject_velocity` | 그룹화 모드: `subject_velocity`, `subject`, 또는 `total_mean` |
+| `--sample` | (플래그) | 미리보기만 생성 (3명 피험자, 2개 속도) |
+| `--dpi` | `300` | 그림 해상도 |
+| `--segment_frames` | `100` | 이벤트 기준 구간 크기 (프레임) |
+| `--x_piecewise` | 활성화 | 표시를 위한 구간별 시간 정규화 |
+| `--y_zero_onset` | 활성화 | 시행별 platform onset 시점 값 차감 |
+| `--separate_step_nonstep` | 비활성화 | Step vs. non-step 별도 그림 생성 |
 
-Event reference lines were overlaid: platform onset (red), platform offset (green), and step onset (blue dashed).
+이벤트 기준선이 중첩 표시되었다: platform onset(빨간색), platform offset(초록색), step onset(파란색 점선).
 
-### 7.3 Statistical Analysis
+## 8. 출력 설명
 
-```bash
-# Step vs. non-step LMM (pre-step window, 34 DVs)
-conda run -n module python analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py
+### 8.1 시계열 CSV
 
-# Initial posture strategy LMM (onset frame, 19 DVs)
-conda run -n module python analysis/initial_posture_strategy_lmm/analyze_initial_posture_strategy_lmm.py
-```
+주요 출력 파일(`output/all_trials_timeseries.csv`)은 시행별·모캡 프레임별 한 행으로 구성된 장형(long format) 구조이다. 컬럼 군은 다음과 같이 요약된다:
 
-## 8. Output Description
+| 군 | 컬럼 | 단위 | Onset-Zeroed |
+|----|------|------|-------------|
+| 식별자 | `subject`, `velocity`, `trial` | — | — |
+| 시간 | `MocapFrame`, `time_from_platform_onset_s` | 프레임, 초 | — |
+| 이벤트 | `platform_onset_local`, `platform_offset_local`, `step_onset_local` | 프레임 | — |
+| COM | `COM_X`, `COM_Y`, `COM_Z` | m | 아니오 |
+| vCOM | `vCOM_X`, `vCOM_Y`, `vCOM_Z` | m/s | 아니오 |
+| xCOM | `xCOM_X`, `xCOM_Y`, `xCOM_Z` | m | 아니오 |
+| BoS | `BOS_area`, `BOS_minX`, `BOS_maxX`, `BOS_minY`, `BOS_maxY` | m, m² | 아니오 |
+| MoS | `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d` | m | 아니오 |
+| 관절 각도 | `Hip_L_X_deg`, ..., `Neck_Z_deg` | deg | 예 |
+| GRF | `GRF_X_N`, `GRF_Y_N`, `GRF_Z_N` | N | 예 |
+| COP | `COP_X_m`, `COP_Y_m`, `COP_X_m_onset0`, `COP_Y_m_onset0` | m | 양쪽 |
+| GRM | `GRM_X_Nm`, `GRM_Y_Nm`, `GRM_Z_Nm` | Nm | 예 |
+| 발목 토크 | `AnkleTorqueMid_*_Nm`, `AnkleTorqueL_*_Nm`, `AnkleTorqueR_*_Nm` | Nm | 예 |
 
-### 8.1 Time-Series CSV
+### 8.2 시각화
 
-The primary output (`output/all_trials_timeseries.csv`) was structured in long format with one row per trial per mocap frame. Column families are summarized below:
+격자 플롯은 `output/figures/grid_timeseries/`에 저장되며, 6개 변수 범주로 구성된다: MoS/BoS, COM 계열, 하지 관절 각도, 상체 관절 각도, 발목 토크, GRF/COP.
 
-| Family | Columns | Unit | Onset-Zeroed |
-|--------|---------|------|-------------|
-| Identifiers | `subject`, `velocity`, `trial` | — | — |
-| Time | `MocapFrame`, `time_from_platform_onset_s` | frame, s | — |
-| Events | `platform_onset_local`, `platform_offset_local`, `step_onset_local` | frame | — |
-| COM | `COM_X`, `COM_Y`, `COM_Z` | m | No |
-| vCOM | `vCOM_X`, `vCOM_Y`, `vCOM_Z` | m/s | No |
-| xCOM | `xCOM_X`, `xCOM_Y`, `xCOM_Z` | m | No |
-| BoS | `BOS_area`, `BOS_minX`, `BOS_maxX`, `BOS_minY`, `BOS_maxY` | m, m^2 | No |
-| MoS | `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d` | m | No |
-| Joint angles | `Hip_L_X_deg`, ..., `Neck_Z_deg` | deg | Yes |
-| GRF | `GRF_X_N`, `GRF_Y_N`, `GRF_Z_N` | N | Yes |
-| COP | `COP_X_m`, `COP_Y_m`, `COP_X_m_onset0`, `COP_Y_m_onset0` | m | Both |
-| GRM | `GRM_X_Nm`, `GRM_Y_Nm`, `GRM_Z_Nm` | Nm | Yes |
-| Ankle torque | `AnkleTorqueMid_*_Nm`, `AnkleTorqueL_*_Nm`, `AnkleTorqueR_*_Nm` | Nm | Yes |
-
-### 8.2 Visualizations
-
-Grid plots were saved to `output/figures/grid_timeseries/`, organized by six variable categories: MoS/BoS, COM family, lower-limb joint angles, upper-body joint angles, ankle torque, and GRF/COP.
-
-### 8.3 Analysis Outputs
-
-LMM results, forest plots, violin plots, and descriptive heatmaps were saved to their respective analysis subdirectories under `analysis/`.
-
-## 9. Project Structure
-
-```
-replace_V3D/
-├── main.py                          # Pipeline entry point
-├── config.yaml                      # Signal processing & plot configuration
-├── data/
-│   ├── all_data/                    # Trimmed C3D files
-│   └── perturb_inform.xlsm         # Event timing & participant metadata
-├── scripts/
-│   ├── run_batch_all_timeseries_csv.py    # Core batch processor
-│   ├── plot_grid_timeseries.py            # Grid visualization
-│   ├── apply_post_filter_from_meta.py     # Metadata-based trial filtering
-│   └── torque_build_fp_inertial_templates.py  # Inertial template generation
-├── src/replace_v3d/
-│   ├── cli/                         # Trial matching, CSV export utilities
-│   ├── com/                         # COM, joint centers (De Leva, Harrington)
-│   ├── geometry/                    # 2D convex hull, polygon operations
-│   ├── io/                          # C3D reader, event/metadata loading
-│   ├── joint_angles/                # 3D joint angle computation
-│   ├── mos/                         # MoS & BoS computation
-│   ├── signal/                      # Butterworth filter, baseline zeroing
-│   └── torque/                      # Force plate, COP, ankle torque, axis transform
-├── analysis/
-│   ├── step_vs_nonstep_lmm/        # Pre-step window LMM (34 DVs)
-│   └── initial_posture_strategy_lmm/ # Onset-frame LMM (19 DVs)
-└── output/
-    ├── all_trials_timeseries.csv    # Primary output (long-format)
-    └── figures/grid_timeseries/     # Grid visualization plots
-```
-
-## 10. References
+## 9. 참고문헌
 
 - De Leva, P. (1996). Adjustments to Zatsiorsky-Seluyanov's segment inertia parameters. *Journal of Biomechanics*, 29(9), 1223-1230.
 - Harrington, M. E., Zavatsky, A. B., Lawson, S. E. M., Yuan, Z., & Theologis, T. N. (2007). Prediction of the hip joint centre in adults, children, and patients with cerebral palsy based on magnetic resonance imaging. *Journal of Biomechanics*, 40(3), 595-602.

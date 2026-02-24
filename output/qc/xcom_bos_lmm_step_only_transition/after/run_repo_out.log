@@ -1,0 +1,55 @@
+========================================================================
+xCOM/BOS Normalization Step-vs-Nonstep LMM
+========================================================================
+
+[M1] Load and prepare data...
+  Loading CSV...
+  Loading platform metadata...
+  Loading anthropometrics from meta sheet...
+  Building trial frame bounds...
+  Computing trial event frames (platform/step onset)...
+  step_onset fill (trial-level prefilter): 0
+  step_onset fill (subject-velocity mean): 68
+  step_onset fill (prefilter platform subject-velocity mean): 5
+  Event range validation passed: platform_oob=0, step_oob=0
+  Joining anthropometrics...
+  Building frame-wise normalized variables...
+  Frames: 29038
+  Trials: 125 (step=53, nonstep=72)
+  DV1_xcom_hof_rear_over_foot_platformonset missing: 0
+  DV1_xcom_hof_rear_over_foot_steponset missing: 0
+  DV2_com_rear_over_foot_platformonset missing: 0
+  DV2_com_rear_over_foot_steponset missing: 0
+  DV3_vcom_rel_over_sqrtgh_platformonset missing: 0
+  DV3_vcom_rel_over_sqrtgh_steponset missing: 0
+
+[M2] Fit LMMs...
+  Running Rscript for step-effect LMM fitting...
+  Using Rscript: /home/alice/miniconda3/envs/module/bin/Rscript
+  R: LMM fitting complete: 6 rows
+
+================================================================================================
+LMM Results: DV ~ step_TF + (1|subject), REML
+FDR: BH across all DVs
+================================================================================================
+DV                                           Term                           Estimate        SE        t    Sig
+------------------------------------------------------------------------------------------------
+DV1_xcom_hof_rear_over_foot_platformonset    main_step_effect                -0.0440    0.0065   -6.758    ***
+DV1_xcom_hof_rear_over_foot_steponset        main_step_effect                -0.0893    0.0150   -5.974    ***
+DV2_com_rear_over_foot_platformonset         main_step_effect                -0.0395    0.0063   -6.249    ***
+DV2_com_rear_over_foot_steponset             main_step_effect                -0.0225    0.0091   -2.476      *
+DV3_vcom_rel_over_sqrtgh_platformonset       main_step_effect                -0.0001    0.0012   -0.099   n.s.
+DV3_vcom_rel_over_sqrtgh_steponset           main_step_effect                 0.0715    0.0052   13.753    ***
+------------------------------------------------------------------------------------------------
+
+FDR significant coefficients: 5/6
+
+[M3] Generate figures...
+  fig1_main_effect_forest.png
+  removed legacy fig2_interaction_forest.png
+  fig3_violin_significant.png
+
+========================================================================
+Analysis complete.
+Output directory: analysis/xCOM&BOS_normalization
+========================================================================

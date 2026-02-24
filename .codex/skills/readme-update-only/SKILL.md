@@ -1,6 +1,6 @@
 ---
 name: readme-update-only
-description: Update only the current repository README.md. Use when the user asks to revise, refresh, reorganize, or maintain README content, or when the user explicitly types `$readme-update-only` (or `${skill_name}` for this skill). If the prompt is only `$readme-update-only`, immediately perform a README-only update using the current README content as the source of truth, without touching any other file.
+description: Update only the current repository README.md. Use when the user asks to revise, refresh, reorganize, or maintain README content, or when the user explicitly types `$readme-update-only` (or `${skill_name}` for this skill). 
 ---
 
 # README-Only Update
