@@ -129,23 +129,70 @@
 
 | Comparison Item | Prior Study Result | Current Result | Verdict |
 |---|---|---|---|
-| 초기자세가 전략 variability를 설명 | 초기 COM 위치가 trunk lean과 subject-specific하게 연관 (`R^2=0.29–0.82`) | onset 변수 19개 중 5개만 유의 | Partially consistent |
-| `xCOM/BOS_onset` 중요성 | onset 안정성 지표로 사용 | `xCOM_BOS_norm_onset` 유의 (`step < nonstep`) | Consistent |
+| 초기자세가 전략 variability를 설명 | 초기 COM 위치가 trunk lean과 subject-specific하게 연관 (`R^2=0.29–0.82`) | onset 변수 19개 중 5개만 유의; 관절 각도 전부 비유의 | Weakly consistent |
+| `xCOM/BOS_onset` 중요성 | onset 안정성 지표로 사용 | `xCOM_BOS_norm_onset` 유의 (`step < nonstep`), 단 `COM_X` 비유의 → BOS 정규화 기여 의심 | Conditionally consistent |
 | trunk 전략 지표 | trunk lean variability 핵심 | `Trunk_X_abs_onset`는 비유의 | Inconsistent |
 | force 계열 초기값 영향 | 원문에서 간접적으로 전략 반응과 연계 | absolute force 중 `AnkleTorqueMid_Y_perkg_abs_onset` 유의 | Partially consistent |
 | 결론 수준 | 초기자세 + task-level goal 상호작용 강조 | goal 파라미터 직접 모델링 없음 | Inconsistent (scope mismatch) |
 
 ## Interpretation & Conclusion
 
-1. 각도와 force를 absolute onset으로 전환해도, 엄격 기준에서는 `5/19`만 유의하여 Van Wouwe식 "광범위 onset 차이" 가설은 **FAIL**이다.
-2. 유의 변수는 `MOS_minDist_signed`, `MOS_AP_v3d`, `xCOM_BOS_norm_onset`, `vCOM_X`, `AnkleTorqueMid_Y_perkg_abs_onset`로, 초기 안정성/전후 방향 상태 신호가 일부 전략 차이를 반영한다.
-3. 핵심은 "검정불가" 문제가 아니라, absolute 변환 이후에도 대부분 변수는 통계적으로 분리되지 않는다는 점이다.
+### 1. 엄격 기준 결과
+
+각도와 force를 absolute onset으로 전환해도, `5/19`만 FDR 유의하여 "onset에서 광범위한 step/nonstep 차이"라는 가설은 **FAIL**이다.
+
+### 2. 관절 각도 비유의 vs COM 파생 유의 — 생체역학적 비일관성
+
+본 분석의 **가장 큰 해석적 문제**는, COM 파생 변수(`xCOM_BOS_norm_onset`, `MOS_AP_v3d`, `MOS_minDist_signed`, `vCOM_X`)는 유의한데, 그 원천(source)인 **관절 각도 5개가 전부 비유의**라는 점이다.
+
+COM 위치는 관절 각도의 함수이다. 각 segment의 위치는 관절 각도 chain으로 결정되고, COM은 각 segment 위치의 mass-weighted average이다:
+
+```
+관절 각도 (ankle, knee, hip, trunk, neck)
+  → segment positions
+    → COM = Σ(m_i × p_i) / Σ(m_i)
+      → xCOM = COM_X + vCOM_X / sqrt(g/l)
+        → xCOM_BOS_norm = (xCOM_X - BOS_minX) / (BOS_maxX - BOS_minX)
+```
+
+이 chain에서 입력(관절 각도) 전부가 step/nonstep 간 차이가 없다면, 출력(COM)에서 유의한 차이가 나타나는 것은 논리적으로 설명이 필요하다. 가능한 경로는 다음과 같다:
+
+| 가능한 설명 | 평가 |
+|---|---|
+| 개별 관절의 미세 차이가 누적되어 COM에서 유의해짐 | 5개 관절 **모두** n.s.이므로, 누적으로도 유의한 차이를 만들기 어려움 |
+| segment mass 분포의 개인차가 COM에 영향 | inter-subject 차이이며, LMM의 `(1\|subject)` random intercept에 이미 흡수됨 |
+| 관절 각속도 차이가 vCOM_X를 통해 xCOM에 기여 | 각속도는 검정하지 않아 배제 불가. 단, `vCOM_X` 단독으로는 전체 유의 패턴을 설명하기 부족 |
+| **BOS 정규화(분모)가 유의성을 주도** | 가장 유력한 설명. 아래 상세 |
+
+### 3. xCOM_BOS_norm_onset 유의성의 원천 분석
+
+`xCOM_BOS_norm_onset`은 `(xCOM_X - BOS_minX) / (BOS_maxX - BOS_minX)`로 계산된다.
+
+- **분자**: `xCOM_X - BOS_minX`. `COM_X` 자체가 n.s.이므로, xCOM의 유의성은 주로 `vCOM_X` 기여분(`vCOM_X / sqrt(g/l)`)과 `BOS_minX`(뒤꿈치 위치) 차이에 의존한다.
+- **분모**: `BOS_maxX - BOS_minX` (발 길이에 해당하는 BOS 범위). step/nonstep 간 **발 위치(foot placement)**가 다르면, 분모가 달라져 정규화 결과가 유의해질 수 있다.
+
+즉, `xCOM_BOS_norm_onset`의 유의성이 **신체 자세(posture)의 실질적 차이**를 반영하는 것인지, 아니면 **발 위치/BOS 범위의 차이**가 정규화를 통해 만들어낸 산물인지 분리되지 않는다. `MOS_AP_v3d`와 `MOS_minDist_signed`도 BOS polygon에 의존하므로, 같은 문제가 적용된다.
+
+### 4. AnkleTorqueMid_Y_perkg_abs_onset의 해석
+
+유일하게 유의한 force 변수인 ankle torque는 onset에서 step trial의 plantarflexion torque가 nonstep보다 약간 작다(절대값 기준). 이것은 onset 전 quiet standing 중 ankle stiffness 또는 weight distribution의 미세한 차이를 반영할 수 있으나, 관절 각도(`Ankle_stance_X_abs_onset`)가 비유의인 상태에서 torque만 유의한 것은 **co-contraction 또는 muscle tone 차이**를 시사할 가능성이 있다. 다만 단일 변수로 강한 해석을 내리기는 어렵다.
+
+### 5. 종합 결론
+
+**onset 시점에서 step/nonstep 간 신체 자세(posture)의 실질적 차이를 확인하기 어렵다.** 관절 각도 5개 (hip, knee, ankle, trunk, neck) 전부가 비유의이므로, "초기 자세가 다르기 때문에 전략이 달라진다"는 Van Wouwe식 해석은 본 데이터에서 **강하게 지지되지 않는다.**
+
+유의한 COM 파생 변수(`xCOM_BOS_norm_onset`, `MOS_AP_v3d`, `MOS_minDist_signed`)는 BOS 정규화에 의존하며, 그 원천인 관절 각도에서 차이가 없으므로, **발 위치(foot placement) 또는 BOS 기하학의 차이**가 유의성을 만들어냈을 가능성을 배제할 수 없다. `vCOM_X`의 약한 유의성(**)은 onset 직전의 미세한 동적 상태 차이를 시사하지만, 이것만으로 "초기 자세 → 전략 결정"이라는 인과적 해석을 뒷받침하기에는 불충분하다.
+
+Van Wouwe (2021)의 원문은 **개인 내(within-subject) 연속 상관**(COM 위치 → trunk lean, R²=0.29–0.82)과 **시뮬레이션 기반 인과 추론**으로 가설을 지지했으나, 본 분석은 **집단 간 평균 비교** 프레임이므로 직접적 대조에 한계가 있다. 그럼에도, 관절 각도 전부 비유의라는 결과는 본 데이터에서 "초기 자세의 전략 예측력"이 제한적임을 보여준다.
 
 ## Limitations
 
 1. 원문의 task-level goal 파라미터를 직접 모델링하지 않았다.
 2. inertial subtraction QC 경고가 4 trial에서 관찰되었고(non-strict), 이 선택이 force 절대값 해석에 영향을 줄 수 있다.
 3. 본 분석은 Van Wouwe 2021의 simulation 기반 인과 프레임을 1:1 재현한 결과가 아니다.
+4. 관절 각속도를 검정하지 않았다. vCOM은 관절 각속도의 함수이므로, 각속도 검정을 추가하면 COM 유의성의 원천을 더 명확히 분리할 수 있다.
+5. BOS 변수(BOS_minX, BOS_maxX, BOS polygon area 등)를 독립적으로 검정하지 않았다. xCOM_BOS_norm과 MOS의 유의성이 자세 차이인지 BOS 기하학 차이인지 분리하려면 BOS 자체의 step/nonstep 비교가 필요하다.
+6. 원문은 개인 내 연속 상관(within-subject correlation) 분석인 반면, 본 분석은 집단 평균 비교(LMM with binary predictor)이므로 분석 프레임이 근본적으로 다르다.
 
 ## Reproduction
 
