@@ -407,8 +407,26 @@ def _compute_trial_event_frames(
 
 def build_dv_specs() -> list[dict]:
     return [
+        # DV1 Primary: foot-length normalized (dimensionless)
         {
-            "dv": "DV1_xcom_bos_rear_abs_cm_platformonset",
+            "dv": "DV1_norm_platformonset",
+            "frame_col": "dv1_xcom_bos_rear_norm",
+            "event_col": "platform_eval_frame",
+            "metric": "DV1_xcom_bos_rear_norm",
+            "event": "platform_onset",
+            "paper_group": "VanWouwe+Salot+Patel+Bhatt",
+        },
+        {
+            "dv": "DV1_norm_steponset",
+            "frame_col": "dv1_xcom_bos_rear_norm",
+            "event_col": "step_onset_eval",
+            "metric": "DV1_xcom_bos_rear_norm",
+            "event": "step_onset",
+            "paper_group": "VanWouwe+Salot+Patel+Bhatt",
+        },
+        # DV1 Supplementary: absolute cm (for interpretation)
+        {
+            "dv": "DV1_abs_cm_platformonset",
             "frame_col": "dv1_xcom_bos_rear_abs_cm",
             "event_col": "platform_eval_frame",
             "metric": "DV1_xcom_bos_rear_abs_cm",
@@ -416,7 +434,7 @@ def build_dv_specs() -> list[dict]:
             "paper_group": "VanWouwe+Salot+Patel+Bhatt",
         },
         {
-            "dv": "DV1_xcom_bos_rear_abs_cm_steponset",
+            "dv": "DV1_abs_cm_steponset",
             "frame_col": "dv1_xcom_bos_rear_abs_cm",
             "event_col": "step_onset_eval",
             "metric": "DV1_xcom_bos_rear_abs_cm",
@@ -547,6 +565,10 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, dv_specs: list[dict]) -> t
             pl.col("BOS_minX").alias("bos_rear"),
         )
         .with_columns(
+            pl.when(pl.col("foot_len_m") > 0)
+            .then((pl.col("xcom_hof") - pl.col("bos_rear")) / pl.col("foot_len_m"))
+            .otherwise(None)
+            .alias("dv1_xcom_bos_rear_norm"),
             ((pl.col("xcom_hof") - pl.col("bos_rear")) * 100.0)
             .alias("dv1_xcom_bos_rear_abs_cm"),
             pl.when(pl.col("foot_len_m") > 0)
@@ -783,7 +805,8 @@ def _event_label(v: str) -> str:
 
 def _metric_label(metric: str) -> str:
     mapping = {
-        "DV1_xcom_bos_rear_abs_cm": "DV1 xCOM_hof - BOS_rear (cm)",
+        "DV1_xcom_bos_rear_norm": "DV1 (xCOM-rear) / foot_len",
+        "DV1_xcom_bos_rear_abs_cm": "DV1 xCOM-rear (cm, suppl.)",
         "DV2_com_rear_over_foot": "DV2 COM-rear / foot_len",
         "DV3_vcom_rel_over_sqrtgh": "DV3 (vCOM-vBOSrear) / sqrt(g*h)",
     }
