@@ -40,7 +40,7 @@
 | 논문 이벤트(lift-off/touchdown, onset, 300ms) | `platform onset`, `step onset` 2개 이벤트로 고정 | 사용자 확정 요구사항에 따라 이벤트 수를 2개로 제한 |
 | 통계 모델 | `DV ~ step_TF + (1|subject)` | 반복측정 구조(24명, 125 trial)를 반영하면서 변수별 step/nonstep 유의성을 직접 검정 |
 
-**Summary**: 본 분석은 Van Wouwe/Salot/Joshi 계열 공식을 현재 데이터에 맞게 통합(`DV1~DV3`)하고, `platform onset`/`step onset` 이벤트에서 각 변수의 step/nonstep 차이를 독립 LMM으로 검정했다.
+**Summary**: Van Wouwe/Salot/Joshi 계열 공식을 현재 데이터 구조에 맞게 `DV1~DV3`로 통합하고, `platform onset`/`step onset`에서 step vs nonstep 차이를 독립 LMM으로 검정했다.
 
 ## Data Summary
 
@@ -68,29 +68,16 @@
   - `height_m = 키 / 100`
   - `leg_len_m = 다리길이 / 100`
 
-### Axis & Direction Sign
-
-| Axis | Positive (+) | Negative (-) | 대표 변수 |
-|---|---|---|---|
-| X (AP) | 전방(anterior) | 후방(posterior) | `COM_X`, `vCOM_X`, `BOS_minX`, `xCOM_hof` |
-| Y (ML) | 우측(lateral) | 좌측(medial) | (본 분석 직접 사용 없음) |
-| Z (Vertical) | 상방(up) | 하방(down) | (본 분석 직접 사용 없음) |
-
-### Signed Metrics Interpretation
+### Direction & Signed Interpretation
 
 | Metric | (+) meaning | (-) meaning | 판정 기준/참조 |
 |---|---|---|---|
-| `DV1=(xCOM_hof-BOS_rear)/foot_len` | xCOM가 BOS rear 기준 전방 | xCOM가 BOS rear 기준 후방 | step-nonstep LMM 계수 부호 |
-| `DV2=(COM_X-BOS_rear)/foot_len` | COM이 BOS rear 기준 전방 | COM이 BOS rear 기준 후방 | step-nonstep LMM 계수 부호 |
-| `DV3=(vCOM_X-vBOSrear)/sqrt(g*h)` | 상대 전방 속도 증가 | 상대 후방 속도 증가 | step-nonstep LMM 계수 부호 |
+| `DV1=(xCOM_hof-BOS_rear)/foot_len` | xCOM가 BOS rear 기준 전방 | xCOM가 BOS rear 기준 후방 | `step_TFstep` 계수 부호 |
+| `DV2=(COM_X-BOS_rear)/foot_len` | COM이 BOS rear 기준 전방 | COM이 BOS rear 기준 후방 | `step_TFstep` 계수 부호 |
+| `DV3=(vCOM_X-vBOSrear)/sqrt(g*h)` | 상대 전방 속도 증가 | 상대 후방 속도 증가 | `step_TFstep` 계수 부호 |
 
-### Joint/Force/Torque Sign Conventions
-
-| Variable group | (+)/(-) meaning | 추가 규칙 |
-|---|---|---|
-| xCOM/BOS normalized metrics (`DV1~DV3`) | AP축 기반 부호 해석 | 모두 dimensionless 정규화 값 |
-| Joint angles | 본 분석 미사용 | 해당 없음 |
-| Force/Torque | 본 분석 미사용 | 해당 없음 |
+- AP(X)축 부호: `+` 전방, `-` 후방
+- 본 분석은 xCOM/BOS 계열(`DV1~DV3`)만 포함하며 joint/force/torque 변수는 포함하지 않았다.
 
 ### Analyzed Variables (Full Set)
 
@@ -116,12 +103,8 @@
 | `DV3_vcom_rel_over_sqrtgh_platformonset` | -0.0245±0.0159 | -0.0291±0.0195 | -0.0001 | n.s. |
 | `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | -0.0039±0.0184 | 0.0715 | *** |
 
-- Main effect 유의 계수: **5/6**
-
-### 2. Overall
-
-- 전체 DV 기준 FDR 유의: **5/6**
-- 유의성은 `main_step_effect` 기준으로 DV1, DV2(2개 이벤트), DV3(step onset)에서 관찰되었다.
+- 전체 FDR 기준 유의: **5/6**
+- 유의 항목: DV1(2개 이벤트), DV2(2개 이벤트), DV3(step onset)
 
 ## Comparison with Prior Studies
 
@@ -136,9 +119,10 @@
 
 ## Interpretation & Conclusion
 
-1. `methods_list` 기반 xCOM/BOS 계열 통합식은 본 데이터에서 step/nonstep 전략 차이를 통계적으로 구분했다. 특히 DV1, DV2는 두 이벤트 모두 유의했다.
-2. 속도 정규화 지표(DV3)는 step onset에서만 유의하여, 전략 분리는 이벤트 시점 의존성이 크다.
-3. 본 분석 목적(변수별 step/nonstep 유의성 확인)에 맞춰 단일 고정효과 LMM을 사용했으며, 결과 해석은 각 DV의 `step_TFstep` 계수 유의성에 집중한다.
+1. `methods_list` 기반 xCOM/BOS 통합식은 본 데이터에서 step/nonstep 전략 차이를 유의하게 구분했다(5/6).
+2. DV1, DV2는 두 이벤트 모두 유의해 위치 기반 정규화 지표의 안정적 구분력을 보였다.
+3. DV3는 step onset에서만 유의해 속도항 기반 분리는 이벤트 시점 의존성이 큰 것으로 해석된다.
+4. 모델은 `DV ~ step_TF + (1|subject)`로 단순화했고, 해석은 `step_TFstep` 주효과에 집중했다.
 
 ## Limitations
 
