@@ -10,7 +10,7 @@ Statistical method: Linear Mixed Model (LMM) with lmerTest inference
   Analysis events: platform onset and step onset
 
 Produces:
-  - 3 publication-quality figures (saved alongside this script)
+  - 2 publication-quality figures (saved alongside this script)
   - stdout summary statistics
 
 Usage:
