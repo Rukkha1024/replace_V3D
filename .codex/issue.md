@@ -5,6 +5,11 @@ Policy:
 - Record **solutions/workarounds** in the global skill: `$replace-v3d-troubleshooting`.
 
 ---
+## 2026-02-25
+
+- [PIPELINE] `main.py`는 `scripts/apply_post_filter_from_meta.py`를 생략하더라도 기본값이 `--meta_prefilter` 활성화라, 사용자가 기대한 "필터링 없이 raw output"이 아니라 trial subset이 미리 필터링된 CSV가 생성될 수 있음(요구사항 혼동 위험).
+- [SCHEMA] `--no-meta_prefilter`로 raw batch export를 수행하면 `step_TF/state/mixed/age_group` 등의 group label 컬럼이 CSV에 포함되지 않아, step vs nonstep 분석이 CSV 단독으로는 바로 실행되지 않음(키 기반 label 결합이 필요).
+
 ## 2026-02-24
 
 - [ANALYSIS] `analysis/xCOM&BOS_normalization`에서 통계모델이 `DV ~ step_TF * velocity_c + (1|subject)`로 고정되어 있어, 사용자 요구사항인 "변수별 step/nonstep 유의성만 확인"과 직접적으로 일치하지 않고 결과 해석이 상호작용 중심으로 분산되는 문제가 있었음.
