@@ -135,6 +135,37 @@
 | force 계열 초기값 영향 | 원문에서 간접적으로 전략 반응과 연계 | absolute force 중 `AnkleTorqueMid_Y_perkg_abs_onset` 유의 | Partially consistent |
 | 결론 수준 | 초기자세 + task-level goal 상호작용 강조 | goal 파라미터 직접 모델링 없음 | Inconsistent (scope mismatch) |
 
+## Additional Check (Raw, No Filtering)
+
+- 별도 임시 실험에서 prefilter/post-filter를 모두 끈 raw 표본(`trials=184`, `subjects=24`, `step=112`, `nonstep=72`)에 대해 `DV ~ step_TF + (1|subject)` LMM을 재적용했다.
+- 본 섹션의 `xCOM_BOS_norm`은 **foot length 정규화가 아니라** `BOS_rangeX=(BOS_maxX-BOS_minX)`로 나눈 비율 정규화다:
+  - `xCOM_BOS_norm = (xCOM_X - BOS_minX) / (BOS_maxX - BOS_minX)`
+- foot length 정규화와 cm 보조지표도 같은 raw 표본에서 병렬 검정했다:
+  - `DV1_norm = (xCOM_X - BOS_minX) / foot_len_m`
+  - `DV1_abs_cm = (xCOM_X - BOS_minX) * 100`
+  - `DV2_norm = (COM_X - BOS_minX) / foot_len_m`
+
+| Metric family | Variable | Estimate (step-nonstep) | p_fdr | Sig |
+|---|---|---:|---:|---|
+| BOS-range norm | `xCOM_BOS_norm_onset` | -0.0559 | 6.02e-14 | *** |
+| BOS-range norm | `xCOM_BOS_norm_300ms` | -0.0659 | 3.92e-11 | *** |
+| Decomposition (numerator) | `xCOM_rel_minX_onset` | -0.0115 | 6.12e-14 | *** |
+| Decomposition (denominator) | `BOS_rangeX_onset` | -4.47e-05 | 9.50e-01 | n.s. |
+| Decomposition (numerator) | `xCOM_rel_minX_300ms` | -0.0113 | 2.12e-07 | *** |
+| Decomposition (denominator) | `BOS_rangeX_300ms` | 0.0048 | 6.61e-03 | ** |
+| Foot-length norm | `DV1_norm_onset` | -0.0460 | 6.12e-14 | *** |
+| Foot-length norm | `DV1_norm_300ms` | -0.0461 | 8.96e-08 | *** |
+| Absolute supplement | `DV1_abs_cm_onset` | -1.1502 | 6.12e-14 | *** |
+| Absolute supplement | `DV1_abs_cm_300ms` | -1.1310 | 1.69e-07 | *** |
+| Foot-length norm | `DV2_norm_onset` | -0.0421 | 1.15e-12 | *** |
+| Foot-length norm | `DV2_norm_300ms` | -0.0216 | 1.36e-03 | ** |
+
+- 해석:
+  - raw 표본에서도 step vs nonstep 차이는 BOS-range 정규화, foot-length 정규화, cm 보조지표에서 모두 **동일 방향(음수)**으로 유지된다.
+  - onset에서는 분자(`xCOM_rel_minX`) 차이가 주된 원천이고 분모(`BOS_rangeX`)는 유의하지 않다.
+  - 300ms에서는 분자와 분모가 모두 유의해, ratio 차이는 분자 변화와 BOS 기하학(분모) 변화가 함께 기여한 결과로 해석해야 한다.
+
+
 ## Interpretation & Conclusion
 
 ### 1. 엄격 기준 결과
