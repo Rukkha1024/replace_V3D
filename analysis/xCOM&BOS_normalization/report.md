@@ -106,6 +106,18 @@
 - 전체 FDR 기준 유의: **5/6**
 - 유의 항목: DV1(2개 이벤트), DV2(2개 이벤트), DV3(step onset)
 
+## Additional Check (Raw, No Filtering)
+
+- 별도 임시 실험에서 `main.py --no-meta_prefilter`로 raw CSV를 재생성하고(`apply_post_filter_from_meta.py` 미사용), 같은 `step vs nonstep` LMM을 xCOM/BOS 정규화값에 적용했다.
+- 대상: `xCOM_BOS_norm_onset`, `xCOM_BOS_norm_300ms` (표본: trials=184, subjects=24, step=112, nonstep=72)
+
+| Variable | Estimate (step-nonstep) | p_fdr | Sig |
+|---|---:|---:|---|
+| `xCOM_BOS_norm_onset` | -0.0559 | 2.01e-14 | *** |
+| `xCOM_BOS_norm_300ms` | -0.0659 | 1.96e-11 | *** |
+
+- 요약: prefilter/post-filter를 모두 끈 raw 표본에서도 xCOM/BOS 정규화 지표의 step vs nonstep 차이는 동일 방향(음수)으로 유지되었다.
+
 ## Comparison with Prior Studies
 
 | Comparison Item | Prior Study Result | Current Result | Verdict |

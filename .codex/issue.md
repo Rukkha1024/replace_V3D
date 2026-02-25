@@ -9,6 +9,7 @@ Policy:
 
 - [PIPELINE] `main.py`는 `scripts/apply_post_filter_from_meta.py`를 생략하더라도 기본값이 `--meta_prefilter` 활성화라, 사용자가 기대한 "필터링 없이 raw output"이 아니라 trial subset이 미리 필터링된 CSV가 생성될 수 있음(요구사항 혼동 위험).
 - [SCHEMA] `--no-meta_prefilter`로 raw batch export를 수행하면 `step_TF/state/mixed/age_group` 등의 group label 컬럼이 CSV에 포함되지 않아, step vs nonstep 분석이 CSV 단독으로는 바로 실행되지 않음(키 기반 label 결합이 필요).
+- [ANALYSIS] raw 표본에서 `xCOM_BOS_norm` step/nonstep 차이를 해석할 때, 분해 검정 결과 `BOS_rangeX_300ms`도 유의하여(분모 변화) ratio 차이를 분자 변화만으로 단정할 수 없는 해석 혼입 위험이 확인됨.
 
 ## 2026-02-24
 
