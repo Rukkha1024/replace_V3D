@@ -914,22 +914,22 @@ def print_significant_only(results: pd.DataFrame) -> None:
             fmt.format(
                 str(row["dv"])[:28],
                 str(row["family"])[:20],
-                f"{row['estimate']:.4f}" if pd.notna(row["estimate"]) else "NA",
-                f"{row['SE']:.4f}" if pd.notna(row["SE"]) else "NA",
-                f"{row['t_value']:.3f}" if pd.notna(row["t_value"]) else "NA",
+                f"{row['estimate']:.2f}" if pd.notna(row["estimate"]) else "NA",
+                f"{row['SE']:.2f}" if pd.notna(row["SE"]) else "NA",
+                f"{row['t_value']:.2f}" if pd.notna(row["t_value"]) else "NA",
                 str(row["sig"]),
             )
         )
     print("-" * 96)
 
 
-def _fmt_num(v: Any, digits: int = 4) -> str:
+def _fmt_num(v: Any, digits: int = 2) -> str:
     if pd.isna(v):
         return "NA"
     return f"{float(v):.{digits}f}"
 
 
-def _fmt_mean_sd(mean_v: Any, sd_v: Any, digits: int = 4) -> str:
+def _fmt_mean_sd(mean_v: Any, sd_v: Any, digits: int = 2) -> str:
     return f"{_fmt_num(mean_v, digits)}±{_fmt_num(sd_v, digits)}"
 
 
@@ -970,9 +970,9 @@ def _build_significant_table(results: pd.DataFrame) -> str:
         lines.append(
             "| "
             f"`{row.dv}` | {row.family} | "
-            f"{_fmt_mean_sd(row.mean_step, row.sd_step, 4)} | "
-            f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 4)} | "
-            f"{_fmt_num(row.estimate, 4)} | {row.sig} |"
+            f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
+            f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
+            f"{_fmt_num(row.estimate, 2)} | {row.sig} |"
         )
     if sig_df.empty:
         lines.append("| (none) | - | - | - | - | - |")
@@ -993,9 +993,9 @@ def _build_segment_angle_table(results: pd.DataFrame) -> str:
         lines.append(
             "| "
             f"`{row.dv}` | "
-            f"{_fmt_mean_sd(row.mean_step, row.sd_step, 4)} | "
-            f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 4)} | "
-            f"{_fmt_num(row.estimate, 4)} | {sig} |"
+            f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
+            f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
+            f"{_fmt_num(row.estimate, 2)} | {sig} |"
         )
     return "\n".join(lines)
 

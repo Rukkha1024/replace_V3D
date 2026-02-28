@@ -10,21 +10,21 @@
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
-| `Hip_stance_X_abs_onset` | 10.7532±5.8730 | 9.9375±6.9879 | 0.1224 | n.s. |
-| `Hip_stance_Y_abs_onset` | -0.6657±4.4060 | 0.3647±3.6700 | -0.6079 | n.s. |
-| `Hip_stance_Z_abs_onset` | 1.6891±9.3399 | 2.7555±8.0346 | -0.2547 | n.s. |
-| `Knee_stance_X_abs_onset` | -4.5070±5.7125 | -3.1723±5.0054 | -0.1155 | n.s. |
-| `Knee_stance_Y_abs_onset` | 2.7263±3.7406 | -0.4018±4.1432 | 2.4942 | *** |
-| `Knee_stance_Z_abs_onset` | 3.0931±4.2824 | 0.0120±3.2762 | 2.3179 | *** |
-| `Ankle_stance_X_abs_onset` | 4.2941±3.0272 | 4.0405±3.0784 | 0.0060 | n.s. |
-| `Ankle_stance_Y_abs_onset` | -8.5805±7.8510 | -2.0432±10.6401 | -4.8044 | ** |
-| `Ankle_stance_Z_abs_onset` | 6.3717±8.0032 | -0.0406±7.2812 | 4.5817 | *** |
-| `Trunk_X_abs_onset` | 2.7874±6.4858 | 2.4941±6.3978 | -0.1806 | n.s. |
-| `Trunk_Y_abs_onset` | -1.0002±4.0661 | 0.3346±3.5069 | -0.3606 | n.s. |
-| `Trunk_Z_abs_onset` | 1.1478±3.5757 | 0.7884±3.5928 | 0.2404 | n.s. |
-| `Neck_X_abs_onset` | 17.5877±27.6573 | 23.0236±7.5072 | -5.2471 | n.s. |
-| `Neck_Y_abs_onset` | 2.1684±6.9468 | 1.8285±5.0522 | -0.3469 | n.s. |
-| `Neck_Z_abs_onset` | 0.9243±13.4529 | 0.3064±4.9903 | 1.2954 | n.s. |
+| `Hip_stance_X_abs_onset` | 10.75±5.87 | 9.94±6.99 | 0.12 | n.s. |
+| `Hip_stance_Y_abs_onset` | -0.67±4.41 | 0.36±3.67 | -0.61 | n.s. |
+| `Hip_stance_Z_abs_onset` | 1.69±9.34 | 2.76±8.03 | -0.25 | n.s. |
+| `Knee_stance_X_abs_onset` | -4.51±5.71 | -3.17±5.01 | -0.12 | n.s. |
+| `Knee_stance_Y_abs_onset` | 2.73±3.74 | -0.40±4.14 | 2.49 | *** |
+| `Knee_stance_Z_abs_onset` | 3.09±4.28 | 0.01±3.28 | 2.32 | *** |
+| `Ankle_stance_X_abs_onset` | 4.29±3.03 | 4.04±3.08 | 0.01 | n.s. |
+| `Ankle_stance_Y_abs_onset` | -8.58±7.85 | -2.04±10.64 | -4.80 | ** |
+| `Ankle_stance_Z_abs_onset` | 6.37±8.00 | -0.04±7.28 | 4.58 | *** |
+| `Trunk_X_abs_onset` | 2.79±6.49 | 2.49±6.40 | -0.18 | n.s. |
+| `Trunk_Y_abs_onset` | -1.00±4.07 | 0.33±3.51 | -0.36 | n.s. |
+| `Trunk_Z_abs_onset` | 1.15±3.58 | 0.79±3.59 | 0.24 | n.s. |
+| `Neck_X_abs_onset` | 17.59±27.66 | 23.02±7.51 | -5.25 | n.s. |
+| `Neck_Y_abs_onset` | 2.17±6.95 | 1.83±5.05 | -0.35 | n.s. |
+| `Neck_Z_abs_onset` | 0.92±13.45 | 0.31±4.99 | 1.30 | n.s. |
 
 ## coordinate 해석 기준
 

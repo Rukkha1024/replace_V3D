@@ -101,15 +101,15 @@
 
 | Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---|---:|---:|---:|---|
-| `MOS_minDist_signed` | Balance | 0.0718±0.0143 | 0.0573±0.0154 | 0.0109 | *** |
-| `xCOM_BOS_norm_onset` | Balance | 0.6318±0.0681 | 0.7005±0.0727 | -0.0513 | *** |
-| `MOS_AP_v3d` | Balance | 0.0753±0.0147 | 0.0619±0.0159 | 0.0102 | *** |
-| `Knee_stance_Y_abs_onset` | Joint_absolute | 2.7263±3.7406 | -0.4018±4.1432 | 2.4942 | *** |
-| `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.4516±0.1632 | -2.5763±0.1679 | 0.0931 | *** |
-| `Ankle_stance_Z_abs_onset` | Joint_absolute | 6.3717±8.0032 | -0.0406±7.2812 | 4.5817 | *** |
-| `Knee_stance_Z_abs_onset` | Joint_absolute | 3.0931±4.2824 | 0.0120±3.2762 | 2.3179 | *** |
-| `vCOM_X` | Balance | 0.0097±0.0088 | 0.0161±0.0100 | -0.0037 | ** |
-| `Ankle_stance_Y_abs_onset` | Joint_absolute | -8.5805±7.8510 | -2.0432±10.6401 | -4.8044 | ** |
+| `MOS_minDist_signed` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | *** |
+| `xCOM_BOS_norm_onset` | Balance | 0.63±0.07 | 0.70±0.07 | -0.05 | *** |
+| `MOS_AP_v3d` | Balance | 0.08±0.01 | 0.06±0.02 | 0.01 | *** |
+| `Knee_stance_Y_abs_onset` | Joint_absolute | 2.73±3.74 | -0.40±4.14 | 2.49 | *** |
+| `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.45±0.16 | -2.58±0.17 | 0.09 | *** |
+| `Ankle_stance_Z_abs_onset` | Joint_absolute | 6.37±8.00 | -0.04±7.28 | 4.58 | *** |
+| `Knee_stance_Z_abs_onset` | Joint_absolute | 3.09±4.28 | 0.01±3.28 | 2.32 | *** |
+| `vCOM_X` | Balance | 0.01±0.01 | 0.02±0.01 | -0.00 | ** |
+| `Ankle_stance_Y_abs_onset` | Joint_absolute | -8.58±7.85 | -2.04±10.64 | -4.80 | ** |
 
 ## Interpretation & Conclusion
 
