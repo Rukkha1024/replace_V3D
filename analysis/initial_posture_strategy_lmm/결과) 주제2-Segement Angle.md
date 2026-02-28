@@ -32,6 +32,13 @@
 - Segment 좌표계 기준은 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`이다.
 - 따라서 `X/Y/Z`는 각 축 회전 성분이며, 임상적 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
 
+## stance 기준
+
+- step trial은 `step_r -> 좌측 stance`, `step_l -> 우측 stance`로 계산한다.
+- nonstep trial은 subject별 step trial의 `major_step_side`를 stance 기준으로 사용한다.
+- `step_r_count == step_l_count`인 tie subject는 좌/우 평균으로 계산한다.
+- 이번 실행 요약: `step_r_major=9`, `step_l_major=10`, `tie=5` (tie subjects: `강비은, 김서하, 김유민, 안지연, 유재원`)
+
 - 해석 노트:
   - 15개 segment angle 변수(X/Y/Z) 중 4개가 FDR 유의였다: `Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`.
   - 따라서 onset 단일시점에서 관절각 차이는 일부 축(Y/Z)에 제한적으로 관찰되며, 전축에서 일관되게 나타나지는 않았다.

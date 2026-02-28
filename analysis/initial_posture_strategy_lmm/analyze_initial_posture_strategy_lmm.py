@@ -223,6 +223,11 @@ def load_platform_sheet(path: Path) -> pd.DataFrame:
 
 
 def build_subject_major_step_side(platform: pd.DataFrame) -> pd.DataFrame:
+    """Determine subject-level major stepping side from mixed step trials.
+
+    step_r means left leg is stance; step_l means right leg is stance.
+    Nonstep uses this major side. Tie keeps both sides and is handled as L/R mean.
+    """
     trial_unique = platform[TRIAL_KEYS + ["step_TF", "state", "mixed"]].drop_duplicates().copy()
     mask = (
         trial_unique["mixed"].eq(1)
@@ -251,7 +256,7 @@ def build_subject_major_step_side(platform: pd.DataFrame) -> pd.DataFrame:
         "step_r",
         np.where(counts["step_l_count"] > counts["step_r_count"], "step_l", "tie"),
     )
-    return counts[["subject", "major_step_side"]]
+    return counts[["subject", "step_r_count", "step_l_count", "major_step_side"]]
 
 
 def build_trial_meta(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFrame:
@@ -341,6 +346,13 @@ def build_onset_snapshot(
 
 
 def _pick_stance_value(row: pd.Series, left_col: str, right_col: str) -> float:
+    """Select stance-side value for one trial.
+
+    Priority:
+    1) step_r -> left side, step_l -> right side.
+    2) nonstep -> subject major_step_side.
+    3) tie -> average of left and right.
+    """
     state = str(row.get("state", "")).lower().strip()
     major = str(row.get("major_step_side", "")).lower().strip()
     if state == "step_r":
@@ -352,6 +364,23 @@ def _pick_stance_value(row: pd.Series, left_col: str, right_col: str) -> float:
     if major == "step_l":
         return float(row[right_col])
     return float(np.nanmean([row[left_col], row[right_col]]))
+
+
+def summarize_major_step_side(major_side: pd.DataFrame) -> dict[str, Any]:
+    """Summarize subject-level major step side and tie subjects."""
+    counts = major_side["major_step_side"].value_counts(dropna=False).to_dict()
+    tie_subjects = (
+        major_side.loc[major_side["major_step_side"] == "tie", "subject"]
+        .astype(str)
+        .tolist()
+    )
+    return {
+        "subjects": int(len(major_side)),
+        "step_r_major": int(counts.get("step_r", 0)),
+        "step_l_major": int(counts.get("step_l", 0)),
+        "tie_major": int(counts.get("tie", 0)),
+        "tie_subjects": tie_subjects,
+    }
 
 
 def _build_c3d_key_map(c3d_dir: Path, platform_xlsm: Path, trial_keys: set[tuple[str, float, int]]) -> dict[tuple[str, float, int], Path]:
@@ -586,7 +615,7 @@ def build_analysis_dataframe(
     fp_inertial_qc_fz_threshold: float,
     fp_inertial_qc_margin_m: float,
     fp_inertial_qc_strict: bool,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     print("  Loading CSV...")
     df = load_csv(csv_path)
     print(f"  Frames: {df.height}, Columns: {df.width}")
@@ -596,6 +625,8 @@ def build_analysis_dataframe(
 
     trial_meta = build_trial_meta(df=df, platform=platform)
     major_side = build_subject_major_step_side(platform=platform)
+    trial_subjects = set(trial_meta["subject"].astype(str).tolist())
+    major_side = major_side[major_side["subject"].astype(str).isin(trial_subjects)].copy()
 
     print(
         "  Trial set: "
@@ -650,7 +681,7 @@ def build_analysis_dataframe(
     if analysis_df[required_abs_cols].isna().any().any():
         raise ValueError("Missing absolute onset feature values after merge.")
 
-    return analysis_df, trial_meta, abs_features
+    return analysis_df, trial_meta, abs_features, major_side
 
 
 def variable_catalog() -> list[dict[str, str]]:
@@ -983,6 +1014,7 @@ def write_report_markdown(
     specs: list[dict[str, str]],
     audit_df: pd.DataFrame,
     results: pd.DataFrame,
+    major_side: pd.DataFrame,
     n_trials: int,
     n_step: int,
     n_nonstep: int,
@@ -995,6 +1027,9 @@ def write_report_markdown(
     ratio = f"{n_sig}/{len(results)}"
     verdict = "PASS" if (len(results) > 0 and n_sig == len(results) and n_untestable == 0) else "FAIL"
     qc_mode = "strict" if qc_strict else "non-strict"
+    major_summary = summarize_major_step_side(major_side)
+    tie_subjects = major_summary["tie_subjects"]
+    tie_subjects_str = ", ".join(tie_subjects) if tie_subjects else "(none)"
     joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
     if joint_sig_count == 0:
         joint_line = (
@@ -1058,6 +1093,15 @@ def write_report_markdown(
 - Segment 좌표계는 전역 기준으로 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`로 구성된다.
 - 따라서 `*_X/*_Y/*_Z`는 각각 해당 축 회전 성분이며, 단순히 sagittal/frontal/transverse와 1:1로 고정 해석하면 안 된다.
 
+### Stance-Leg Selection Rule
+
+- `step_r` trial: left leg angle을 stance로 사용
+- `step_l` trial: right leg angle을 stance로 사용
+- `nonstep` trial: 해당 subject의 step trial 분포(`major_step_side`)로 stance를 선택
+- `tie` (`step_r_count == step_l_count`): left/right 평균값 사용
+- Subject summary: `step_r_major={major_summary["step_r_major"]}`, `step_l_major={major_summary["step_l_major"]}`, `tie={major_summary["tie_major"]}`
+- Tie subjects: `{tie_subjects_str}`
+
 ### Analyzed Variables (Full Set, n={len(specs)})
 
 {analyzed_table}
@@ -1102,9 +1146,17 @@ Auto-generated by analyze_initial_posture_strategy_lmm.py.
     report_md.write_text(report_text, encoding="utf-8-sig")
 
 
-def write_segment_angle_markdown(segment_md: Path, results: pd.DataFrame, verdict_pass: bool) -> None:
+def write_segment_angle_markdown(
+    segment_md: Path,
+    results: pd.DataFrame,
+    major_side: pd.DataFrame,
+    verdict_pass: bool,
+) -> None:
     table = _build_segment_angle_table(results)
     verdict = "PASS" if verdict_pass else "FAIL"
+    major_summary = summarize_major_step_side(major_side)
+    tie_subjects = major_summary["tie_subjects"]
+    tie_subjects_str = ", ".join(tie_subjects) if tie_subjects else "(none)"
     joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
     if joint_sig_count == 0:
         joint_note = f"- {joint_total}개 segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다."
@@ -1130,6 +1182,13 @@ def write_segment_angle_markdown(segment_md: Path, results: pd.DataFrame, verdic
 - 관절각 계산은 Visual3D-like intrinsic `XYZ` 순서를 사용한다.
 - Segment 좌표계 기준은 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`이다.
 - 따라서 `X/Y/Z`는 각 축 회전 성분이며, 임상적 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
+
+## stance 기준
+
+- step trial은 `step_r -> 좌측 stance`, `step_l -> 우측 stance`로 계산한다.
+- nonstep trial은 subject별 step trial의 `major_step_side`를 stance 기준으로 사용한다.
+- `step_r_count == step_l_count`인 tie subject는 좌/우 평균으로 계산한다.
+- 이번 실행 요약: `step_r_major={major_summary["step_r_major"]}`, `step_l_major={major_summary["step_l_major"]}`, `tie={major_summary["tie_major"]}` (tie subjects: `{tie_subjects_str}`)
 
 - 해석 노트:
   - {joint_note[2:]}
@@ -1159,7 +1218,7 @@ def main() -> None:
     print("=" * 72)
 
     print("\n[M1] Load and prepare data...")
-    analysis_df, trial_meta, _abs_angles = build_analysis_dataframe(
+    analysis_df, trial_meta, _abs_angles, major_side = build_analysis_dataframe(
         csv_path=args.csv,
         platform_xlsm=args.platform_xlsm,
         c3d_dir=args.c3d_dir,
@@ -1190,6 +1249,16 @@ def main() -> None:
     n_nonstep = int((trial_meta["step_TF"] == "nonstep").sum())
     n_subjects = int(trial_meta["subject"].nunique())
     print(f"  Trial set fixed: {n_trials} (step={n_step}, nonstep={n_nonstep})")
+    major_summary = summarize_major_step_side(major_side)
+    print(
+        "  major_step_side summary: "
+        f"subjects={major_summary['subjects']}, "
+        f"step_r_major={major_summary['step_r_major']}, "
+        f"step_l_major={major_summary['step_l_major']}, "
+        f"tie={major_summary['tie_major']}"
+    )
+    if major_summary["tie_subjects"]:
+        print(f"  tie subjects (L/R mean): {', '.join(major_summary['tie_subjects'])}")
 
     if args.dry_run:
         print("\nDry run complete.")
@@ -1226,6 +1295,7 @@ def main() -> None:
         specs=specs,
         audit_df=audit_df,
         results=results,
+        major_side=major_side,
         n_trials=n_trials,
         n_step=n_step,
         n_nonstep=n_nonstep,
@@ -1235,6 +1305,7 @@ def main() -> None:
     write_segment_angle_markdown(
         segment_md=args.segment_angle_md,
         results=results,
+        major_side=major_side,
         verdict_pass=verdict_pass,
     )
     print(f"  Updated: {args.report_md}")

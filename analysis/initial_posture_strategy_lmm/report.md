@@ -46,6 +46,15 @@
 - Segment 좌표계는 전역 기준으로 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`로 구성된다.
 - 따라서 `*_X/*_Y/*_Z`는 각각 해당 축 회전 성분이며, 단순히 sagittal/frontal/transverse와 1:1로 고정 해석하면 안 된다.
 
+### Stance-Leg Selection Rule
+
+- `step_r` trial: left leg angle을 stance로 사용
+- `step_l` trial: right leg angle을 stance로 사용
+- `nonstep` trial: 해당 subject의 step trial 분포(`major_step_side`)로 stance를 선택
+- `tie` (`step_r_count == step_l_count`): left/right 평균값 사용
+- Subject summary: `step_r_major=9`, `step_l_major=10`, `tie=5`
+- Tie subjects: `강비은, 김서하, 김유민, 안지연, 유재원`
+
 ### Analyzed Variables (Full Set, n=29)
 
 | Variable | Family | Testability at onset | Result status |
