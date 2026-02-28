@@ -1053,6 +1053,11 @@ def main() -> None:
     results = fit_lmm_all(trial_df, specs)
     print_results_table(results)
 
+    # Save full LMM results for documentation
+    results_csv = out_dir / "lmm_results.csv"
+    results.to_csv(results_csv, index=False)
+    print(f"  Saved results to {results_csv}")
+
     # --- Milestone 3 ---
     if args.no_figures:
         print("\n[M3] Skipping figure generation (--no-figures).")
