@@ -1,179 +1,187 @@
 ﻿---
 cssclass: clean-embeds
 date created: 2026-01-19. 00.31
+date revised: 2026-03-01
 ---
 
-# results 
+# 1. 가설
 
+동일 perturbation 강도(mixed velocity)에서 xCOM/BOS 정규화 지표(DV1–DV3)는 step 전략과 nonstep 전략 간 유의한 차이를 보일 것이다. Forward translation perturbation이므로 AP 방향(X축)에서 주된 차이가 관찰될 것이다.
 
-## plot으로 확인했을 때 
+**분석 변수 (DV1–DV3):**
 
-<!-- 단위 기준: 원 데이터(COM/xCOM/BOS/MOS)는 m, 본 문서 길이 해석은 cm(=m*100)로 표기 -->
+| DV | 공식 | 선행연구 | 의미 |
+|---|---|---|---|
+| DV1 | `(xCOM_hof − BOS_rear) / foot_length` | Van Wouwe (2021), Salot (2016), Patel (2015), Bhatt group | xCOM의 BOS rear 대비 상대 위치 (무차원) |
+| DV2 | `(COM_X − BOS_rear) / foot_length` | Joshi (2018) 위치항 | COM 위치항만 분리한 BOS rear 대비 상대 위치 (무차원) |
+| DV3 | `(vCOM_X − vBOS_rear) / √(g × height)` | Joshi (2018) 속도항 | COM–BOS 상대 속도를 신장으로 정규화 (무차원) |
 
-### COM 
-![](https://i.imgur.com/7d8Qh1M.png)
+- DV1 Supplementary: `DV1_abs_cm = (xCOM_hof − BOS_rear) × 100 [cm]` — 직관적 크기 해석용 병행.
 
-- COM X
-	- step_onset 이후로 극명하게 나뉨. 
-	- vCOM, xCOM은 그래도 onset - step_onset 사이에 살짝 차이가 있음. nonstep 값이 좀 더 높네. 
-- COM Y: 애초에 stepping의 영역이다 보니깐 별로 의미가 없는 것 같네. 
-- COM Z: 둘이 차이 못 느낌 
+**분석 이벤트:** `platform_onset`, `step_onset` (2개)
 
-### MOS 
+**분석구간:**
+- Step trial: `[platform_onset_local, step_onset_local]`
+- Nonstep trial: `[platform_onset_local, same (subject, velocity) step trial의 step_onset_local 평균]`
+- Fallback: prefilter 이벤트 기반 subject-velocity mean 보완.
 
-![](https://i.imgur.com/4clnWYI.png)
+**좌표계:** `X = +Anterior (AP)`, `Y = +Left (ML)`, `Z = +Up (Vertical)`
 
-- MOS 부호 설명
-	- 양수(+): xCOM이 BOS 안에 있음. 
-	- 음수(-): xCOM이 BOS 밖으로 나감. 
-- MOS AP: nonstep이 더 안정적이다? <!-- 근데 이게 끝? 해석을 못하겠음  -->
-- MOS ML: 얘도 모르겠음. <!-- 선행연구나 읽자 -->
+**통계 모델:** `DV ~ step_TF + (1|subject)`, REML (`lmerTest`). BH-FDR 일괄 보정.
 
+---
 
-## 1차 스크리닝 (COM + xCOM + xCOM/BOS, LMM)
+# 2. 결과
 
-### 1차 스크리닝 목적/구간
+## 2.1 1차 스크리닝 (COM + xCOM + xCOM/BOS, 24 DVs)
 
-- 목적: 2차 확인 분석 전에, `COM + xCOM + xCOM/BOS`에서 step/nonstep 차이가 나타나는 후보 변수를 먼저 탐색.
-- 분석구간:
-	- step: `[platform_onset_local, step_onset_local]`
-	- nonstep: `[platform_onset_local, same (subject, velocity) stepping mean step_onset_local]`
-	- fallback: prefilter 이벤트 기반 subject-velocity mean 보완.
-- 모델: `DV ~ step_TF + (1|subject)`, REML.
-- 다중비교: 1차 스크리닝 전체 DV(24개) 대상으로 BH-FDR 일괄 보정.
-- 주의: `xCOM_BOS_ML_foot`는 이번 1차 스크리닝에서 **foot_length 공통 분모**를 적용한 사용자 지정 정의.
-- 전체 결과 파일: `analysis/xCOM&BOS_normalization/com_xcom_screening_lmm_results.csv`
+### 목적
 
-### COM+xCOM+xCOM/BOS 변수표
+DV1–DV3 확인 분석 전에, COM + xCOM + xCOM/BOS 계열에서 step/nonstep 차이가 나타나는 후보 변수를 탐색한다.
 
-| Group | 변수 구성 |
+### 스크리닝 변수 구성
+
+| Group | 변수 |
 |---|---|
 | COM (X/Y/Z) | `max-min`, `mean_velocity`, `peak_velocity` |
 | xCOM (X/Y/Z) | `max-min`, `mean_velocity`, `peak_velocity` |
 | xCOM/BOS (AP/ML, foot 정규화) | `platform_onset`, `step_onset`, `window_mean` |
 
-### LMM 결과 (2차 확인 A: 유의 변수 9개 테이블)
+- 다중비교: 24개 DV 전체 BH-FDR 보정.
+- 전체 결과 파일: `com_xcom_screening_lmm_results.csv`
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig. |
-|---|---|---|---|---|
+### FDR 유의 변수 (9/24개)
+
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
+|---|---:|---:|---:|---|
 | `xCOM_Y_peak_velocity` | 0.2705±0.0940 | 0.1483±0.0703 | 0.1269 | *** |
-| `xCOM_BOS_AP_foot_mean_window` | 0.3292±0.1256 | 0.4036±0.0996 | -0.0666 | *** |
-| `xCOM_BOS_AP_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | -0.0440 | *** |
-| `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | -0.0893 | *** |
+| `xCOM_BOS_AP_foot_mean_window` | 0.3292±0.1256 | 0.4036±0.0996 | −0.0666 | *** |
+| `xCOM_BOS_AP_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | −0.0440 | *** |
+| `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | −0.0893 | *** |
 | `xCOM_Y_mean_velocity` | 0.0703±0.0320 | 0.0450±0.0233 | 0.0277 | *** |
 | `COM_Y_peak_velocity` | 0.0561±0.0294 | 0.0340±0.0239 | 0.0230 | *** |
 | `xCOM_Y_max_min` | 0.0235±0.0116 | 0.0161±0.0124 | 0.0078 | ** |
 | `COM_Z_mean_velocity` | 0.0250±0.0118 | 0.0220±0.0082 | 0.0036 | * |
 | `xCOM_X_mean_velocity` | 0.1286±0.0778 | 0.1347±0.0694 | 0.0133 | * |
 
-### 1차 해석 (유의 변수 기준)
+### 스크리닝 해석
 
-- 전체 24개 DV 중 9개가 FDR 유의.
-- 유의 신호는 `xCOM` 계열, 특히 `Y축`(`xCOM_Y_peak_velocity`, `xCOM_Y_mean_velocity`, `xCOM_Y_max_min`)에 집중.
-- `xCOM/BOS_AP_foot`는 이벤트 2개 + 구간평균 모두 유의(`step < nonstep`)라서 AP 안정성 차이 후보로 우선순위가 높음.
-- `COM` 단독 변수는 `COM_Y_peak_velocity`, `COM_Z_mean_velocity`만 유의했고 나머지는 비유의.
-- 따라서 2차 분석은 `xCOM_Y` 계열 + `xCOM_BOS_AP_foot` 계열을 우선 검증 대상으로 두는 것이 합리적.
-
-
-## DV1 통계결과 (LMM)
-
-### DV1 산출 방법
-
-DV1은 **"특정 이벤트 시점에서 xCOM이 발 뒤꿈치(BOS 뒤 경계)보다 얼마나 앞에 있는가"**를 나타낸 값.
-
-**재료 ①: `xCOM_hof` (Hof, 2005)**
-
-- extrapolated COM(xCOM)의 AP 위치.
-- 공식: `xCOM_hof = COM_X + vCOM_X / ω₀`
-	- `COM_X`: 무게중심(COM)의 AP 위치 (m)
-	- `vCOM_X`: COM의 AP 속도 (m/s)
-	- `ω₀ = sqrt(g / 신장)`, g = 9.81 m/s²  →  신장이 클수록 ω₀가 작고, 같은 속도라도 xCOM이 더 앞으로 나감.
-
-**재료 ②: `BOS_rear`**
-
-- 지지면(BOS)의 AP 최솟값, 즉 발 뒤꿈치 위치 (m).
-- 값이 클수록 발이 앞쪽에 있다는 뜻.
-
-**계산 — 두 버전 병행**
-
-```
-Primary (통계 검정용):
-  DV1_norm = (xCOM_hof - BOS_rear) / foot_len   [무차원]
-
-Supplementary (크기 해석용):
-  DV1_abs_cm = (xCOM_hof - BOS_rear) × 100      [cm]
-```
-
-- 분자(`xCOM − BOS_rear`)는 동일. 나누기(foot_len) vs 곱하기(×100)만 다름.
-- **Primary (norm)**: 피험자 간 발 크기 차이를 보정 → 통계적으로 적절. 선행연구(Salot, Patel, Bhatt)와 동일한 정규화.
-- **Supplementary (abs_cm)**: "step군이 nonstep보다 ~1.1 cm 더 뒤" 같은 직관적 크기 해석에 사용.
-- 양수 → xCOM이 발 뒤꿈치보다 앞에 있음. 값이 작을수록 불안정 방향.
-
-**값 추출 시점**
-
-trial 전체 시계열 중에서 이벤트 프레임(1개) 시점의 값만 뽑아 trial당 1개 값으로 만든 뒤 LMM에 투입.
-
-- `platform_onset` 버전: 플랫폼이 움직이기 시작한 프레임
-- `step_onset` 버전: stepping이 시작된 프레임
+1. 유의 신호는 xCOM 계열, 특히 Y축(`xCOM_Y_peak_velocity`, `xCOM_Y_mean_velocity`, `xCOM_Y_max_min`)에 집중되었다.
+2. `xCOM_BOS_AP_foot`는 이벤트 2개 + 구간평균 모두 유의(`step < nonstep`)하여, AP 안정성 차이 후보로 우선순위가 가장 높았다.
+3. COM 단독 변수는 `COM_Y_peak_velocity`, `COM_Z_mean_velocity`만 유의했고 나머지는 비유의였다.
+4. 따라서 2차 확인 분석(DV1–DV3)은 `xCOM/BOS_AP_foot` 계열을 중심으로 위치항(DV2)과 속도항(DV3)을 분리 검증하도록 설계하였다.
 
 ---
 
-### LMM 결과
+## 2.2 DV1–DV3 Main Effect (LMM)
 
-- 모델: Primary `DV1_norm ~ step_TF + (1|subject)` / Supplementary `DV1_abs_cm ~ step_TF + (1|subject)`
-- 참조: nonstep (`step_TFstep` Estimate = step − nonstep 차이)
+### 부호 해석 기준
 
-| Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig. | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig. |
-|---|---|---|---|---|---|---|---|---|
+| Metric | (+) 의미 | (−) 의미 | 판정 기준 |
+|---|---|---|---|
+| DV1 = (xCOM_hof − BOS_rear) / foot_len | xCOM이 BOS rear보다 전방 | xCOM이 BOS rear보다 후방 | `step_TFstep` 계수 부호 |
+| DV2 = (COM_X − BOS_rear) / foot_len | COM이 BOS rear보다 전방 | COM이 BOS rear보다 후방 | `step_TFstep` 계수 부호 |
+| DV3 = (vCOM_X − vBOS_rear) / √(g×h) | 상대 전방 속도 증가 | 상대 후방 속도 증가 | `step_TFstep` 계수 부호 |
+
+- AP(X)축 부호: `+` 전방, `−` 후방.
+- DV1, DV2: 값이 작을수록 xCOM/COM이 BOS rear에 가까움 → 후방 불안정.
+
+### 모델 정보
+
+- 모델: `DV ~ step_TF + (1|subject)`, REML
+- 표본: trials = 125 (step = 53, nonstep = 72), subjects = 24
+- 참조 수준: nonstep (Estimate = step − nonstep)
+- 다중비교: 6개 DV 전체 BH-FDR 보정
+
+### 주효과 결과 (6개 DV)
+
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
+|---|---:|---:|---:|---|
+| `DV1_xcom_hof_rear_over_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | −0.0440 | *** |
+| `DV1_xcom_hof_rear_over_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | −0.0893 | *** |
+| `DV2_com_rear_over_foot_platformonset` | 0.4976±0.0583 | 0.5525±0.0627 | −0.0395 | *** |
+| `DV2_com_rear_over_foot_steponset` | 0.2648±0.1109 | 0.2872±0.0745 | −0.0225 | * |
+| `DV3_vcom_rel_over_sqrtgh_platformonset` | −0.0245±0.0159 | −0.0291±0.0195 | −0.0001 | n.s. |
+| `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | −0.0039±0.0184 | 0.0715 | *** |
+
+- FDR 유의: **5/6**
+
+### DV1 해석 (위치 + 속도 통합항)
+
+- Platform onset: step군의 DV1이 nonstep보다 0.04 낮았다(`***`). xCOM이 BOS rear에 상대적으로 더 가까운(후방) 위치에 있었다.
+- Step onset: 차이가 0.09로 확대되었다(`***`). 섭동 진행 후 step군의 xCOM이 더 큰 폭으로 후방 이동하였다.
+
+### DV2 해석 (위치항 분리)
+
+- Platform onset: step군의 DV2가 nonstep보다 0.04 낮았다(`***`). COM 위치 자체가 이미 BOS rear에 더 가까웠다.
+- Step onset: 차이가 0.02로 줄었으나 유의하였다(`*`). 위치항 기여는 onset 시점에서 더 두드러졌다.
+
+### DV3 해석 (속도항 분리)
+
+- Platform onset: 전략 간 상대 속도 차이는 없었다(n.s.). 섭동 직전 COM–BOS 상대 속도는 동등하였다.
+- Step onset: step군에서 상대 전방 속도가 0.07 더 컸다(`***`). 섭동 진행 중 step군의 COM이 BOS 대비 전방으로 더 빠르게 이동하였다.
+
+### DV1–DV3 종합 요약
+
+| 이벤트 | DV1 (xCOM/BOS) | DV2 (위치항) | DV3 (속도항) |
+|---|---|---|---|
+| platform onset | *** (step < nonstep) | *** (step < nonstep) | n.s. |
+| step onset | *** (step < nonstep) | * (step < nonstep) | *** (step > nonstep) |
+
+- Platform onset 시점: 위치항(DV2)이 전략 차이를 주도하였고, 속도항(DV3)은 아직 분화되지 않았다.
+- Step onset 시점: 위치항 차이는 축소된 반면 속도항이 크게 분화되어, xCOM 전체 차이(DV1)를 위치+속도 공동으로 설명하는 구조로 전환되었다.
+
+---
+
+## 2.3 DV1 Supplementary — 절대 크기 (cm) 및 확장 표본 검증
+
+### Primary 표본 (125 trials) — norm + abs_cm 병행
+
+| Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig |
+|---|---:|---:|---:|---|---:|---:|---:|---|
 | platform onset | 0.51±0.06 | 0.57±0.07 | −0.04 | *** | 12.91±1.62 | 14.44±1.62 | −1.10 | *** |
 | step onset | 0.24±0.17 | 0.32±0.10 | −0.09 | *** | 5.95±4.45 | 8.19±2.61 | −2.29 | *** |
 
-- 방향 해석
-	- DV1이 작을수록 BOS rear 대비 xCOM이 더 후방.
-	- 따라서 두 이벤트 모두 step군이 nonstep군보다 상대적으로 후방 위치.
-	- 절대 크기로 보면 platform onset 시 약 1.1 cm, step onset 시 약 2.3 cm 차이. 
+- 절대 크기: platform onset에서 약 1.1 cm, step onset에서 약 2.3 cm 차이.
 
-#### Additional Check (Raw, No Filtering)
+### Additional Check — 확장 표본 (184 trials, Raw/No Filtering)
 
-- 별도 임시 실험에서 stance leg 상관 없이 step 표본을 그냥 mixed == 1 모두 해당하는 것으로 넓혀서 분석 진행. 
-- 대상: `xCOM_BOS_norm_onset`, `xCOM_BOS_norm_300ms` (표본: trials=184, subjects=24, step=112, nonstep=72)
+Stance leg 필터를 해제하고 전체 step trial(mixed == 1)을 포함하여 방향 일관성을 재확인하였다.
 
-- DV1은 위에서 정의한 것처럼 분자(`xCOM_hof - BOS_rear`)는 동일하고,
-	- 정규화 버전: `DV1_norm = (xCOM_hof - BOS_rear) / foot_len`
-	- 절대 크기 버전: `DV1_abs_cm = (xCOM_hof - BOS_rear) × 100`
-- raw 표본에서도 두 버전 모두 같은 방향(음수)으로 유지되는지 LMM으로 재확인.
-- 이벤트: `platform onset`, `step onset`
-- 표본: trials=184, subjects=24, step=112, nonstep=72  
-	- 단, `DV1_*_step_onset`은 step onset 프레임이 없는 step trial 일부 때문에 step n이 `112 -> 110`으로 줄어듦.
+- 표본: trials = 184, subjects = 24 (step = 112, nonstep = 72)
+- step_onset DVs: step onset 미보유 trial 제외로 step n = 110.
 
-| Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig. | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig. |
-|---|---|---|---|---|---|---|---|---|
+| Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig |
+|---|---:|---:|---:|---|---:|---:|---:|---|
 | platform onset | 0.52±0.06 | 0.58±0.07 | −0.05 | *** | 13.08±1.65 | 14.63±1.64 | −1.19 | *** |
 | step onset | 0.22±0.17 | 0.34±0.10 | −0.11 | *** | 5.63±4.32 | 8.65±2.67 | −2.90 | *** |
 
-- 해석
-	- `DV1_norm`과 `DV1_abs_cm`은 분자가 동일하므로 방향 해석은 같아야 한다.
-	- raw 표본에서도 두 이벤트 모두 step군이 nonstep군보다 **더 후방(DV1이 더 작음)**.
-	- cm로 보면 platform onset에서 약 `1.19 cm`, step onset에서 약 `2.90 cm` 차이로 관찰됨.
+- 확장 표본에서도 두 이벤트 모두 step군이 nonstep보다 DV1이 낮았다(후방). 방향 일관성이 확인되었다.
+- 절대 크기: platform onset에서 약 1.2 cm, step onset에서 약 2.9 cm 차이.
 
+---
 
-# 3. 결론 
+# 3. 결론
 
-- DV1 기준으로 보면, step이 nonstep보다 **더 앞**에 있는 게 아니라 오히려 **더 뒤(후방)**에 있음.
-	- 통계 검정은 foot_len 정규화 값(`DV1_norm`) 기준으로 수행.
-	- platform onset: step < nonstep (`0.51` vs `0.57`, Estimate `-0.04`, `***`; 절대 cm 환산 약 1.1 cm 차이)
-	- step onset: step < nonstep (`0.24` vs `0.32`, Estimate `-0.09`, `***`; 절대 cm 환산 약 2.3 cm 차이)
-- 즉 platform onset 시점의 초기 xCOM-BOS 상대 위치 차이가 strategy(step vs nonstep)와 연관되어 있음.
+1. **DV1 (xCOM/BOS):** 두 이벤트 모두 step군이 nonstep보다 유의하게 작았다(`***`). Step trial은 xCOM이 BOS rear에 더 가까운, 즉 후방 불안정 위치에 있었다.
+2. **DV2 (위치항):** 두 이벤트 모두 유의하였다(`***`, `*`). Platform onset 시점에서 COM 위치 차이가 전략 분화의 주요 원인이었다.
+3. **DV3 (속도항):** Step onset에서만 유의하였다(`***`). 섭동 진행 중 step군의 COM이 BOS 대비 전방으로 더 빠르게 이동하여, 후방 stepping이 필요한 동적 불안정 상태에 이르렀다.
+4. **종합:** Platform onset 초기 xCOM–BOS 상대 위치(DV1, DV2)는 전략 선택과 연관되어 있었다. 섭동이 진행될수록 속도항(DV3)이 추가로 분화되면서 step 전략의 동적 불안정을 반영하였다. 6개 DV 중 5개가 FDR 유의(5/6)하여, xCOM/BOS 정규화 지표가 step vs nonstep 전략을 구분하는 유효한 지표임을 확인하였다.
 
+---
 
+# 4. Key papers와의 결과 일치도
 
-# 4. key papers와의 결과 일치도 
+| 비교 항목 | 선행연구 결과 | 본 연구 결과 | 판정 |
+|---|---|---|---|
+| Hof 기반 xCOM/BOS의 전략 구분력 (Van Wouwe, 2021) | onset/early 시점 안정성 지표로 유효 | DV1이 onset/step_onset 모두 유의(`***`) | Consistent |
+| COM 위치항 정규화의 차이 (Joshi, 2018) | `(COM−BOS)/foot_length` 위치 지표 사용 보고 | DV2가 두 이벤트 모두 유의(`***`, `*`) | Consistent |
+| 속도 정규화 항의 분리 해석 (Joshi, 2018) | `VCOM/BOS`를 별도 지표로 해석 | DV3는 step_onset에서만 유의(`***`), onset은 n.s. | Partially consistent |
+| 초기 자세와 전략 variability의 연관 (Van Wouwe, 2021) | 초기 xCOM/BOS 상태가 trial-by-trial 전략 변동을 설명 | Platform onset DV1에서 step < nonstep(`***`) — 초기 위치 차이와 전략 연관 확인 | Consistent |
+| Foot-length 정규화의 유효성 (Salot, 2016; Patel, 2015) | foot-length normalized xCOM/BOS가 집단 간 비교에 유효 | Primary(norm)과 Supplementary(abs_cm) 모두 동일 방향 유의 | Consistent |
 
-##  key papers
+### 차이점
 
-1. [[@Effects of the type and direction of support surface perturbation on postural responses|Chen et al., 2014]]
-
-2. [[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]
-	- 섭동 전 xCOM/BOS의 값이 strategy를 변경하는데 있어서 중요하다고 이야기함. 
-	- 일치점: Van Wouwe et al. (2021)이 제시한 것처럼, 초기 자세/초기 xCOM-BOS 상태가 전략 차이와 연결된다는 해석과 맞음.
-	- 차이점: Van Wouwe는 onset-early window(예: 0-300 ms) 중심이고, 본 분석은 `platform onset`, `step onset` 이벤트 기반이라는 점이 다름.
+- Van Wouwe는 onset–300 ms window 중심이었고, 본 분석은 `platform_onset`, `step_onset` 이벤트 기반이다. 이벤트 정의가 다르므로 수치 직접 비교는 제한적이다.
+- Joshi의 원 연구는 trip-like perturbation(treadmill)이며 lift-off/touchdown 이벤트를 사용하였다. 본 연구는 platform translation + step onset으로 패러다임이 다르지만, 위치항과 속도항을 분리하는 분석 전략은 동일하게 유효하였다.
+- 선행연구(Salot, Joshi)는 stroke/aging 그룹 비교(between-group)였으나, 본 연구는 건강 젊은 성인 내 step vs nonstep 비교(within-condition)이다. 같은 집단 내에서도 xCOM/BOS 차이가 전략을 구분하였다는 점에서, 지표의 민감도가 높음을 뒷받침한다.
