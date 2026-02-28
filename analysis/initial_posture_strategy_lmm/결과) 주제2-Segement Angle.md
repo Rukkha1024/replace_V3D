@@ -11,19 +11,35 @@
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
 | `Hip_stance_X_abs_onset` | 10.7532±5.8730 | 9.9375±6.9879 | 0.1224 | n.s. |
+| `Hip_stance_Y_abs_onset` | -0.6657±4.4060 | 0.3647±3.6700 | -0.6079 | n.s. |
+| `Hip_stance_Z_abs_onset` | 1.6891±9.3399 | 2.7555±8.0346 | -0.2547 | n.s. |
 | `Knee_stance_X_abs_onset` | -4.5070±5.7125 | -3.1723±5.0054 | -0.1155 | n.s. |
+| `Knee_stance_Y_abs_onset` | 2.7263±3.7406 | -0.4018±4.1432 | 2.4942 | *** |
+| `Knee_stance_Z_abs_onset` | 3.0931±4.2824 | 0.0120±3.2762 | 2.3179 | *** |
 | `Ankle_stance_X_abs_onset` | 4.2941±3.0272 | 4.0405±3.0784 | 0.0060 | n.s. |
+| `Ankle_stance_Y_abs_onset` | -8.5805±7.8510 | -2.0432±10.6401 | -4.8044 | ** |
+| `Ankle_stance_Z_abs_onset` | 6.3717±8.0032 | -0.0406±7.2812 | 4.5817 | *** |
 | `Trunk_X_abs_onset` | 2.7874±6.4858 | 2.4941±6.3978 | -0.1806 | n.s. |
+| `Trunk_Y_abs_onset` | -1.0002±4.0661 | 0.3346±3.5069 | -0.3606 | n.s. |
+| `Trunk_Z_abs_onset` | 1.1478±3.5757 | 0.7884±3.5928 | 0.2404 | n.s. |
 | `Neck_X_abs_onset` | 17.5877±27.6573 | 23.0236±7.5072 | -5.2471 | n.s. |
+| `Neck_Y_abs_onset` | 2.1684±6.9468 | 1.8285±5.0522 | -0.3469 | n.s. |
+| `Neck_Z_abs_onset` | 0.9243±13.4529 | 0.3064±4.9903 | 1.2954 | n.s. |
+
+## coordinate 해석 기준
+
+- 관절각 계산은 Visual3D-like intrinsic `XYZ` 순서를 사용한다.
+- Segment 좌표계 기준은 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`이다.
+- 따라서 `X/Y/Z`는 각 축 회전 성분이며, 임상적 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
 
 - 해석 노트:
-  - 5개 segment angle 변수 모두 FDR 보정 후 `n.s.`였다.
-  - 따라서 onset 단일시점에서 step/nonstep의 관절각 차이는 통계적으로 확인되지 않았다.
+  - 15개 segment angle 변수(X/Y/Z) 중 4개가 FDR 유의였다: `Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`.
+  - 따라서 onset 단일시점에서 관절각 차이는 일부 축(Y/Z)에 제한적으로 관찰되며, 전축에서 일관되게 나타나지는 않았다.
 
 # 결론
 
 - 가설 1 결과: **FAIL**
-- 초기 자세의 관절각 자체(hip, knee, ankle, trunk, neck)만으로 전략 차이를 설명하기 어렵다.
+- 초기 자세의 관절각에서 일부 축 차이는 존재했지만, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
 
 # keypapers
 

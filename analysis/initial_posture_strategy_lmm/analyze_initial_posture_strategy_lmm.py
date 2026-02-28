@@ -60,6 +60,9 @@ DEFAULT_REPORT_MD = SCRIPT_DIR / "report.md"
 DEFAULT_SEGMENT_ANGLE_MD = SCRIPT_DIR / "결과) 주제2-Segement Angle.md"
 
 TRIAL_KEYS = ["subject", "velocity", "trial"]
+ANGLE_AXES = ("X", "Y", "Z")
+STANCE_SEGMENTS = ("Hip", "Knee", "Ankle")
+MIDLINE_SEGMENTS = ("Trunk", "Neck")
 
 WINDOWS_R_HOME = Path(r"C:\Users\Alice\miniconda3\envs\module\lib\R")
 WINDOWS_RSCRIPT = WINDOWS_R_HOME / "bin" / "x64" / "Rscript.exe"
@@ -270,39 +273,37 @@ def build_trial_meta(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _joint_angle_abs_cols() -> list[str]:
+    cols: list[str] = []
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_stance_{axis}_abs_onset")
+    for seg in MIDLINE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_{axis}_abs_onset")
+    return cols
+
+
 def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
-    return df.with_columns(
-        pl.when(pl.col("state") == "step_r")
-        .then(pl.col("Hip_L_X_deg"))
-        .when(pl.col("state") == "step_l")
-        .then(pl.col("Hip_R_X_deg"))
-        .when(pl.col("major_step_side") == "step_r")
-        .then(pl.col("Hip_L_X_deg"))
-        .when(pl.col("major_step_side") == "step_l")
-        .then(pl.col("Hip_R_X_deg"))
-        .otherwise((pl.col("Hip_L_X_deg") + pl.col("Hip_R_X_deg")) / 2.0)
-        .alias("Hip_stance_X_deg"),
-        pl.when(pl.col("state") == "step_r")
-        .then(pl.col("Knee_L_X_deg"))
-        .when(pl.col("state") == "step_l")
-        .then(pl.col("Knee_R_X_deg"))
-        .when(pl.col("major_step_side") == "step_r")
-        .then(pl.col("Knee_L_X_deg"))
-        .when(pl.col("major_step_side") == "step_l")
-        .then(pl.col("Knee_R_X_deg"))
-        .otherwise((pl.col("Knee_L_X_deg") + pl.col("Knee_R_X_deg")) / 2.0)
-        .alias("Knee_stance_X_deg"),
-        pl.when(pl.col("state") == "step_r")
-        .then(pl.col("Ankle_L_X_deg"))
-        .when(pl.col("state") == "step_l")
-        .then(pl.col("Ankle_R_X_deg"))
-        .when(pl.col("major_step_side") == "step_r")
-        .then(pl.col("Ankle_L_X_deg"))
-        .when(pl.col("major_step_side") == "step_l")
-        .then(pl.col("Ankle_R_X_deg"))
-        .otherwise((pl.col("Ankle_L_X_deg") + pl.col("Ankle_R_X_deg")) / 2.0)
-        .alias("Ankle_stance_X_deg"),
-    )
+    exprs: list[pl.Expr] = []
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            left_col = f"{seg}_L_{axis}_deg"
+            right_col = f"{seg}_R_{axis}_deg"
+            out_col = f"{seg}_stance_{axis}_deg"
+            exprs.append(
+                pl.when(pl.col("state") == "step_r")
+                .then(pl.col(left_col))
+                .when(pl.col("state") == "step_l")
+                .then(pl.col(right_col))
+                .when(pl.col("major_step_side") == "step_r")
+                .then(pl.col(left_col))
+                .when(pl.col("major_step_side") == "step_l")
+                .then(pl.col(right_col))
+                .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+                .alias(out_col)
+            )
+    return df.with_columns(exprs)
 
 
 def build_onset_snapshot(
@@ -441,16 +442,20 @@ def compute_absolute_onset_features(
 
         angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=c3d.points.shape[0])
 
-        bilateral = {
-            "Hip_L_X_abs_onset": float(angles.hip_L_X[idx0]),
-            "Hip_R_X_abs_onset": float(angles.hip_R_X[idx0]),
-            "Knee_L_X_abs_onset": float(angles.knee_L_X[idx0]),
-            "Knee_R_X_abs_onset": float(angles.knee_R_X[idx0]),
-            "Ankle_L_X_abs_onset": float(angles.ankle_L_X[idx0]),
-            "Ankle_R_X_abs_onset": float(angles.ankle_R_X[idx0]),
-            "Trunk_X_abs_onset": float(angles.trunk_X[idx0]),
-            "Neck_X_abs_onset": float(angles.neck_X[idx0]),
-        }
+        bilateral: dict[str, float] = {}
+        for seg in STANCE_SEGMENTS:
+            seg_key = seg.lower()
+            for side in ("L", "R"):
+                for axis in ANGLE_AXES:
+                    attr = f"{seg_key}_{side}_{axis}"
+                    col = f"{seg}_{side}_{axis}_abs_onset"
+                    bilateral[col] = float(getattr(angles, attr)[idx0])
+        for seg in MIDLINE_SEGMENTS:
+            seg_key = seg.lower()
+            for axis in ANGLE_AXES:
+                attr = f"{seg_key}_{axis}"
+                col = f"{seg}_{axis}_abs_onset"
+                bilateral[col] = float(getattr(angles, attr)[idx0])
 
         step_state = trial_lookup[(subject, velocity, trial)]
         row = {
@@ -464,9 +469,12 @@ def compute_absolute_onset_features(
         }
 
         s = pd.Series(row)
-        row["Hip_stance_X_abs_onset"] = _pick_stance_value(s, "Hip_L_X_abs_onset", "Hip_R_X_abs_onset")
-        row["Knee_stance_X_abs_onset"] = _pick_stance_value(s, "Knee_L_X_abs_onset", "Knee_R_X_abs_onset")
-        row["Ankle_stance_X_abs_onset"] = _pick_stance_value(s, "Ankle_L_X_abs_onset", "Ankle_R_X_abs_onset")
+        for seg in STANCE_SEGMENTS:
+            for axis in ANGLE_AXES:
+                left_col = f"{seg}_L_{axis}_abs_onset"
+                right_col = f"{seg}_R_{axis}_abs_onset"
+                out_col = f"{seg}_stance_{axis}_abs_onset"
+                row[out_col] = _pick_stance_value(s, left_col, right_col)
 
         fp_coll = read_force_platforms(c3d_file)
         analog_avg = fp_coll.analog.values
@@ -555,19 +563,18 @@ def compute_absolute_onset_features(
     if qc_warn_count > 0:
         print(f"  Warning: force inertial subtract QC failed in {qc_warn_count} trials (non-strict mode).")
 
-    return out[TRIAL_KEYS + [
-        "Hip_stance_X_abs_onset",
-        "Knee_stance_X_abs_onset",
-        "Ankle_stance_X_abs_onset",
-        "Trunk_X_abs_onset",
-        "Neck_X_abs_onset",
-        "GRF_X_abs_onset",
-        "GRF_Y_abs_onset",
-        "GRF_Z_abs_onset",
-        "COP_X_abs_onset",
-        "COP_Y_abs_onset",
-        "AnkleTorqueMid_Y_perkg_abs_onset",
-    ]]
+    return out[
+        TRIAL_KEYS
+        + _joint_angle_abs_cols()
+        + [
+            "GRF_X_abs_onset",
+            "GRF_Y_abs_onset",
+            "GRF_Z_abs_onset",
+            "COP_X_abs_onset",
+            "COP_Y_abs_onset",
+            "AnkleTorqueMid_Y_perkg_abs_onset",
+        ]
+    ]
 
 
 def build_analysis_dataframe(
@@ -632,26 +639,22 @@ def build_analysis_dataframe(
     )
 
     analysis_df = onset_df.merge(abs_features, on=TRIAL_KEYS, how="left")
-    if analysis_df[[
-        "Hip_stance_X_abs_onset",
-        "Knee_stance_X_abs_onset",
-        "Ankle_stance_X_abs_onset",
-        "Trunk_X_abs_onset",
-        "Neck_X_abs_onset",
+    required_abs_cols = _joint_angle_abs_cols() + [
         "GRF_X_abs_onset",
         "GRF_Y_abs_onset",
         "GRF_Z_abs_onset",
         "COP_X_abs_onset",
         "COP_Y_abs_onset",
         "AnkleTorqueMid_Y_perkg_abs_onset",
-    ]].isna().any().any():
+    ]
+    if analysis_df[required_abs_cols].isna().any().any():
         raise ValueError("Missing absolute onset feature values after merge.")
 
     return analysis_df, trial_meta, abs_features
 
 
 def variable_catalog() -> list[dict[str, str]]:
-    return [
+    specs: list[dict[str, str]] = [
         {"dv": "COM_X", "family": "Balance"},
         {"dv": "COM_Y", "family": "Balance"},
         {"dv": "vCOM_X", "family": "Balance"},
@@ -660,18 +663,22 @@ def variable_catalog() -> list[dict[str, str]]:
         {"dv": "MOS_AP_v3d", "family": "Balance"},
         {"dv": "MOS_ML_v3d", "family": "Balance"},
         {"dv": "xCOM_BOS_norm_onset", "family": "Balance"},
-        {"dv": "Hip_stance_X_abs_onset", "family": "Joint_absolute"},
-        {"dv": "Knee_stance_X_abs_onset", "family": "Joint_absolute"},
-        {"dv": "Ankle_stance_X_abs_onset", "family": "Joint_absolute"},
-        {"dv": "Trunk_X_abs_onset", "family": "Joint_absolute"},
-        {"dv": "Neck_X_abs_onset", "family": "Joint_absolute"},
+    ]
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_stance_{axis}_abs_onset", "family": "Joint_absolute"})
+    for seg in MIDLINE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_{axis}_abs_onset", "family": "Joint_absolute"})
+    specs.extend([
         {"dv": "COP_X_abs_onset", "family": "Force_absolute"},
         {"dv": "COP_Y_abs_onset", "family": "Force_absolute"},
         {"dv": "GRF_X_abs_onset", "family": "Force_absolute"},
         {"dv": "GRF_Y_abs_onset", "family": "Force_absolute"},
         {"dv": "GRF_Z_abs_onset", "family": "Force_absolute"},
         {"dv": "AnkleTorqueMid_Y_perkg_abs_onset", "family": "Force_absolute"},
-    ]
+    ])
+    return specs
 
 
 def audit_variables(analysis_df: pd.DataFrame, specs: list[dict[str, str]]) -> pd.DataFrame:
@@ -942,13 +949,7 @@ def _build_significant_table(results: pd.DataFrame) -> str:
 
 
 def _build_segment_angle_table(results: pd.DataFrame) -> str:
-    dvs = [
-        "Hip_stance_X_abs_onset",
-        "Knee_stance_X_abs_onset",
-        "Ankle_stance_X_abs_onset",
-        "Trunk_X_abs_onset",
-        "Neck_X_abs_onset",
-    ]
+    dvs = _joint_angle_abs_cols()
     sub = results[results["dv"].isin(dvs)].copy()
     sub["order"] = sub["dv"].map({dv: i for i, dv in enumerate(dvs)})
     sub = sub.sort_values("order")
@@ -968,6 +969,15 @@ def _build_segment_angle_table(results: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def _joint_angle_significance(results: pd.DataFrame) -> tuple[int, int, list[str]]:
+    joint_dvs = _joint_angle_abs_cols()
+    sub = results[results["dv"].isin(joint_dvs)].copy()
+    sub["sig"] = sub["sig"].fillna("")
+    sig_sub = sub[sub["sig"] != ""].copy()
+    sig_names = sig_sub.sort_values("p_fdr")["dv"].tolist()
+    return len(sub), len(sig_sub), sig_names
+
+
 def write_report_markdown(
     report_md: Path,
     specs: list[dict[str, str]],
@@ -985,6 +995,17 @@ def write_report_markdown(
     ratio = f"{n_sig}/{len(results)}"
     verdict = "PASS" if (len(results) > 0 and n_sig == len(results) and n_untestable == 0) else "FAIL"
     qc_mode = "strict" if qc_strict else "non-strict"
+    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
+    if joint_sig_count == 0:
+        joint_line = (
+            f"관절 각도 변수(`Hip/Knee/Ankle`의 stance `X/Y/Z` + `Trunk/Neck`의 `X/Y/Z`, 총 {joint_total}개)는 "
+            "`n.s.`였고"
+        )
+    else:
+        joint_line = (
+            f"관절 각도 변수는 총 {joint_total}개 중 {joint_sig_count}개가 유의했고 "
+            f"(`{', '.join(joint_sig_names)}`), 나머지는 `n.s.`였다."
+        )
     result_status = _result_status_map(results)
     analyzed_table = _build_analyzed_variables_table(specs, audit_df, result_status)
     significant_table = _build_significant_table(results)
@@ -1031,6 +1052,12 @@ def write_report_markdown(
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
 
+### Coordinate Definition (Joint Angle)
+
+- Joint angle는 `compute_v3d_joint_angles_3d` 기준의 **intrinsic XYZ Euler sequence**를 사용한다.
+- Segment 좌표계는 전역 기준으로 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`로 구성된다.
+- 따라서 `*_X/*_Y/*_Z`는 각각 해당 축 회전 성분이며, 단순히 sagittal/frontal/transverse와 1:1로 고정 해석하면 안 된다.
+
 ### Analyzed Variables (Full Set, n={len(specs)})
 
 {analyzed_table}
@@ -1050,7 +1077,7 @@ def write_report_markdown(
 ## Interpretation & Conclusion
 
 1. 각도와 force를 absolute onset으로 전환해도 모든 onset 변수가 유의하지는 않았고, strict 기준 가설은 **{verdict}**였다.
-2. 관절 각도 변수(`Hip/Knee/Ankle/Trunk/Neck`)는 모두 `n.s.`였고, 유의 변수는 COM/MOS 및 ankle torque 일부에 제한되었다.
+2. {joint_line} 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
 3. 따라서 본 데이터에서는 onset 시점의 광범위한 초기 자세 차이가 step/nonstep 전략 차이를 직접 설명한다고 단정하기 어렵다.
 
 ## Limitations
@@ -1078,6 +1105,14 @@ Auto-generated by analyze_initial_posture_strategy_lmm.py.
 def write_segment_angle_markdown(segment_md: Path, results: pd.DataFrame, verdict_pass: bool) -> None:
     table = _build_segment_angle_table(results)
     verdict = "PASS" if verdict_pass else "FAIL"
+    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
+    if joint_sig_count == 0:
+        joint_note = f"- {joint_total}개 segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다."
+    else:
+        joint_note = (
+            f"- {joint_total}개 segment angle 변수(X/Y/Z) 중 {joint_sig_count}개가 FDR 유의였다: "
+            f"`{', '.join(joint_sig_names)}`."
+        )
     text = f"""---
 ---
 # 가설
@@ -1090,14 +1125,20 @@ def write_segment_angle_markdown(segment_md: Path, results: pd.DataFrame, verdic
 
 {table}
 
+## coordinate 해석 기준
+
+- 관절각 계산은 Visual3D-like intrinsic `XYZ` 순서를 사용한다.
+- Segment 좌표계 기준은 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`이다.
+- 따라서 `X/Y/Z`는 각 축 회전 성분이며, 임상적 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
+
 - 해석 노트:
-  - 5개 segment angle 변수 모두 FDR 보정 후 `n.s.`였다.
-  - 따라서 onset 단일시점에서 step/nonstep의 관절각 차이는 통계적으로 확인되지 않았다.
+  - {joint_note[2:]}
+  - 따라서 onset 단일시점에서 관절각 차이는 일부 축(Y/Z)에 제한적으로 관찰되며, 전축에서 일관되게 나타나지는 않았다.
 
 # 결론
 
 - 가설 1 결과: **{verdict}**
-- 초기 자세의 관절각 자체(hip, knee, ankle, trunk, neck)만으로 전략 차이를 설명하기 어렵다.
+- 초기 자세의 관절각에서 일부 축 차이는 존재했지만, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
 
 # keypapers
 

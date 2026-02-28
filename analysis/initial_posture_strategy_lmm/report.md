@@ -27,8 +27,8 @@
   - `data/all_data/*.c3d`
   - `src/replace_v3d/torque/assets/fp_inertial_templates.npz`
 - 분석 변수:
-  - onset 후보 총 **19개**
-  - 검정 가능(testable) **19개**
+  - onset 후보 총 **29개**
+  - 검정 가능(testable) **29개**
   - 검정 불가(untestable) **0개**
 - Force inertial QC mode: **non-strict**
 
@@ -36,11 +36,17 @@
 
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
-- **Multiple comparison correction**: BH-FDR (19개 onset 변수 전체 1회)
+- **Multiple comparison correction**: BH-FDR (29개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
 
-### Analyzed Variables (Full Set, n=19)
+### Coordinate Definition (Joint Angle)
+
+- Joint angle는 `compute_v3d_joint_angles_3d` 기준의 **intrinsic XYZ Euler sequence**를 사용한다.
+- Segment 좌표계는 전역 기준으로 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`로 구성된다.
+- 따라서 `*_X/*_Y/*_Z`는 각각 해당 축 회전 성분이며, 단순히 sagittal/frontal/transverse와 1:1로 고정 해석하면 안 된다.
+
+### Analyzed Variables (Full Set, n=29)
 
 | Variable | Family | Testability at onset | Result status |
 |---|---|---|---|
@@ -53,10 +59,20 @@
 | `MOS_ML_v3d` | Balance | testable | n.s. |
 | `xCOM_BOS_norm_onset` | Balance | testable | *** |
 | `Hip_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Hip_stance_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Hip_stance_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Knee_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Knee_stance_Y_abs_onset` | Joint_absolute | testable | *** |
+| `Knee_stance_Z_abs_onset` | Joint_absolute | testable | *** |
 | `Ankle_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Ankle_stance_Y_abs_onset` | Joint_absolute | testable | ** |
+| `Ankle_stance_Z_abs_onset` | Joint_absolute | testable | *** |
 | `Trunk_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Trunk_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Trunk_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Neck_X_abs_onset` | Joint_absolute | testable | n.s. |
+| `Neck_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Neck_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `COP_X_abs_onset` | Force_absolute | testable | n.s. |
 | `COP_Y_abs_onset` | Force_absolute | testable | n.s. |
 | `GRF_X_abs_onset` | Force_absolute | testable | n.s. |
@@ -69,7 +85,7 @@
 ### Hypothesis Verdict (strict)
 
 - **Rule**: testable onset 변수 전부가 FDR 유의여야 PASS
-- **Observed**: testable significant ratio = `5/19`, untestable=`0`
+- **Observed**: testable significant ratio = `9/29`, untestable=`0`
 - **Verdict**: **FAIL**
 
 ### Significant Variables Only (BH-FDR < 0.05)
@@ -79,13 +95,17 @@
 | `MOS_minDist_signed` | Balance | 0.0718±0.0143 | 0.0573±0.0154 | 0.0109 | *** |
 | `xCOM_BOS_norm_onset` | Balance | 0.6318±0.0681 | 0.7005±0.0727 | -0.0513 | *** |
 | `MOS_AP_v3d` | Balance | 0.0753±0.0147 | 0.0619±0.0159 | 0.0102 | *** |
+| `Knee_stance_Y_abs_onset` | Joint_absolute | 2.7263±3.7406 | -0.4018±4.1432 | 2.4942 | *** |
 | `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.4516±0.1632 | -2.5763±0.1679 | 0.0931 | *** |
+| `Ankle_stance_Z_abs_onset` | Joint_absolute | 6.3717±8.0032 | -0.0406±7.2812 | 4.5817 | *** |
+| `Knee_stance_Z_abs_onset` | Joint_absolute | 3.0931±4.2824 | 0.0120±3.2762 | 2.3179 | *** |
 | `vCOM_X` | Balance | 0.0097±0.0088 | 0.0161±0.0100 | -0.0037 | ** |
+| `Ankle_stance_Y_abs_onset` | Joint_absolute | -8.5805±7.8510 | -2.0432±10.6401 | -4.8044 | ** |
 
 ## Interpretation & Conclusion
 
 1. 각도와 force를 absolute onset으로 전환해도 모든 onset 변수가 유의하지는 않았고, strict 기준 가설은 **FAIL**였다.
-2. 관절 각도 변수(`Hip/Knee/Ankle/Trunk/Neck`)는 모두 `n.s.`였고, 유의 변수는 COM/MOS 및 ankle torque 일부에 제한되었다.
+2. 관절 각도 변수는 총 15개 중 4개가 유의했고 (`Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
 3. 따라서 본 데이터에서는 onset 시점의 광범위한 초기 자세 차이가 step/nonstep 전략 차이를 직접 설명한다고 단정하기 어렵다.
 
 ## Limitations
