@@ -1,4 +1,4 @@
-﻿---
+﻿﻿---
 cssclass: clean-embeds
 date created: 2026-01-19. 00.31
 ---
@@ -52,7 +52,7 @@ date created: 2026-01-19. 00.31
 | xCOM (X/Y/Z) | `max-min`, `mean_velocity`, `peak_velocity` |
 | xCOM/BOS (AP/ML, foot 정규화) | `platform_onset`, `step_onset`, `window_mean` |
 
-### LMM 결과 (1차 유의 변수 shortlist)
+### LMM 결과 (2차 확인 A: 유의 변수 9개 테이블)
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig. |
 |---|---|---|---|---|
@@ -62,14 +62,14 @@ date created: 2026-01-19. 00.31
 | `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | -0.0893 | *** |
 | `xCOM_Y_mean_velocity` | 0.0703±0.0320 | 0.0450±0.0233 | 0.0277 | *** |
 | `COM_Y_peak_velocity` | 0.0561±0.0294 | 0.0340±0.0239 | 0.0230 | *** |
-| `xCOM_Y_range` | 0.0235±0.0116 | 0.0161±0.0124 | 0.0078 | ** |
+| `xCOM_Y_max_min` | 0.0235±0.0116 | 0.0161±0.0124 | 0.0078 | ** |
 | `COM_Z_mean_velocity` | 0.0250±0.0118 | 0.0220±0.0082 | 0.0036 | * |
 | `xCOM_X_mean_velocity` | 0.1286±0.0778 | 0.1347±0.0694 | 0.0133 | * |
 
 ### 1차 해석 (유의 변수 기준)
 
 - 전체 24개 DV 중 9개가 FDR 유의.
-- 유의 신호는 `xCOM` 계열, 특히 `Y축`(`xCOM_Y_peak_velocity`, `xCOM_Y_mean_velocity`, `xCOM_Y_range`)에 집중.
+- 유의 신호는 `xCOM` 계열, 특히 `Y축`(`xCOM_Y_peak_velocity`, `xCOM_Y_mean_velocity`, `xCOM_Y_max_min`)에 집중.
 - `xCOM/BOS_AP_foot`는 이벤트 2개 + 구간평균 모두 유의(`step < nonstep`)라서 AP 안정성 차이 후보로 우선순위가 높음.
 - `COM` 단독 변수는 `COM_Y_peak_velocity`, `COM_Z_mean_velocity`만 유의했고 나머지는 비유의.
 - 따라서 2차 분석은 `xCOM_Y` 계열 + `xCOM_BOS_AP_foot` 계열을 우선 검증 대상으로 두는 것이 합리적.

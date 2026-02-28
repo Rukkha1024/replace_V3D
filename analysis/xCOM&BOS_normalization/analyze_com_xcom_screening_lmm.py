@@ -1,4 +1,4 @@
-﻿"""COM/xCOM/xCOM_BOS 1차 스크리닝 LMM.
+﻿﻿"""COM/xCOM/xCOM_BOS 1차 스크리닝 LMM.
 
 Window: [platform_onset, step_onset_eval] per trial.
 Model: DV ~ step_TF + (1|subject), REML.
@@ -303,7 +303,7 @@ def build_dv_specs() -> list[dict]:
     for ax in AXES:
         specs.append(
             {
-                "dv": f"COM_{ax}_range",
+                "dv": f"COM_{ax}_max_min",
                 "col": f"COM_{ax}",
                 "agg": "range",
                 "family": "COM",
@@ -335,7 +335,7 @@ def build_dv_specs() -> list[dict]:
     for ax in AXES:
         specs.append(
             {
-                "dv": f"xCOM_{ax}_range",
+                "dv": f"xCOM_{ax}_max_min",
                 "col": f"xCOM_{ax}_resolved",
                 "agg": "range",
                 "family": "xCOM",
