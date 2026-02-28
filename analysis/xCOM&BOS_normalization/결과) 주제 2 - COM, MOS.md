@@ -1,4 +1,4 @@
----
+﻿---
 cssclass: clean-embeds
 date created: 2026-01-19. 00.31
 ---
@@ -28,6 +28,51 @@ date created: 2026-01-19. 00.31
 	- 음수(-): xCOM이 BOS 밖으로 나감. 
 - MOS AP: nonstep이 더 안정적이다? <!-- 근데 이게 끝? 해석을 못하겠음  -->
 - MOS ML: 얘도 모르겠음. <!-- 선행연구나 읽자 -->
+
+
+## 1차 스크리닝 (COM + xCOM + xCOM/BOS, LMM)
+
+### 1차 스크리닝 목적/구간
+
+- 목적: 2차 확인 분석 전에, `COM + xCOM + xCOM/BOS`에서 step/nonstep 차이가 나타나는 후보 변수를 먼저 탐색.
+- 분석구간:
+	- step: `[platform_onset_local, step_onset_local]`
+	- nonstep: `[platform_onset_local, same (subject, velocity) stepping mean step_onset_local]`
+	- fallback: prefilter 이벤트 기반 subject-velocity mean 보완.
+- 모델: `DV ~ step_TF + (1|subject)`, REML.
+- 다중비교: 1차 스크리닝 전체 DV(24개) 대상으로 BH-FDR 일괄 보정.
+- 주의: `xCOM_BOS_ML_foot`는 이번 1차 스크리닝에서 **foot_length 공통 분모**를 적용한 사용자 지정 정의.
+- 전체 결과 파일: `analysis/xCOM&BOS_normalization/com_xcom_screening_lmm_results.csv`
+
+### COM+xCOM+xCOM/BOS 변수표
+
+| Group | 변수 구성 |
+|---|---|
+| COM (X/Y/Z) | `max-min`, `mean_velocity`, `peak_velocity` |
+| xCOM (X/Y/Z) | `max-min`, `mean_velocity`, `peak_velocity` |
+| xCOM/BOS (AP/ML, foot 정규화) | `platform_onset`, `step_onset`, `window_mean` |
+
+### LMM 결과 (1차 유의 변수 shortlist)
+
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig. |
+|---|---|---|---|---|
+| `xCOM_Y_peak_velocity` | 0.2705±0.0940 | 0.1483±0.0703 | 0.1269 | *** |
+| `xCOM_BOS_AP_foot_mean_window` | 0.3292±0.1256 | 0.4036±0.0996 | -0.0666 | *** |
+| `xCOM_BOS_AP_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | -0.0440 | *** |
+| `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | -0.0893 | *** |
+| `xCOM_Y_mean_velocity` | 0.0703±0.0320 | 0.0450±0.0233 | 0.0277 | *** |
+| `COM_Y_peak_velocity` | 0.0561±0.0294 | 0.0340±0.0239 | 0.0230 | *** |
+| `xCOM_Y_range` | 0.0235±0.0116 | 0.0161±0.0124 | 0.0078 | ** |
+| `COM_Z_mean_velocity` | 0.0250±0.0118 | 0.0220±0.0082 | 0.0036 | * |
+| `xCOM_X_mean_velocity` | 0.1286±0.0778 | 0.1347±0.0694 | 0.0133 | * |
+
+### 1차 해석 (유의 변수 기준)
+
+- 전체 24개 DV 중 9개가 FDR 유의.
+- 유의 신호는 `xCOM` 계열, 특히 `Y축`(`xCOM_Y_peak_velocity`, `xCOM_Y_mean_velocity`, `xCOM_Y_range`)에 집중.
+- `xCOM/BOS_AP_foot`는 이벤트 2개 + 구간평균 모두 유의(`step < nonstep`)라서 AP 안정성 차이 후보로 우선순위가 높음.
+- `COM` 단독 변수는 `COM_Y_peak_velocity`, `COM_Z_mean_velocity`만 유의했고 나머지는 비유의.
+- 따라서 2차 분석은 `xCOM_Y` 계열 + `xCOM_BOS_AP_foot` 계열을 우선 검증 대상으로 두는 것이 합리적.
 
 
 ## DV1 통계결과 (LMM)
