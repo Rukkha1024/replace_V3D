@@ -8,7 +8,7 @@ date created: 2025-11-17. 14.51
 timeline: [[⏰낙상 주제2 - 분석]]
 
 
-## 논문의 주 목표
+# 논문의 주 목표
 
 낙상을 모방한 platform translation perturbation 실험 시, platform의 특정 물리적 강도에서 피험자의 step 과 non-step이 동시에 나타난다. 그렇다면, perturbation의 강도가 동일함에도 불구하고, 왜 신체는 step과 non-step이라는 서로 다른 움직임 결과를 도출하는지를 알아보고자 한다. 
 
@@ -21,8 +21,8 @@ timeline: [[⏰낙상 주제2 - 분석]]
 	2. 낙상은 외적 perturbation과 밀접하며, 반응적 균형 평가가 낙상 위험 평가에 의미가 있는 영역이다. 낙상 연구 간 결과 차이는 perturbation 방법·방향·크기·정밀도·스텝 제한 지시·방향 예측 가능성 등의 차이에서 비롯될 수 있다(Crenshaw et al., 2020). 
 	3. 따라서 낙상의 유사한 상황을 재현하는 perturbation 실험을 통해서 낙상의 메커니즘을 알아보고자 한다. 
 
-2. 문단 2: perturbation 실험으로 낙상과 유사한 상황을 실험실에서 재현하여 균형회복을 연구할 수 있다.  
-	- perturbation 실험은 task와 perturbation을 유발하는 장비의 속성에 따라 여러 종류로 나뉜다. 피험자가 가만히 서 있는 과제를 수행하는 도중, 신체의 특정 부위(허리, 어깨 등)를 push/pull 하거나, treadmill 또는 moving platform 위에서 platform이 vertical 또는 horizontal처럼 여러 방향으로 움직이는 실험이 있다. 또한 피험자가 특정 동작(gait, ...)을 수행하고 있는 중에 perturbation을 유발하는 경우 등이 있다. 
+2. 문단 2: perturbation 실험으로 낙상과 유사한 상황을 실험실에서 재현하여 균형회복을 연구할 수 있다([Paillard & Noé, 2015](@Techniques%20and%20Methods%20for%20Testing%20the%20Postural%20Function%20in%20Healthy%20and%20Pathological%20Subjects)).  
+	- perturbation 실험은 task와 perturbation을 유발하는 장비의 속성에 따라 여러 종류로 나뉜다. 피험자가 가만히 서 있는 과제를 수행하는 도중, 신체의 특정 부위(허리, 어깨 등)를 push/pull 하거나<!--reference 필요  -->, treadmill 또는 moving platform 위에서 platform이 vertical<!-- reference 필요 --> 또는 horizontal<!-- reference 필요 -->처럼 여러 방향으로 움직이는 실험이 있다. 또한 피험자가 특정 동작(gait, ...)을 수행하고 있는 중에 perturbation을 유발하는 경우 등이 있다<!--  reference 필요-->. 
 	- 본 논문은 platform translation 실험으로, 실제 낙상 환경과 유시한 platform moving forward direction에서의 perturbation 실험을 실시하였다.
 		- "Forward translation perturbation은 rotation이나 backward translation보다 더 큰 상체 불안정성과 수평 COM 변위를 유발하여(Chen et al., 2014), 낙상 유사 상황을 재현하는 데 적합하다." 
 3. 문단 3: platform moving perturbation과 기본 자세 전략(ankle/hip/step) 소개 
@@ -36,8 +36,8 @@ timeline: [[⏰낙상 주제2 - 분석]]
 
 ##  What we do not know 
 
-1. 문단 5. 기존 연구는 step vs. nonstep을 서로 다른 perturbation 강도/조건으로 유발하는 경우가 많아, 전략이 갈리는 이유를 분리해 설명하기 어렵다. 따라서 동일 강도에서 step과 non-step이 공존하는 상황에서 step과 nonstep 데이터를 수집해 분석해야 한다. 
-	1. Chvatal 등의 설계에서는 stepping block과 nonstepping block의 displacement/velocity/acceleration이 다르므로, 관찰된 EMG 차이가 “전략 차이”인지 “강도 차이”인지 분리하기 어렵다는 논리적 한계를 제시한다([[📝Common muscle synergies for control of center of mass and force in nonstepping and stepping postural behaviors|Chvatal et al., 2011]])
+1. **문단 5.** "선행연구 대부분은 step과 nonstep을 서로 다른 perturbation 강도에서 유발하였으므로(Chvatal et al., 2011; <!-- reference 필요 -->), 관찰된 차이가 전략 자체의 차이인지 강도의 차이인지 구분하기 어렵다. 본 연구는 개인별 stepping threshold와 mixed velocity를 정의하여 동일 perturbation 강도에서 step과 nonstep이 자연스럽게 공존하는 시행을 분석하였다. 이는 perturbation 강도를 교란 변수로 제거한 상태에서 전략 선택의 순수한 차이를 비교할 수 있는 설계이다."
+	1. <!-- reference 필요 -->
 
 2. 문단 6. perturbation 연구 중 다수의 실험은 "unexpected" 조건보다는 예측 가능한 perturbation protocol 에서 진행한 경우가 많다. 예측 가능한 조건에서 나타난 step/nonstep 패턴은 실제 낙상 유사 상황(예측이 제한된 상황)에서의 전략 선택과 다를 수 있으므로<!-- reference 필요 -->, 예측을 억제한 perturbation 설계가 필요하다. 
 	1. 일부 연구는 일정 간격으로 perturbation을 제공하는 등 피험자가 timing을 추정할 수 있는 프로토콜로 설계해 실험을 진행했다. 
@@ -72,7 +72,7 @@ timeline: [[⏰낙상 주제2 - 분석]]
 
 ## 실험 절차
 
-본 연구는 참가자 내 교차설계(within-subject crossover design)를 적용하여 진행되었다. 피험자는 지면반력기가 설치된 60 cm × 40 cm 크기의 moving platform 위에 양발을 위치시키고 정적인 자세를 유지하도록 지시받았다. Perturbation은 피험자가 platform 위에 선 후 10초에서 60초 사이의 무작위 시점에 platform을 갑작스럽게 forward으로 translation시키는 방식으로 유발하였다. 초기 자세의 설정이 균형 회복에 영향을 미친다고 알려져 있다([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]). 따라서 perturbation 유발 시점은 forceplate data인 Mx가 posterior direction으로 이동시 발생하도록 설정하였다. platform의 이동 변위는 10 cm로 고정하였으며, perturbation의 강도는 이동 속도를 5 cm/s에서 170 cm/s 범위 내에서 조절하여 설정하였다.
+본 연구는 참가자 내 교차설계(within-subject crossover design)를 적용하여 진행되었다. 피험자는 지면반력기가 설치된 60 cm × 40 cm 크기의 moving platform 위에 양발을 위치시키고 정적인 자세를 유지하도록 지시받았다. Perturbation은 피험자가 platform 위에 선 후 10초에서 60초 사이의 무작위 시점에 platform을 갑작스럽게 forward으로 translation시키는 방식으로 유발하였다. 초기 자세의 설정이 균형 회복에 영향을 미칠 수 있기 때문에,([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]). perturbation 유발 시점은 forceplate data인 Mx가 posterior direction으로 이동시 발생하도록 설정하였다. platform의 이동 변위는 10 cm로 고정하였으며, perturbation의 강도는 이동 속도를 5 cm/s에서 170 cm/s 범위 내에서 조절하여 설정하였다.
 
 실험은 특정 프로토콜에 고정되지 않고 각 피험자의 균형 능력에 맞춰 낮은 강도에서 높은 강도로 점진적으로 증가시키는 방식을 채택하였다. 모든 피험자는 10cm/s 속도에서 시작하였으며, stepping이 연속 3번 이상 나올 때까지 10-20cm/s 단위로 강도를 올렸다. 연속 3번 이상 stepping이 나오면, 해당 구간의 stepping threshold 속도로 정의하고 해당 구간보다 낮은 속도로 stepping과 nonstepping이 혼재되는 구간을 찾았다. 피험자마다 14~24회의 시행이 수행되었으며, 시행 횟수의 차이는 혼재 구간 도달 소요 시행 수에 따라 달라졌다. 피로 효과를 배제하기 위해 시행 간 30초의 휴식 시간을 제공하였다. 피험자는 양팔을 몸 옆에 편안히 두고 전방의 시각 표적을 응시한 상태에서 실험에 임했으며, perturbation 발생 시 가능한 한 발을 떼지 않고 자세를 유지하되 균형 상실이 감지될 경우 자연스럽게 보상적 스텝을 취하도록 지시 받았다. 실험 중 발생할 수 있는 낙상을 방지하기 위해 모든 피험자는 천장에 고정된 안전 하네스를 착용하였으며, 전·후방에는 완충 매트와 연구자가 대기하여 안전을 확보하였다.
 
@@ -84,7 +84,7 @@ timeline: [[⏰낙상 주제2 - 분석]]
 
 근육 활성도는 16채널 무선 표면 근전도 시스템(AVANTI, Delsys, USA)을 이용하여 20–450 Hz 대역폭, 1,000 Hz의 샘플링 주파수로 수집하였다. 전극은 공을 찰 때 주로 사용하는 발인 우세측 하지에 부착하였으며, 부착 전 피부 각질 제거 및 알코올 소독을 통해 피부 임피던스를 최소화하였다. 측정 대상 근육은 TA(tibialis anterior), EHL(extensor hallucis longus), PL(peroneus longus), MG(medial gastrocnemius), SOL(soleus), RF(rectus femoris), VL(vastus lateralis), ST(semitendinosus), MG(medial gluteus maximus), RA(rectus abdominis), IO(internal oblique), EO(external oblique), ESL(erector spinae lumborum), EST(erector spinae thoracis), ESC(erector spinae cervicis), SCM(sternocleidomastoid)으로 총 16개 근육이었다.
 
-수집된 EMG 신호는 전처리 및 정규화 과정을 거쳤다. EMG data were high-pass filtered at 35Hz(3-order Butterworth), demeaned, rectified, and low-pass filtered at 40Hz(3-order Butterworth)[(Chvatal et al., 2011)]. 정규화는 platform이 움직이기 전 1,000 ms 구간의 기저선 평균값을 기준으로 수행하여 피험자 내 비교가 가능하도록 하였다. 운동역학 및 운동학 변수는 platform onset(0 ms)부터 800 ms까지의 고정된 분석 구간에서 산출했다. 반면, EMG max amplitdue and RMS는 각 채널의 muscle onset timing을 기준으로 설정한 구간에서 산출하였다. 이는 platform onset을 일괄 기준으로 적용할 경우 피험자 간 근활성 반응 시점의 개인차가 상쇄되기 때문이다. 구체적으로, 각 채널의 muscle onset을 기준 시점(0)으로 설정한 후 세 구간(0–100 ms, 100–200 ms, 200 ms–step onset)으로 구분하였다. Step 시행에서 step onset은 발이 지면에서 처음 떨어지는 시점으로 정의하였고, non-step 시행에서는 해당 피험자의 step 시행에서 산출한 step onset 평균값을 대입하여 두 조건 간 동일한 시간 구조에서 비교가 이루어지도록 하였다.
+수집된 EMG 신호는 전처리 및 정규화 과정을 거쳤다. EMG data were high-pass filtered at 35Hz(3-order Butterworth), demeaned, rectified, and low-pass filtered at 40Hz(3-order Butterworth)[(Chvatal et al., 2011)]. 정규화는 platform이 움직이기 전 1,000 ms 구간의 기저선 평균값을 기준으로 수행하여 피험자 내 비교가 가능하도록 하였다. kinetic 및 kinematic 변수는 perturbation 시작 시점을 기준(0ms)으로 하여 step을 시작한 시점까지의 고정된 분석 구간에서 산출했다. **반면,** EMG max amplitdue and RMS는 각 채널의 muscle onset timing을 기준으로 설정한 구간에서 산출하였다. 이는 perturbation 시작 시점을 일괄 기준으로 적용할 경우 피험자 간 근활성 반응 시점의 개인차가 상쇄되기 때문이다. 구체적으로, 각 채널의 muscle onset timing을 기준 시점(0ms)으로 설정한 후 세 구간~~(0–100 ms, 100–200 ms, 200 ms–step onset)~~으로 구분하였다. Step 시행에서 step onset은 발이 지면에서 처음 떨어지는 시점으로 정의하였고, non-step 시행에서는 해당 피험자의 step 시행에서 산출한 step onset 평균값을 대입하여 두 조건 간 동일한 시간 구조에서 비교가 이루어지도록 하였다.
 
 kinetic 데이터는 platform에 설치된 force plate(Bertec, USA)로 수집하였으며, GRF 신호는 1000 Hz로 샘플링한 뒤 4차 Butterworth 저역통과 필터(컷오프 10 Hz)를 적용하였다. platform moving으로 인한 관성에너지를 제거하기 위해 사람이 없는 empty forceplate의 값을 실험한 데이터에서 subtract하여 보정했다. kinematic 데이터는 모션 캡처 시스템(Motive; OptiTrack, USA)과 45개 반사 마커 세트를 이용하여 100 Hz로 수집하였고, 4차 Butterworth 저역통과 필터(cut-off 6 Hz)를 적용하였다. 마커 궤적은 Motive의 conventional full-body model을 기반으로 하되 발목·무릎·팔꿈치의 medial marker를 추가한 모델로 처리하였다. Platform onset timing은 platform에 부착한 마커로부터 산출하였으며, platform 마커 속도가 perturbation 전 baseline 평균 대비 2 표준편차(Mean + 2SD)를 초과하는 최초 시점으로 정의하였다. Forceplate자체의 관성으로 인해 발생하는 힘과 모멘트를 제거하기 위해 플랫폼 위에 아무도 없을 때의 perturbation 데이터에서 측정된 힘과 모멘트 값을 피험자가 있을 때의 데이터에서 차감하는 방식으로 보정했다.
 
@@ -92,67 +92,178 @@ kinetic 데이터는 platform에 설치된 force plate(Bertec, USA)로 수집하
 
 ## step, nonstep 분류 및 혼재 속도 구간의 정의
 
-동요로 인한 step은 2가지 기준으로 판정되었다. 1) perturbation 이후 2초 이내, 2) perturbation 직전 기준 구간에서의 heel 마커 평균 위치를 기준으로, perturbation 이후 heel 마커가 스텝 방향으로 0.5 cm 이상 이동하면 해당 시행을 step으로 분류하였다. stepping onset timing은 위 기준(0.5 cm)을 최초로 충족하는 시점으로 정의하였다(Crenshaw & Grabiner (2014)). 추가로 육안으로도 식별하였다. 
+perturbation으로 인한 step은 2가지 기준으로 판정되었다. 1) perturbation 이후 2초 이내, 2) perturbation 직전 기준 구간에서의 heel 마커 평균 위치를 기준으로, perturbation 이후 heel 마커가 스텝 방향으로 0.5 cm 이상 이동하면 해당 시행을 step으로 분류하였다. stepping onset timing은 위 기준(0.5 cm)을 최초로 충족하는 시점으로 정의하였다(Crenshaw & Grabiner (2014)). 추가로 육안으로도 식별하였다. 
 
-분류된 step/nontsep 시행 결과를 바탕으로, subject 별 stepping threshold와 mixed velocity를 산출하였다. Stepping threshold는 플랫폼 속도를 증가시키는 과정에서 동일 속도에서 3회 이상 연속으로 step이 발생한 최소 속도로 정의하였다. Mixed velocity는 stepping threshold보다 낮은 속도 중 동일 속도에서 step과 nonstep이 공존하는 속도로 정의하였으며, 해당 속도는 총 4회의 시행(step, nonstep 각 2회)을 포함해야 했다. 여러 속도가 조건을 만족할 경우, threshold에 가장 가까운 속도를 mixed velocity로 결정하였다. 
+분류된 step/nonstep 시행 결과를 바탕으로, subject 별 stepping threshold와 mixed velocity를 산출하였다. Stepping threshold는 플랫폼 속도를 증가시키는 과정에서 동일 속도에서 3회 이상 연속으로 step이 발생한 최소 속도로 정의하였다. Mixed velocity는 stepping threshold보다 낮은 속도 중 동일 속도에서 step과 nonstep이 공존하는 속도로 정의하였으며, 해당 속도는 총 4회의 시행(step, nonstep 각 2회)을 포함해야 했다. 여러 속도가 조건을 만족할 경우, threshold에 가장 가까운 속도를 mixed velocity로 결정하였다.
 
+관절각 분석은 perturbation onset 단일 시점(onset)의 trial-level 데이터를 사용하였다. 관절각 변수는 hip, knee, ankle, trunk, neck의 absolute angle에서 X, Y, Z 3축 성분을 모두 포함하였다. Segment 좌표계는 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`로 정의하였다.
+
+EMG 전극이 우세측 하지에 부착된 조건을 반영하기 위해, stance leg 기준 필터링 규칙을 적용하였다. `step_r` 시행은 좌측 다리를 stance leg로, `step_l` 시행은 우측 다리를 stance leg로 정의하였다. `nonstep` 시행은 동일 피험자의 step 시행 분포에서 산출한 `major_step_side`를 기준으로 stance leg를 매핑하였다. `step_r`와 `step_l` 빈도가 같은 피험자는 좌/우 stance angle 평균값을 사용하였다. 이 절차는 step/nonstep 비교에서 지지측 기준의 일관성을 유지하기 위한 전처리로 적용하였다. 
 
 ## 분석 변수
 
-근전도 변수는 각 채널별로 EMG onset timing, EMG max amplitude value, EMG max amplitude timing, 그리고 EMG RMS를 산출하였다. EMG RMS는 시간 정규화를 통해 시행 간 시간 간격을 일치시킨 후 계산하였으며, 근활성 개시시점은 TKEO-AGLR 알고리즘을 사용하여 탐지하였다(Solnik et al., 2010). 이후 알고리즘이 시작 시점을 정확히 포착했는지 육안으로 재확인하였으며, 노이즈 등으로 인해 시점이 명확히 잘못 측정된 경우에는 수동으로 수정하였다. 
+### 초기 자세 조건
 
-- 운동역학 및 자세 안정성을 평가하기 위해 COM과 COP(각 coordinate마다 계산), ankle torque를 계산하였다.
-	- COM: 
-		- COM distance: max - min
-		- COM path length 
-		- COM peak velocity 
-	-  COP:  ^77bf4p
-		- COP peak range: max - min ^4r8ds4
-		- COP path length 
-		- COP peak velocity 
-- 경추 관절 [[@Predicting reactive stepping in response to perturbations by using a classification approach|Emmens et al., 2020]]
+Perturbation onset 시점의 초기 자세 동질성을 확인하기 위해, perturbation 유발 직전의 xCOM/BOS를 step과 nonstep 간 비교하였다([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]). 이를 통해 Mx 기반 트리거 조건이 두 전략 간 초기 자세를 동질하게 통제하였는지를 검증하였다.
 
-perturbation onset에서 step onset timing 내 time window에서의 MOS(margin of stability)를 산출한다. MOS는 COM과 기저면 경계 사이의 관계를 나타내는 동적 안정성을 산출하여, 양수일 경우의 안정 상태와 음수일 경우의 불안정 상태를 구분하여 분석하였다~~ → **이거 대체 뭐지? 왜 스텝은 하면 안돼? 직접 pdf 파일 올려놓고 물어보기.** (Crenshaw & Grabiner, 2014; Eichenlaub et al., 2023).
+### 근전도(EMG) 변수
+
+각 채널별로 EMG onset timing, EMG max amplitude value, EMG max amplitude timing, 그리고 EMG RMS를 산출하였다. 근활성 개시시점은 TKEO-AGLR 알고리즘을 사용하여 탐지하였으며([[@Teager–Kaiser energy operator signal conditioning improves EMG onset detection|Solnik et al., 2010]]), 이후 알고리즘이 시작 시점을 정확히 포착했는지 육안으로 재확인하였다. 노이즈 등으로 인해 시점이 명확히 잘못 측정된 경우에는 수동으로 수정하였다. EMG RMS는 시간 정규화를 통해 시행 간 시간 간격을 일치시킨 후 계산하였다.
+
+### 운동역학 및 자세 안정성 변수
+
+동적 자세 안정성은 xCOM/BOS로 평가하였으며, 피험자의 foot length로 정규화하였다([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]). COM 관련 변수로는 COM peak velocity와 COM mean velocity를 추가로 산출하였다. COP 관련 변수로는 COP path length와 COP peak velocity를, 그리고 ankle torque를 산출하였다.
 
 
-동적 자세 안정성은 전후방 MOS(margin of stability)로 평가하였다. inverted pendulum 모델에 기반하여 XCoM(XCoM = xCOM + vCOM/√(g/l))을 계산하였다. MoS는 perturbation 방향의 기저면 경계(BoS boundary)와 XCoM 간의 부호 있는 거리(MoS = BoS - XCoM)로 정의하였으며, COM의 위치와 속도를 함께 반영하는 안정성 지표로 해석하였다. MoS는 perturbation onset부터 step onset 직전까지 시계열로 산출하였다. 
+### 관절 각도 변수
 
+관절 각도는 경추([[@Predicting reactive stepping in response to perturbations by using a classification approach|Emmens et al., 2020]]), 발목, 무릎, 고관절, 그리고 체간([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]])에서 산출하였다.
 
 ## 통계방법 
 
-균형회복 전략(step vs. nonstep) 간 차이는 각 EMG 채널, COP, COM 변수별로 독립적인 linear mixed-effects model(LMM)을 적용하여 분석하였다. 각 종속변수에 대해 피험자 수준으로 평균하지 않은 개별 시행(raw trial) 데이터를 그대로 모델에 투입하였다. 모델은 균형회복 전략(step vs. nonstep)을 고정 효과(fixed effect)로, 피험자를 임의 절편(random intercept)으로 설정하여 REML(restricted maximum likelihood)로 추정하였다. LMM은 onset timing에 존재하는 결측치 및 피험자별 불균등한 시행 수를 자연스럽게 처리하며, 이는 완전한 균형 설계를 가정하는 paired t-test나 repeated-measures ANOVA보다 정보 손실이 적다는 장점이 있다. 고정 효과의 유의성 검정은 Satterthwaite 자유도 근사를 적용하였다. 다중비교 보정은 종속변수별로 Benjamini-Hochberg FDR을 적용하였다. 보정은 각 변수집단(근전도, 운동학, 운동역학) 내에서 개별적으로(family-wise) 수행되었다.
+균형회복 전략(step vs. nonstep) 간 차이는 변수별로 독립적인 linear mixed-effects model(LMM)을 적용하여 분석하였다. 각 종속변수에 대해 피험자 수준으로 평균하지 않은 개별 시행(raw trial) 데이터를 그대로 모델에 투입하였다. 모델은 균형회복 전략(step vs. nonstep)을 고정 효과(fixed effect)로, 피험자를 임의 절편(random intercept)으로 설정하여 REML(restricted maximum likelihood)로 추정하였다. LMM은 onset timing에 존재하는 결측치 및 피험자별 불균등한 시행 수를 자연스럽게 처리하며, 이는 완전한 균형 설계를 가정하는 paired t-test나 repeated-measures ANOVA보다 정보 손실이 적다는 장점이 있다. 다중비교 보정은 종속변수별로 Benjamini-Hochberg FDR을 적용하였다. 보정은 각 변수집단(근전도, 운동학, 운동역학) 내에서 개별적으로(family-wise) 수행되었다.
 
 
 # 4. 결과 
 
-|subject information  |   |   |   |   |   |
-|---|---|---|---|---|---|
-|variable|mean|sd|min|max|N|
-|Age|21.63|2.60|18.00|27.00|24|
-|Height|167.65|7.85|153.00|183.00|24|
-|Weight|66.17|13.83|49.00|112.00|24|
-|All_trials|7.83|2.81|4.00|12.00|24|
-|Step_trials|4.79|2.06|2.00|10.00|24|
-|Nonstep_trials|3.04|1.68|1.00|7.00|24|
-|Velocities(cm/s)|62.29|49.23|20.00|170.00|24| 
+| subject information |        |       |        |        |     |     |
+| ------------------- | ------ | ----- | ------ | ------ | --- | --- |
+| variable            | mean   | sd    | min    | max    | N   |     |
+| Age                 | 21.63  | 2.60  | 18.00  | 27.00  | 24  |     |
+| Height              | 167.65 | 7.85  | 153.00 | 183.00 | 24  |     |
+| Weight              | 66.17  | 13.83 | 49.00  | 112.00 | 24  |     |
+| All_trials          | 5.21   | 2.4   | 1      | 9      | 24  |     |
+| Step_trials         | 2.52   | 1.33  | 1      | 5.00   | 24  |     |
+| Nonstep_trials      | 3.04   | 1.68  | 1.00   | 7.00   | 24  |     |
+| Velocities(cm/s)    | 62.29  | 49.23 | 20.00  | 170.00 | 24  |     |
 
 - step onset initation(timing): 
-	- 518.40±220.90 ms. 
-	- Range:[165 - 1052](887.50)
+	- 526.9±274.0 ms. 
+	- Range:[220, 1400]
 
 
+
+
+
+## EMG 
+
+## onset timing 
 [[결과) 주제 2- EMG onset timing]]
 
-[[결과) 주제 2 - emg max magnitude]]
+| NONSTEP | | N(nonstep) | STEP | | N(step) |
+| :--- | :--- | :---: | :--- | :--- | :---: |
+| EST | 125.01±19.92 | 73 | EST | 128.23±28.01 | 53 |
+| ESL | 130.81±27.85 | 70 | TA | 135.79±15.59 | 53 |
+| ST | 130.86±34.33 | 65 | PL | 138.71±16.29 | 51 |
+| TA | 131.63±14.03 | 73 | EHL | 139.42±18.44 | 53 |
+| PL | 136.75±15.97 | 72 | VL | 140.66±20.95 | 53 |
+| EHL | 137.58±12.39 | 73 | ESL | 143.75±31.09 | 51 |
+| VL | 139.61±15.68 | 72 | RF | 147.51±20.41 | 53 |
+| ESC | 143.94±33.73 | 63 | ST | 148.62±58.71 | 50 |
+| RF | 148.68±18.47 | 73 | EO | 160.98±38.87 | 48 |
+| SOL | 148.75±39.55 | 67 | ESC | 164.33±47.92 | 48 |
+| MG | 152.97±67.58 | 40 | SCM | 168.04±27.91 | 46 |
+| EO | 153.48±36.86 | 66 | GM | 171.58±33.32 | 48 |
+| SCM | 153.9±24.56 | 58 | IO | 171.73±31.35 | 48 |
+| GM | 159.25±29.31 | 64 | SOL | 185.07±92.5 | 44 |
+| RA | 169.45±43.9 | 65 | RA | 185.65±34.96 | 48 |
+| IO | 172.64±41.08 | 64 | MG | 215.63±125.8 | 38 |
 
+step과 nonstep 전략 간 근육 별 LMM 통계 분석 결과, 16개 채널 모두 유의하지 않았다. 다만, 젠처 평균에서는 nonstep이 step보다 더 빠른 결과를 보여주었다. 
+
+
+| 순위(빠름→느림) | nonstep (mean±sd, ms) | step (mean±sd, ms) |
+| :---: | :---: | :---: |
+| 1 | erector_spinae (127.80±21.70) | erector_spinae (135.18±26.21) |
+| | posterior_thigh (130.86±34.33) | anterior_shank (138.00±15.31) |
+| | anterior_shank (135.33±12.48) | anterior_thigh (144.08±18.04) |
+| | | posterior_thigh (148.62±58.71) |
+| 2 | anterior_thigh (144.14±14.66) | neck (167.29±37.13) |
+| | neck (149.09±23.99) | hip (171.58±33.32) |
+| | | trunk (175.22±30.44) |
+| 3 | posterior_shank (154.69±56.96) | posterior_shank (195.04±80.52) |
+| | hip (159.25±29.31) | |
+| 4 | trunk (166.38±38.12) | |
+
+muscle을 그룹별로 묶어 근육 간 협응 타이밍을 분석한 결과, nonstep에서는 tier가 4개 tier로 분류되었지만, step에서는 tier가 3개 tier로 분류되었다<!-- 이거에 대한 결론이 있나? 이유가 뭘까? co-contraction이 높은걸까?-->. 
+
+
+## magnitude 
+[[결과) 주제 2 - emg max amplitude timing]]
 [[결과) 주제 2 - RMS]]
 
-[[결과) 주제 2 - COM, MOS]]
+전체 평균 비교 시, Step(336.8±76.4)의 max amplitude timing은 Nonstep(282.5±55.3)보다 유의하게 늦었다. 
 
+채널 별로 비교 시, 8개 채널(EHL, PL, MG, SOL, ST, GM, EO, ESL)에서 step의 max timing이 유의하게 늦었다(FDR 보정 후).Step 전략은 근활성이 더 오래 지속되며, 정점에 늦게 도달하는 패턴을 보인다.
+
+EMG onset timing 기준으로 0-200ms, 200ms에서 step이 시작하기 직전까지의 2개의 분석구간으로 나눠서 RMS 값을 비교하였다. 
+초기에는 ESL, GM, MG, SOL, ST 근육군에서 step 시 더 높은 RMS 값을 보였다. 후기에는 ESL, EST, ST, VL에서 더 높은 RMS 값을 보였다. 단, VL은 후기에는 Nonstep > step 인 결과가 나왔다. <!-- 해석을 전혀 못하겠음. 어떻게 해석을 하지? 몸이 뒤로 sway 되는데 오히려 posterior muscle이 활성화 된다고? -->
+
+
+## COM
+
+[[결과) 주제 2 - COM, BOS]]
+
+## Angle 
+
+[[결과) 주제2-Segement Angle]]
+
+
+## GRF 
 [[결과) 주제 2 - Foceplate, COP]]
 
 [[결과) 주제 2 - ankle torque]]
 
 <!--  **[[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]를 보면 초기 자세가 step을 결정짓는다고 하고 있음. 초기 자세를 통제했다는 결과가 필요함. adaptation leading to reduced COM movement during the ER has been observed within a series of identical perturbations (24(24.Welch TDJ, Ting LH. Mechanisms of motor adaptation in reactive balance control. PLoS One 9: e96440, 2014. doi: 10.1371/journal.pone.0096440.)).** -->
+
+
+# 결론 
+
+## 초기자세로 인해서 step이 발생하였는가? 
+
+**yes**
+- hip과 xCOM/BOS에서 perturbation 시작 시 step과 nonstep 시도 간에 통계적으로 차이가 있었음. 
+- 이는, Mx로 피험자의 초기 자세를 동일하게 고정하고자 한 시도가 제한적이었음을 드러냄. 
+- 초기자세에 의해서 perturbation 시 전략의 차이가 드러나는 선행연구는 다수 존재([[@Interactions between initial posture and task-level goal explain experimental variability in postural responses to perturbations of standing balance|Van Wouwe et al., 2021]]; [[@Postural adjustments in anticipation of predictable perturbations allow elderly fallers to achieve a balance recovery performance equivalent to elderly non-fallers|Le Mouel et al., 2019]]; ) <!-- reference 2개 더 필요 --> 
+- 하지만, 초기자세를 통제한 연구에서도 perturbation 시 전략의 차이가 달라지는 논문이 있었기 때문에 hip과 xCOM/BOS의 차이만으로 strategy 선택의 차이라고 이어지기에는 무리가 있음<!-- reference 필요 -->. 또한 결과적으로 관절 각도는 <!-- 채워넣어야함 -->°, xCOM/BOS의 물리적 차이는 1-2cm였음. 
+
+<!-- 초기자세로 인한 차이가 있다면, EMG에서도 차이가 있어야 하지 않나? intial posture의 emg 반응을 어떻게 알 수 있고 이를 비교할 수 있을까? -->
+
+
+## step과 nonstep의 차이는 근육레벨에서 존재하는가? 
+
+**부분적 yes**
+- muscle onset timing에서 nonstep과 step 간의 차이는 발생하지 않았음. 하지만, muscle amplitude peak timing의 경우 nonstep에서 더 빨랐고, onset 이후 step onset 전까지의 분석구간의 후기 구간에서 step의 RMS 값이 더 높았다. 
+- 따라서, 근활성 개시 시점은 전략과 무관하게 동일하지만, 정점 도달 시점은 step에서 더 늦다. Step 전략에서 근활성이 더 오래 지속되며, 이는 stepping 동작 수행을 위한 추가 근수축과 관련될 수 있다. 
+- 지지하는 선행연구: <!-- 지지하는 reference 필요 -->
+	- [[📝Common muscle synergies for control of center of mass and force in nonstepping and stepping postural behaviors|Chvatal et al., 2011]]. 다만, 본 연구처럼 동일 perturbation 강도에서의 step vs. nonstep을 비교하지는 않았음.  
+	- 
+- <!-- 반대되는 선행연구 있나? -->
+
+
+
+
+
+
+## 근육 간 협응패턴은 전략 간 차이가 있나? 
+
+**부분적 yes**
+- 근육의 활성화 타이밍에 따른 근육 간 협응패턴은 다수 선행연구에서 연구된 바 있다
+	- distal to proximal을 주장한 연구([[@Central programming of postural movements - adaptation to altered support-surface configurations|Horak & Nashner, 1986]]). 
+- 본 연구에서는 distal to proximal 현상과 erector spinae 근육이 동시에 활성화되는 현상이 관찰되었다. 
+
+## 무게중심 및 관절각도, GRF 데이터는 EMG와 상관성이 존재하는가? 
+
+
+
+## unexpected perturbation 실험 조건은 실험 결과에 영향을 미쳤는가? 
+
+- 본 연구는 선행연구와 다르게, unexpected 조건을 만들어서 긴 시간의 대기 시간을 통해서 perturbation 실험을 진행하였다. 
+- 다수 perturbation 선행연구에서 trial 간 좁은 시간간격을 설계하여 피험자가 perturbation을 예측가능하게 하였다. 
+- <!-- 이 질문에 대해서 어떻게 결과를 맞춰야 할지 모르겠음. 선행연구 결과와 차이가 있다고 해야 하나? 그럼 대체 뭔 차이가 있지? platform이 앞으로 이동했을 때의 선행연구 결과와의 차이? -->
+
+## step과 nonstep이 공존하는 perturbation 강도는 기존 선행연구와 무엇이 달랐나? 
+
+<!-- 이 질문에 대한 답 여전히 잘 모르겠음. 근데 굳이 이 질문은 discussion에 넣을 필요 없지 않나?  -->
 
 
