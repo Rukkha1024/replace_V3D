@@ -1,4 +1,4 @@
-﻿﻿"""COM/xCOM/xCOM_BOS 1차 스크리닝 LMM.
+"""COM/xCOM/xCOM_BOS 1차 스크리닝 LMM.
 
 Window: [platform_onset, step_onset_eval] per trial.
 Model: DV ~ step_TF + (1|subject), REML.

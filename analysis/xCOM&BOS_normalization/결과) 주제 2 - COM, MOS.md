@@ -1,4 +1,4 @@
-﻿﻿---
+﻿---
 cssclass: clean-embeds
 date created: 2026-01-19. 00.31
 ---
