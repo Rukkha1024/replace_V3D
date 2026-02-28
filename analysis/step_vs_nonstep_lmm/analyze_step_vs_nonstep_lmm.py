@@ -200,6 +200,7 @@ def build_dv_specs() -> list[dict]:
         specs.append({"dv": f"COP_{ax}_range", "col": col, "agg": "range", "family": FAMILY_BALANCE})
         specs.append({"dv": f"COP_{ax}_path_length", "col": col, "agg": "path_length", "family": FAMILY_BALANCE})
         specs.append({"dv": f"COP_{ax}_peak_velocity", "col": col, "agg": "abs_peak_velocity", "family": FAMILY_BALANCE})
+        specs.append({"dv": f"COP_{ax}_mean_velocity", "col": col, "agg": "mean_velocity", "family": FAMILY_BALANCE})
 
     # MoS
     specs.append({"dv": "MOS_minDist_signed_min", "col": "MOS_minDist_signed", "agg": "min_val", "family": FAMILY_BALANCE})
@@ -416,6 +417,15 @@ def aggregate_trial_features(df: pl.DataFrame, specs: list[dict]) -> pl.DataFram
         elif agg == "abs_peak_velocity":
             # peak velocity: max of |diff/dt|, dt=0.01s (100Hz)
             agg_exprs.append((pl.col(col).filter(in_window).diff().abs() / 0.01).max().alias(dv))
+        elif agg == "mean_velocity":
+            # mean velocity: path_length / window_duration
+            # path_length = sum(|diff|), duration = (n_frames - 1) * dt, dt = 0.01s (100Hz)
+            agg_exprs.append(
+                (
+                    pl.col(col).filter(in_window).diff().abs().sum()
+                    / ((pl.col(col).filter(in_window).count() - 1).cast(pl.Float64) * 0.01)
+                ).alias(dv)
+            )
         elif agg == "value_at_event":
             event_col = spec.get("event_col")
             if not event_col:

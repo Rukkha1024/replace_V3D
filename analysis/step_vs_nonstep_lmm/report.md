@@ -10,7 +10,7 @@
 
 - Trials: **125** (step=53, nonstep=72), subjects=24
 - Input: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`
-- DVs: **34개** (Balance/Stability 17, Joint Angles 10, Force/Torque 7)
+- DVs: **36개** (Balance/Stability 19, Joint Angles 10, Force/Torque 7)
 - Window: `[platform_onset_local, end_frame]`
   - step: `end_frame = actual step_onset_local`
   - nonstep: subject-velocity step 평균 onset, 불가 시 prefilter `platform` fallback
@@ -31,11 +31,11 @@
 
 ### Overall
 
-- **FDR significant: 13/34**
+- **FDR significant: 14/36**
 
 | Family | Total DVs | Significant DVs |
 |---|---:|---:|
-| Balance/Stability | 17 | 9 |
+| Balance/Stability | 19 | 10 |
 | Joint Angles | 10 | 2 |
 | Force/Torque | 7 | 2 |
 
@@ -52,9 +52,11 @@
 | `COP_X_range` | Balance/Stability | 0.0119 | 0.0200 | 0.593 | n.s. |
 | `COP_X_path_length` | Balance/Stability | 0.0349 | 0.0410 | 0.851 | n.s. |
 | `COP_X_peak_velocity` | Balance/Stability | 2.3092 | 2.0353 | 1.135 | n.s. |
+| `COP_X_mean_velocity` | Balance/Stability | 0.1742 | 0.1883 | 0.925 | n.s. |
 | `COP_Y_range` | Balance/Stability | 0.0594 | 0.0060 | 9.971 | *** |
 | `COP_Y_path_length` | Balance/Stability | 0.0685 | 0.0089 | 7.708 | *** |
 | `COP_Y_peak_velocity` | Balance/Stability | 0.7236 | 0.1329 | 5.445 | *** |
+| `COP_Y_mean_velocity` | Balance/Stability | 0.1494 | 0.0192 | 7.786 | *** |
 | `MOS_minDist_signed_min` | Balance/Stability | -0.0141 | 0.0027 | -5.282 | *** |
 | `MOS_AP_v3d_min` | Balance/Stability | -0.0136 | 0.0027 | -5.041 | *** |
 | `MOS_ML_v3d_min` | Balance/Stability | -0.0053 | 0.0022 | -2.389 | * |
@@ -92,6 +94,7 @@
 |---|---:|---:|---:|---|
 | `COP_Y_range` | 0.1034±0.0409 | 0.0484±0.0354 | 0.0594 | *** |
 | `GRF_Y_range` | 70.4857±38.3969 | 34.2181±19.4201 | 39.0415 | *** |
+| `COP_Y_mean_velocity` | 0.3288±0.1648 | 0.2092±0.1430 | 0.1494 | *** |
 | `COP_Y_path_length` | 0.1535±0.0709 | 0.0964±0.0700 | 0.0685 | *** |
 | `GRF_Y_peak` | 51.0308±29.5295 | 25.8191±15.1209 | 26.3340 | *** |
 | `xCOM_BOS_platformonset` | 0.6318±0.0681 | 0.7005±0.0727 | -0.0513 | *** |
@@ -106,8 +109,8 @@
 
 ### 결과 해석
 
-**Balance/Stability (9/17 유의)**
-- **ML 방향 (Y축) 변수 집중 유의**: COP_Y_range, COP_Y_path_length, COP_Y_peak_velocity, vCOM_Y_peak 모두 step > nonstep. step 전략 시 내외측 방향 균형 조절이 더 크다 (stepping은 본질적으로 ML 전략).
+**Balance/Stability (10/19 유의)**
+- **AP 방향 (Y축) 변수 집중 유의**: COP_Y_range, COP_Y_path_length, COP_Y_peak_velocity, COP_Y_mean_velocity, vCOM_Y_peak 모두 step > nonstep. step 전략 시 전후 방향 균형 조절이 더 크다.
 - **MoS 감소**: MOS_minDist_signed_min, MOS_AP_v3d_min, MOS_ML_v3d_min 모두 step < nonstep (음수 estimate). step 전략은 stability margin이 더 적다.
 - **xCOM/BOS (AP)**: platform onset과 step onset 시점 모두 step < nonstep. step 전략에서 xCOM이 BOS 내에서 상대적으로 전방에 위치(값이 작음).
 - **AP 방향 (X축) 변수**: COM_X, COP_X 관련 변수는 모두 비유의. 내외측 방향이 주요 차이 방향.
@@ -135,8 +138,8 @@
 
 ## Conclusion
 
-1. 본 데이터에서 step/non-step 분리는 **13/34** DV에서 FDR 유의했다.
-2. 유의 변수는 AP 방향 COP/COM/GRF 및 MoS에 집중되어, step 전략이 전후 방향 균형 반응 크기와 stability margin 감소에서 특징적으로 구분됨을 확인했다.
+1. 본 데이터에서 step/non-step 분리는 **14/36** DV에서 FDR 유의했다.
+2. 유의 변수는 AP 방향 COP/COM/GRF 및 MoS에 집중되어, step 전략이 전후 방향 균형 반응 크기와 stability margin 감소에서 특징적으로 구분됨을 확인했다. 새로 추가된 COP mean velocity (path_length / window_duration) 역시 AP 방향(Y축)에서 유의했다.
 3. 요청 변수 3개 중 `xCOM/BOS_platformonset`, `xCOM/BOS_steponset`은 유의했고, `θtrunk,max(=Trunk_peak)`는 비유의였다.
 4. Joint 관절 중 Hip만 유의하여, step 전략에서 hip strategy 사용이 더 크다는 해석이 가능하다.
 5. Van Wouwe 2021과의 비교는 가능하지만, 통계 단위가 달라 완전한 1:1 대응은 아니다.
