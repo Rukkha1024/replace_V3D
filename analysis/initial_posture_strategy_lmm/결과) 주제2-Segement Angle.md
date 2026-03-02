@@ -50,6 +50,7 @@
 
 - 관절각 계산은 Visual3D-like intrinsic `XYZ` 순서를 사용한다.
 - Segment 좌표계 기준은 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`이다.
+- Hip/Knee/Ankle의 `Y/Z`는 좌우(L/R) 해석 일관성을 위해 **LEFT side 값을 부호 반전**하여 RIGHT 의미와 통일한다.
 - 따라서 `X/Y/Z`는 각 축 회전 성분이며, 임상적 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
 
 ## stance 기준
