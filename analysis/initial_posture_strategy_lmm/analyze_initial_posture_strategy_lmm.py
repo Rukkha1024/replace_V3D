@@ -289,6 +289,17 @@ def _joint_angle_abs_cols() -> list[str]:
     return cols
 
 
+def _joint_angle_step_cols() -> list[str]:
+    cols: list[str] = []
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_stance_{axis}_step_onset")
+    for seg in MIDLINE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_{axis}_step_onset")
+    return cols
+
+
 def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
     exprs: list[pl.Expr] = []
     for seg in STANCE_SEGMENTS:
@@ -343,6 +354,133 @@ def build_onset_snapshot(
     )
 
     return snap.to_pandas()
+
+
+def build_step_onset_joint_snapshot(
+    df: pl.DataFrame,
+    trial_meta: pd.DataFrame,
+    major_side: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    trial_meta_pl = pl.from_pandas(trial_meta[TRIAL_KEYS + ["step_TF", "state"]].copy())
+    major_side_pl = pl.from_pandas(major_side[["subject", "major_step_side"]].copy())
+
+    trial_step = (
+        df.group_by(TRIAL_KEYS)
+        .agg(pl.col("step_onset_local").drop_nulls().first().cast(pl.Float64).alias("step_onset_local"))
+        .sort(TRIAL_KEYS)
+    )
+    trial_info = trial_meta_pl.join(trial_step, on=TRIAL_KEYS, how="left")
+
+    subject_step_ref = (
+        trial_info
+        .filter((pl.col("step_TF") == "step") & pl.col("step_onset_local").is_not_null())
+        .group_by("subject")
+        .agg(pl.col("step_onset_local").mean().alias("step_onset_subject_mean_local"))
+    )
+
+    target = (
+        trial_info.join(subject_step_ref, on="subject", how="left")
+        .with_columns(
+            pl.when(pl.col("step_TF") == "step")
+            .then(pl.col("step_onset_local"))
+            .otherwise(pl.col("step_onset_subject_mean_local"))
+            .alias("step_onset_target_local_float")
+        )
+        .with_columns(
+            pl.when(pl.col("step_onset_target_local_float").is_not_null())
+            .then(pl.col("step_onset_target_local_float").round(0).cast(pl.Int64))
+            .otherwise(None)
+            .alias("step_onset_target_local")
+        )
+    )
+
+    snap = (
+        df.join(
+            target.select(
+                TRIAL_KEYS
+                + [
+                    "step_onset_local",
+                    "step_onset_subject_mean_local",
+                    "step_onset_target_local",
+                ]
+            ),
+            on=TRIAL_KEYS,
+            how="inner",
+        )
+        .filter(pl.col("step_onset_target_local").is_not_null())
+        .filter(pl.col("MocapFrame").cast(pl.Int64) == pl.col("step_onset_target_local"))
+        .join(trial_meta_pl, on=TRIAL_KEYS, how="left")
+        .join(major_side_pl, on="subject", how="left")
+    )
+
+    dup = snap.group_by(TRIAL_KEYS).len().filter(pl.col("len") != 1)
+    if dup.height > 0:
+        raise ValueError(f"Step-onset snapshot has non-unique rows for {dup.height} trials.")
+
+    snap = add_stance_cols_pl(snap)
+
+    src_to_out: dict[str, str] = {}
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            src_to_out[f"{seg}_stance_{axis}_deg"] = f"{seg}_stance_{axis}_step_onset"
+    for seg in MIDLINE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            src_to_out[f"{seg}_{axis}_deg"] = f"{seg}_{axis}_step_onset"
+
+    missing_src = sorted(set(src_to_out.keys()) - set(snap.columns))
+    if missing_src:
+        raise ValueError(f"Missing step-onset angle columns from CSV snapshot: {missing_src}")
+
+    step_df = (
+        snap.select(TRIAL_KEYS + ["step_TF"] + list(src_to_out.keys()))
+        .rename(src_to_out)
+        .to_pandas()
+    )
+
+    target_pd = target.to_pandas()
+    n_trials_total = int(len(target_pd))
+    n_step_total = int((target_pd["step_TF"] == "step").sum())
+    n_nonstep_total = int((target_pd["step_TF"] == "nonstep").sum())
+    n_step_missing_direct = int(
+        ((target_pd["step_TF"] == "step") & target_pd["step_onset_local"].isna()).sum()
+    )
+    n_nonstep_missing_ref = int(
+        ((target_pd["step_TF"] == "nonstep") & target_pd["step_onset_subject_mean_local"].isna()).sum()
+    )
+    missing_ref_subjects = sorted(
+        target_pd.loc[
+            (target_pd["step_TF"] == "nonstep") & target_pd["step_onset_subject_mean_local"].isna(),
+            "subject",
+        ]
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+
+    n_target_available = int(target_pd["step_onset_target_local"].notna().sum())
+    n_used = int(len(step_df))
+    n_step_used = int((step_df["step_TF"] == "step").sum())
+    n_nonstep_used = int((step_df["step_TF"] == "nonstep").sum())
+    n_target_no_frame = int(max(0, n_target_available - n_used))
+    n_excluded = int(max(0, n_trials_total - n_used))
+    n_subject_ref = int(target_pd["step_onset_subject_mean_local"].notna().groupby(target_pd["subject"]).any().sum())
+
+    stats = {
+        "n_trials_total": n_trials_total,
+        "n_step_total": n_step_total,
+        "n_nonstep_total": n_nonstep_total,
+        "n_subject_ref": n_subject_ref,
+        "n_step_missing_direct": n_step_missing_direct,
+        "n_nonstep_missing_ref": n_nonstep_missing_ref,
+        "missing_ref_subjects": missing_ref_subjects,
+        "n_target_available": n_target_available,
+        "n_used": n_used,
+        "n_step_used": n_step_used,
+        "n_nonstep_used": n_nonstep_used,
+        "n_target_no_frame": n_target_no_frame,
+        "n_excluded": n_excluded,
+    }
+    return step_df, stats
 
 
 def _pick_stance_value(row: pd.Series, left_col: str, right_col: str) -> float:
@@ -615,7 +753,7 @@ def build_analysis_dataframe(
     fp_inertial_qc_fz_threshold: float,
     fp_inertial_qc_margin_m: float,
     fp_inertial_qc_strict: bool,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     print("  Loading CSV...")
     df = load_csv(csv_path)
     print(f"  Frames: {df.height}, Columns: {df.width}")
@@ -636,6 +774,12 @@ def build_analysis_dataframe(
 
     print("  Building onset snapshot variables from exported CSV...")
     onset_df = build_onset_snapshot(df=df, trial_meta=trial_meta, major_side=major_side)
+    print("  Building step-onset joint-angle snapshot (step mean imputation for nonstep)...")
+    step_joint_df, step_joint_stats = build_step_onset_joint_snapshot(
+        df=df,
+        trial_meta=trial_meta,
+        major_side=major_side,
+    )
 
     keep_cols = TRIAL_KEYS + [
         "step_TF",
@@ -681,7 +825,7 @@ def build_analysis_dataframe(
     if analysis_df[required_abs_cols].isna().any().any():
         raise ValueError("Missing absolute onset feature values after merge.")
 
-    return analysis_df, trial_meta, abs_features, major_side
+    return analysis_df, trial_meta, abs_features, major_side, step_joint_df, step_joint_stats
 
 
 def variable_catalog() -> list[dict[str, str]]:
@@ -979,20 +1123,21 @@ def _build_significant_table(results: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def _build_segment_angle_table(results: pd.DataFrame) -> str:
-    dvs = _joint_angle_abs_cols()
-    sub = results[results["dv"].isin(dvs)].copy()
-    sub["order"] = sub["dv"].map({dv: i for i, dv in enumerate(dvs)})
-    sub = sub.sort_values("order")
+def _build_joint_angle_table(results: pd.DataFrame, dvs: list[str]) -> str:
+    lookup = {str(row.dv): row for row in results.itertuples(index=False)}
     lines = [
         "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
         "|---|---:|---:|---:|---|",
     ]
-    for row in sub.itertuples(index=False):
+    for dv in dvs:
+        row = lookup.get(dv)
+        if row is None:
+            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | untestable |")
+            continue
         sig = row.sig if isinstance(row.sig, str) and row.sig else "n.s."
         lines.append(
             "| "
-            f"`{row.dv}` | "
+            f"`{dv}` | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
             f"{_fmt_num(row.estimate, 2)} | {sig} |"
@@ -1000,13 +1145,12 @@ def _build_segment_angle_table(results: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def _joint_angle_significance(results: pd.DataFrame) -> tuple[int, int, list[str]]:
-    joint_dvs = _joint_angle_abs_cols()
+def _joint_angle_significance(results: pd.DataFrame, joint_dvs: list[str]) -> tuple[int, int, list[str]]:
     sub = results[results["dv"].isin(joint_dvs)].copy()
     sub["sig"] = sub["sig"].fillna("")
     sig_sub = sub[sub["sig"] != ""].copy()
     sig_names = sig_sub.sort_values("p_fdr")["dv"].tolist()
-    return len(sub), len(sig_sub), sig_names
+    return len(joint_dvs), len(sig_sub), sig_names
 
 
 def write_report_markdown(
@@ -1030,7 +1174,10 @@ def write_report_markdown(
     major_summary = summarize_major_step_side(major_side)
     tie_subjects = major_summary["tie_subjects"]
     tie_subjects_str = ", ".join(tie_subjects) if tie_subjects else "(none)"
-    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
+    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(
+        results,
+        _joint_angle_abs_cols(),
+    )
     if joint_sig_count == 0:
         joint_line = (
             f"관절 각도 변수(`Hip/Knee/Ankle`의 stance `X/Y/Z` + `Trunk/Neck`의 `X/Y/Z`, 총 {joint_total}개)는 "
@@ -1149,22 +1296,40 @@ Auto-generated by analyze_initial_posture_strategy_lmm.py.
 def write_segment_angle_markdown(
     segment_md: Path,
     results: pd.DataFrame,
+    step_results: pd.DataFrame,
     major_side: pd.DataFrame,
+    step_onset_stats: dict[str, Any],
     verdict_pass: bool,
 ) -> None:
-    table = _build_segment_angle_table(results)
+    platform_dvs = _joint_angle_abs_cols()
+    step_dvs = _joint_angle_step_cols()
+    table = _build_joint_angle_table(results, platform_dvs)
+    step_table = _build_joint_angle_table(step_results, step_dvs)
     verdict = "PASS" if verdict_pass else "FAIL"
     major_summary = summarize_major_step_side(major_side)
     tie_subjects = major_summary["tie_subjects"]
     tie_subjects_str = ", ".join(tie_subjects) if tie_subjects else "(none)"
-    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results)
+    joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results, platform_dvs)
+    step_joint_total, step_joint_sig_count, step_joint_sig_names = _joint_angle_significance(step_results, step_dvs)
+
     if joint_sig_count == 0:
-        joint_note = f"- {joint_total}개 segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다."
+        joint_note = f"{joint_total}개 segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다."
     else:
         joint_note = (
-            f"- {joint_total}개 segment angle 변수(X/Y/Z) 중 {joint_sig_count}개가 FDR 유의였다: "
+            f"{joint_total}개 segment angle 변수(X/Y/Z) 중 {joint_sig_count}개가 FDR 유의였다: "
             f"`{', '.join(joint_sig_names)}`."
         )
+    if step_joint_sig_count == 0:
+        step_joint_note = f"{step_joint_total}개 step_onset segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다."
+    else:
+        step_joint_note = (
+            f"{step_joint_total}개 step_onset segment angle 변수(X/Y/Z) 중 {step_joint_sig_count}개가 FDR 유의였다: "
+            f"`{', '.join(step_joint_sig_names)}`."
+        )
+
+    missing_ref_subjects = step_onset_stats.get("missing_ref_subjects", [])
+    missing_ref_subjects_str = ", ".join(missing_ref_subjects) if missing_ref_subjects else "(none)"
+
     text = f"""---
 ---
 # 가설
@@ -1173,9 +1338,13 @@ def write_segment_angle_markdown(
 
 # results
 
-## onset 단일시점 LMM
+## platform_onset 단일시점 LMM
 
 {table}
+
+## step_onset 단일시점 LMM
+
+{step_table}
 
 ## coordinate 해석 기준
 
@@ -1190,14 +1359,22 @@ def write_segment_angle_markdown(
 - `step_r_count == step_l_count`인 tie subject는 좌/우 평균으로 계산한다.
 - 이번 실행 요약: `step_r_major={major_summary["step_r_major"]}`, `step_l_major={major_summary["step_l_major"]}`, `tie={major_summary["tie_major"]}` (tie subjects: `{tie_subjects_str}`)
 
+- step_onset 비교 규칙:
+  - step trial: 해당 trial의 `step_onset_local` 사용
+  - nonstep trial: 동일 subject의 step trial `step_onset_local` 평균값을 대입한 후 frame으로 반올림
+  - step_onset 기준 유효 trial: `{step_onset_stats["n_used"]}/{step_onset_stats["n_trials_total"]}` (step=`{step_onset_stats["n_step_used"]}`, nonstep=`{step_onset_stats["n_nonstep_used"]}`)
+  - 제외 trial: `{step_onset_stats["n_excluded"]}` (step_onset 결측 step=`{step_onset_stats["n_step_missing_direct"]}`, step 참조 부재 nonstep=`{step_onset_stats["n_nonstep_missing_ref"]}`, frame 불일치=`{step_onset_stats["n_target_no_frame"]}`)
+  - nonstep step_onset 참조 부재 subject: `{missing_ref_subjects_str}`
+
 - 해석 노트:
-  - {joint_note[2:]}
-  - 따라서 onset 단일시점에서 관절각 차이는 일부 축(Y/Z)에 제한적으로 관찰되며, 전축에서 일관되게 나타나지는 않았다.
+  - platform_onset: {joint_note}
+  - step_onset: {step_joint_note}
+  - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 # 결론
 
 - 가설 1 결과: **{verdict}**
-- 초기 자세의 관절각에서 일부 축 차이는 존재했지만, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
+- platform_onset 및 step_onset 관절각 비교를 함께 보아도, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
 
 # keypapers
 
@@ -1218,7 +1395,7 @@ def main() -> None:
     print("=" * 72)
 
     print("\n[M1] Load and prepare data...")
-    analysis_df, trial_meta, _abs_angles, major_side = build_analysis_dataframe(
+    analysis_df, trial_meta, _abs_angles, major_side, step_joint_df, step_onset_stats = build_analysis_dataframe(
         csv_path=args.csv,
         platform_xlsm=args.platform_xlsm,
         c3d_dir=args.c3d_dir,
@@ -1259,6 +1436,22 @@ def main() -> None:
     )
     if major_summary["tie_subjects"]:
         print(f"  tie subjects (L/R mean): {', '.join(major_summary['tie_subjects'])}")
+    print(
+        "  step_onset trial usage: "
+        f"used={step_onset_stats['n_used']}/{step_onset_stats['n_trials_total']} "
+        f"(step={step_onset_stats['n_step_used']}, nonstep={step_onset_stats['n_nonstep_used']})"
+    )
+    print(
+        "  step_onset exclusions: "
+        f"step_missing={step_onset_stats['n_step_missing_direct']}, "
+        f"nonstep_missing_ref={step_onset_stats['n_nonstep_missing_ref']}, "
+        f"frame_mismatch={step_onset_stats['n_target_no_frame']}"
+    )
+    if step_onset_stats["missing_ref_subjects"]:
+        print(
+            "  nonstep subjects without step_onset reference: "
+            + ", ".join(step_onset_stats["missing_ref_subjects"])
+        )
 
     if args.dry_run:
         print("\nDry run complete.")
@@ -1269,6 +1462,17 @@ def main() -> None:
     results = fit_lmm_all(analysis_df=analysis_df, testable_vars=testable_vars, dv_to_family=dv_to_family)
 
     print_significant_only(results)
+
+    print("\n[M3b] Fit step_onset joint-angle LMM...")
+    step_specs = [{"dv": dv, "family": "Joint_step_onset"} for dv in _joint_angle_step_cols()]
+    step_dv_to_family = {s["dv"]: s["family"] for s in step_specs}
+    step_audit_df = audit_variables(analysis_df=step_joint_df, specs=step_specs)
+    step_testable_vars = step_audit_df.loc[step_audit_df["status"] == "testable", "dv"].tolist()
+    step_results = fit_lmm_all(
+        analysis_df=step_joint_df,
+        testable_vars=step_testable_vars,
+        dv_to_family=step_dv_to_family,
+    )
 
     n_sig = int((results["sig"] != "").sum())
     n_testable_modeled = len(results)
@@ -1305,7 +1509,9 @@ def main() -> None:
     write_segment_angle_markdown(
         segment_md=args.segment_angle_md,
         results=results,
+        step_results=step_results,
         major_side=major_side,
+        step_onset_stats=step_onset_stats,
         verdict_pass=verdict_pass,
     )
     print(f"  Updated: {args.report_md}")

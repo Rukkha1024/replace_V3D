@@ -6,7 +6,7 @@
 
 # results
 
-## onset 단일시점 LMM
+## platform_onset 단일시점 LMM
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
@@ -26,6 +26,26 @@
 | `Neck_Y_abs_onset` | 2.17±6.95 | 1.83±5.05 | -0.35 | n.s. |
 | `Neck_Z_abs_onset` | 0.92±13.45 | 0.31±4.99 | 1.30 | n.s. |
 
+## step_onset 단일시점 LMM
+
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
+|---|---:|---:|---:|---|
+| `Hip_stance_X_step_onset` | 7.73±3.94 | 4.02±3.81 | 3.76 | *** |
+| `Hip_stance_Y_step_onset` | -0.17±2.01 | -0.01±1.12 | 0.11 | n.s. |
+| `Hip_stance_Z_step_onset` | -1.53±4.00 | 0.50±2.47 | -2.15 | *** |
+| `Knee_stance_X_step_onset` | -9.86±7.45 | -8.72±4.87 | -3.22 | *** |
+| `Knee_stance_Y_step_onset` | -0.58±1.65 | -1.02±1.09 | 0.07 | n.s. |
+| `Knee_stance_Z_step_onset` | -1.24±1.98 | -0.75±1.15 | -0.52 | n.s. |
+| `Ankle_stance_X_step_onset` | 8.15±5.21 | 6.81±4.59 | 1.19 | n.s. |
+| `Ankle_stance_Y_step_onset` | 1.77±3.13 | 1.15±1.59 | 0.60 | n.s. |
+| `Ankle_stance_Z_step_onset` | -0.07±4.61 | 0.88±2.04 | -0.52 | n.s. |
+| `Trunk_X_step_onset` | 3.06±5.63 | 1.11±4.19 | 1.41 | n.s. |
+| `Trunk_Y_step_onset` | 0.69±2.15 | 0.21±1.62 | 0.66 | n.s. |
+| `Trunk_Z_step_onset` | -0.46±2.16 | -0.36±1.90 | -0.00 | n.s. |
+| `Neck_X_step_onset` | -8.32±11.82 | -9.28±9.08 | -1.94 | n.s. |
+| `Neck_Y_step_onset` | -0.21±3.08 | -0.19±2.10 | -0.10 | n.s. |
+| `Neck_Z_step_onset` | 0.80±2.25 | 0.85±2.20 | -0.04 | n.s. |
+
 ## coordinate 해석 기준
 
 - 관절각 계산은 Visual3D-like intrinsic `XYZ` 순서를 사용한다.
@@ -39,14 +59,22 @@
 - `step_r_count == step_l_count`인 tie subject는 좌/우 평균으로 계산한다.
 - 이번 실행 요약: `step_r_major=9`, `step_l_major=10`, `tie=5` (tie subjects: `강비은, 김서하, 김유민, 안지연, 유재원`)
 
+- step_onset 비교 규칙:
+  - step trial: 해당 trial의 `step_onset_local` 사용
+  - nonstep trial: 동일 subject의 step trial `step_onset_local` 평균값을 대입한 후 frame으로 반올림
+  - step_onset 기준 유효 trial: `119/125` (step=`52`, nonstep=`67`)
+  - 제외 trial: `6` (step_onset 결측 step=`1`, step 참조 부재 nonstep=`5`, frame 불일치=`0`)
+  - nonstep step_onset 참조 부재 subject: `권유영, 김종철, 방주원`
+
 - 해석 노트:
-  - 15개 segment angle 변수(X/Y/Z) 중 4개가 FDR 유의였다: `Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`.
-  - 따라서 onset 단일시점에서 관절각 차이는 일부 축(Y/Z)에 제한적으로 관찰되며, 전축에서 일관되게 나타나지는 않았다.
+  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 4개가 FDR 유의였다: `Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`.
+  - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 3개가 FDR 유의였다: `Hip_stance_X_step_onset, Knee_stance_X_step_onset, Hip_stance_Z_step_onset`.
+  - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 # 결론
 
 - 가설 1 결과: **FAIL**
-- 초기 자세의 관절각에서 일부 축 차이는 존재했지만, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
+- platform_onset 및 step_onset 관절각 비교를 함께 보아도, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
 
 # keypapers
 
