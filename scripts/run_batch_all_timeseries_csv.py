@@ -113,14 +113,15 @@ def _build_meta_prefilter_trials(event_xlsm: Path) -> pl.DataFrame:
     merged = platform.join(meta, on="subject", how="left")
 
     mask_base = (pl.col("mixed") == 1) & (pl.col("age_group") == "young")
-    is_step = pl.col("step_TF") == "step"
-    ipsilateral_step = is_step & (
-        ((pl.col("주손 or 주발") == "R") & (pl.col("state") == "step_R"))
-        | ((pl.col("주손 or 주발") == "L") & (pl.col("state") == "step_L"))
-    )
     is_nonstep = pl.col("step_TF") == "nonstep"
+    is_step = pl.col("step_TF") == "step"
     return (
-        merged.filter(mask_base & (ipsilateral_step | is_nonstep))
+        # NOTE:
+        # Previously, step trials were limited to ipsilateral stepping (dominant side),
+        # which can drop valid mixed-velocity step trials for some subjects and break
+        # within-subject step vs nonstep comparisons. For "주제 2" analyses, include
+        # all mixed==1 young step/nonstep trials at the selected mixed velocity.
+        merged.filter(mask_base & (is_step | is_nonstep))
         .select(["subject", "velocity", "trial", "age_group", "주손 or 주발", "step_TF", "state", "mixed"])
         .drop_nulls(["subject", "velocity", "trial"])
         .unique()
@@ -141,7 +142,7 @@ def _make_timeseries_dataframe(
     vCOM: np.ndarray,
     xCOM: np.ndarray,
     mos: Any,
-    angles: Any,
+    angles: Any | None,
     lower_limb_angles: Any | None,
     torque_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
@@ -213,47 +214,64 @@ def _make_timeseries_dataframe(
         "AnkleDorsi_R_deg": ankle_dorsi_R_deg,
     }
 
-    # Joint angles (standard = ana0):
-    # - unify L/R sign meaning (LEFT Hip/Knee/Ankle Y/Z negated)
-    # - no quiet-standing baseline subtraction; outputs are onset-zeroed (platform onset)
-    df_angles = pl.DataFrame(
-        {
-            "MocapFrame": mocap_frames,
-            "Hip_L_X_deg": angles.hip_L_X,
-            "Hip_L_Y_deg": angles.hip_L_Y,
-            "Hip_L_Z_deg": angles.hip_L_Z,
-            "Hip_R_X_deg": angles.hip_R_X,
-            "Hip_R_Y_deg": angles.hip_R_Y,
-            "Hip_R_Z_deg": angles.hip_R_Z,
-            "Knee_L_X_deg": angles.knee_L_X,
-            "Knee_L_Y_deg": angles.knee_L_Y,
-            "Knee_L_Z_deg": angles.knee_L_Z,
-            "Knee_R_X_deg": angles.knee_R_X,
-            "Knee_R_Y_deg": angles.knee_R_Y,
-            "Knee_R_Z_deg": angles.knee_R_Z,
-            "Ankle_L_X_deg": angles.ankle_L_X,
-            "Ankle_L_Y_deg": angles.ankle_L_Y,
-            "Ankle_L_Z_deg": angles.ankle_L_Z,
-            "Ankle_R_X_deg": angles.ankle_R_X,
-            "Ankle_R_Y_deg": angles.ankle_R_Y,
-            "Ankle_R_Z_deg": angles.ankle_R_Z,
-            "Trunk_X_deg": angles.trunk_X,
-            "Trunk_Y_deg": angles.trunk_Y,
-            "Trunk_Z_deg": angles.trunk_Z,
-            "Neck_X_deg": angles.neck_X,
-            "Neck_Y_deg": angles.neck_Y,
-            "Neck_Z_deg": angles.neck_Z,
-        }
-    )
-    df_pp, _meta_pp = postprocess_joint_angles(
-        df_angles,
-        frame_col="MocapFrame",
-        unify_lr_sign=True,
-        baseline_frames=None,
-    )
-    angle_cols = [c for c in df_pp.columns if c.endswith("_deg")]
-    for c in angle_cols:
-        payload[c] = subtract_baseline_at_index(df_pp[c].to_numpy(), onset_idx0)
+    if angles is None:
+        # Some C3D files may lack required trunk/neck markers (e.g., T10).
+        # Keep the trial and export NaNs for joint angles rather than failing
+        # the whole batch export.
+        angle_cols = [
+            "Hip_L_X_deg", "Hip_L_Y_deg", "Hip_L_Z_deg",
+            "Hip_R_X_deg", "Hip_R_Y_deg", "Hip_R_Z_deg",
+            "Knee_L_X_deg", "Knee_L_Y_deg", "Knee_L_Z_deg",
+            "Knee_R_X_deg", "Knee_R_Y_deg", "Knee_R_Z_deg",
+            "Ankle_L_X_deg", "Ankle_L_Y_deg", "Ankle_L_Z_deg",
+            "Ankle_R_X_deg", "Ankle_R_Y_deg", "Ankle_R_Z_deg",
+            "Trunk_X_deg", "Trunk_Y_deg", "Trunk_Z_deg",
+            "Neck_X_deg", "Neck_Y_deg", "Neck_Z_deg",
+        ]
+        for c in angle_cols:
+            payload[c] = np.full(end_frame, np.nan, dtype=float)
+    else:
+        # Joint angles (standard = ana0):
+        # - unify L/R sign meaning (LEFT Hip/Knee/Ankle Y/Z negated)
+        # - no quiet-standing baseline subtraction; outputs are onset-zeroed (platform onset)
+        df_angles = pl.DataFrame(
+            {
+                "MocapFrame": mocap_frames,
+                "Hip_L_X_deg": angles.hip_L_X,
+                "Hip_L_Y_deg": angles.hip_L_Y,
+                "Hip_L_Z_deg": angles.hip_L_Z,
+                "Hip_R_X_deg": angles.hip_R_X,
+                "Hip_R_Y_deg": angles.hip_R_Y,
+                "Hip_R_Z_deg": angles.hip_R_Z,
+                "Knee_L_X_deg": angles.knee_L_X,
+                "Knee_L_Y_deg": angles.knee_L_Y,
+                "Knee_L_Z_deg": angles.knee_L_Z,
+                "Knee_R_X_deg": angles.knee_R_X,
+                "Knee_R_Y_deg": angles.knee_R_Y,
+                "Knee_R_Z_deg": angles.knee_R_Z,
+                "Ankle_L_X_deg": angles.ankle_L_X,
+                "Ankle_L_Y_deg": angles.ankle_L_Y,
+                "Ankle_L_Z_deg": angles.ankle_L_Z,
+                "Ankle_R_X_deg": angles.ankle_R_X,
+                "Ankle_R_Y_deg": angles.ankle_R_Y,
+                "Ankle_R_Z_deg": angles.ankle_R_Z,
+                "Trunk_X_deg": angles.trunk_X,
+                "Trunk_Y_deg": angles.trunk_Y,
+                "Trunk_Z_deg": angles.trunk_Z,
+                "Neck_X_deg": angles.neck_X,
+                "Neck_Y_deg": angles.neck_Y,
+                "Neck_Z_deg": angles.neck_Z,
+            }
+        )
+        df_pp, _meta_pp = postprocess_joint_angles(
+            df_angles,
+            frame_col="MocapFrame",
+            unify_lr_sign=True,
+            baseline_frames=None,
+        )
+        angle_cols = [c for c in df_pp.columns if c.endswith("_deg")]
+        for c in angle_cols:
+            payload[c] = subtract_baseline_at_index(df_pp[c].to_numpy(), onset_idx0)
 
     for key, values in torque_payload.items():
         payload[key] = values
@@ -706,7 +724,13 @@ def main() -> None:
                 end_frame=end_frame,
             )
 
-            angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+            angles = None
+            try:
+                angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+            except Exception as exc:
+                # Keep exporting COM/COP/GRF/MoS for trials that lack required
+                # joint-angle markers (e.g., T10). Export NaNs for joint angles.
+                print(f"[WARN] Joint angle computation skipped for {c3d_file.name}: {exc}")
 
             lower_limb_angles = None
             try:

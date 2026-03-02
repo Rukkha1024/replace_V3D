@@ -1,21 +1,8 @@
-"""Step vs. Non-step Biomechanical LMM Analysis.
+"""Step vs nonstep LMM (mixed-velocity trials).
 
-Answers: "Do biomechanical variables differ between step and non-step
-balance recovery strategies under identical perturbation intensity?"
-
-Statistical method: Linear Mixed Model (LMM) with lmerTest inference
-  Model: DV ~ step_TF + (1|subject)
-  Multiple comparison: Benjamini-Hochberg FDR per variable family
-  Analysis window: [platform_onset, step_onset] per trial
-    - step trials: actual step_onset_local
-    - nonstep trials: mean step_onset of same (subject, velocity) step trials
-
-Produces:
-  - 3 publication-quality figures (saved alongside this script)
-  - stdout summary statistics
-
-Usage:
-    conda run -n module python analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py
+Aggregates per-trial features in the [platform onset, step onset] window, fits
+`DV ~ step_TF + (1|subject)` (REML), applies BH-FDR within kinematics/kinetics,
+and writes `lmm_results.csv`, figures, and `report.md`.
 """
 
 from __future__ import annotations
@@ -177,11 +164,9 @@ _JOINT_NAMES = [
     ("Neck", "Neck_X_deg"),
 ]
 
-FAMILY_BALANCE = "Balance/Stability"
-FAMILY_JOINT = "Joint Angles"
-FAMILY_FORCE = "Force/Torque"
+FAMILY_KINEMATICS = "운동학"
+FAMILY_KINETICS = "운동역학"
 FRAME_RATE_HZ = 100.0
-FIXED_300MS_FRAMES = int(round(0.300 * FRAME_RATE_HZ))
 
 
 def build_dv_specs() -> list[dict]:
@@ -190,29 +175,31 @@ def build_dv_specs() -> list[dict]:
 
     # COM
     for ax in _COM_AXES:
-        specs.append({"dv": f"COM_{ax}_range", "col": f"COM_{ax}", "agg": "range", "family": FAMILY_BALANCE})
-        specs.append({"dv": f"COM_{ax}_path_length", "col": f"COM_{ax}", "agg": "path_length", "family": FAMILY_BALANCE})
-        specs.append({"dv": f"vCOM_{ax}_peak", "col": f"vCOM_{ax}", "agg": "abs_peak", "family": FAMILY_BALANCE})
+        specs.append({"dv": f"COM_{ax}_range", "col": f"COM_{ax}", "agg": "range", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"COM_{ax}_path_length", "col": f"COM_{ax}", "agg": "path_length", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"vCOM_{ax}_peak", "col": f"vCOM_{ax}", "agg": "abs_peak", "family": FAMILY_KINETICS})
+        # "COM mean velocity" in the paper plan is treated as mean(|vCOM|) within the window.
+        specs.append({"dv": f"vCOM_{ax}_mean_abs", "col": f"vCOM_{ax}", "agg": "mean_abs", "family": FAMILY_KINETICS})
 
     # COP (onset-zeroed)
     for ax in _COP_AXES:
         col = f"COP_{ax}_m_onset0"
-        specs.append({"dv": f"COP_{ax}_range", "col": col, "agg": "range", "family": FAMILY_BALANCE})
-        specs.append({"dv": f"COP_{ax}_path_length", "col": col, "agg": "path_length", "family": FAMILY_BALANCE})
-        specs.append({"dv": f"COP_{ax}_peak_velocity", "col": col, "agg": "abs_peak_velocity", "family": FAMILY_BALANCE})
-        specs.append({"dv": f"COP_{ax}_mean_velocity", "col": col, "agg": "mean_velocity", "family": FAMILY_BALANCE})
+        specs.append({"dv": f"COP_{ax}_range", "col": col, "agg": "range", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"COP_{ax}_path_length", "col": col, "agg": "path_length", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"COP_{ax}_peak_velocity", "col": col, "agg": "abs_peak_velocity", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"COP_{ax}_mean_velocity", "col": col, "agg": "mean_velocity", "family": FAMILY_KINETICS})
 
     # MoS
-    specs.append({"dv": "MOS_minDist_signed_min", "col": "MOS_minDist_signed", "agg": "min_val", "family": FAMILY_BALANCE})
-    specs.append({"dv": "MOS_AP_v3d_min", "col": "MOS_AP_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
-    specs.append({"dv": "MOS_ML_v3d_min", "col": "MOS_ML_v3d", "agg": "min_val", "family": FAMILY_BALANCE})
+    specs.append({"dv": "MOS_minDist_signed_min", "col": "MOS_minDist_signed", "agg": "min_val", "family": FAMILY_KINETICS})
+    specs.append({"dv": "MOS_AP_v3d_min", "col": "MOS_AP_v3d", "agg": "min_val", "family": FAMILY_KINETICS})
+    specs.append({"dv": "MOS_ML_v3d_min", "col": "MOS_ML_v3d", "agg": "min_val", "family": FAMILY_KINETICS})
     specs.append(
         {
             "dv": "xCOM_BOS_platformonset",
             "col": "xCOM_BOS_norm_frame",
             "agg": "value_at_event",
             "event_col": "platform_eval_frame",
-            "family": FAMILY_BALANCE,
+            "family": FAMILY_KINETICS,
         }
     )
     specs.append(
@@ -221,23 +208,45 @@ def build_dv_specs() -> list[dict]:
             "col": "xCOM_BOS_norm_frame",
             "agg": "value_at_event",
             "event_col": "steponset_eval_frame",
-            "family": FAMILY_BALANCE,
+            "family": FAMILY_KINETICS,
+        }
+    )
+    # Supplementary (size interpretation): (xCOM_hof - BOS_rear) * 100 [cm]
+    # NOTE: Not included in LMM/FDR. Reported descriptively only.
+    specs.append(
+        {
+            "dv": "xCOM_BOS_cm_platformonset",
+            "col": "xCOM_BOS_cm_frame",
+            "agg": "value_at_event",
+            "event_col": "platform_eval_frame",
+            "family": FAMILY_KINETICS,
+            "run_lmm": False,
+        }
+    )
+    specs.append(
+        {
+            "dv": "xCOM_BOS_cm_steponset",
+            "col": "xCOM_BOS_cm_frame",
+            "agg": "value_at_event",
+            "event_col": "steponset_eval_frame",
+            "family": FAMILY_KINETICS,
+            "run_lmm": False,
         }
     )
 
     # Joint angles (sagittal plane, stance-equivalent side)
     for name, col in _JOINT_NAMES:
-        specs.append({"dv": f"{name}_ROM", "col": col, "agg": "range", "family": FAMILY_JOINT})
-        specs.append({"dv": f"{name}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_JOINT})
+        specs.append({"dv": f"{name}_ROM", "col": col, "agg": "range", "family": FAMILY_KINEMATICS})
+        specs.append({"dv": f"{name}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINEMATICS})
 
     # GRF
     for ax in _GRF_AXES:
         col = f"GRF_{ax}_N"
-        specs.append({"dv": f"GRF_{ax}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_FORCE})
-        specs.append({"dv": f"GRF_{ax}_range", "col": col, "agg": "range", "family": FAMILY_FORCE})
+        specs.append({"dv": f"GRF_{ax}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINETICS})
+        specs.append({"dv": f"GRF_{ax}_range", "col": col, "agg": "range", "family": FAMILY_KINETICS})
 
     # Ankle torque
-    specs.append({"dv": "AnkleTorqueMid_Y_peak", "col": "AnkleTorqueMid_int_Y_Nm_per_kg", "agg": "abs_peak", "family": FAMILY_FORCE})
+    specs.append({"dv": "AnkleTorqueMid_Y_peak", "col": "AnkleTorqueMid_int_Y_Nm_per_kg", "agg": "abs_peak", "family": FAMILY_KINETICS})
 
     return specs
 
@@ -426,6 +435,8 @@ def aggregate_trial_features(df: pl.DataFrame, specs: list[dict]) -> pl.DataFram
                     / ((pl.col(col).filter(in_window).count() - 1).cast(pl.Float64) * 0.01)
                 ).alias(dv)
             )
+        elif agg == "mean_abs":
+            agg_exprs.append(pl.col(col).filter(in_window).abs().mean().alias(dv))
         elif agg == "value_at_event":
             event_col = spec.get("event_col")
             if not event_col:
@@ -579,6 +590,17 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
         tie_subjects = major_side.loc[major_side["major_step_side"] == "tie", "subject"].tolist()
         print(f"  tie subjects use nonstep average (L+R)/2: {', '.join(tie_subjects)}")
 
+    # Step trials without step_onset_local cannot define the window end. Drop them.
+    n_step_missing_onset = (
+        df.filter((pl.col("step_TF") == "step") & pl.col("step_onset_local").is_null())
+        .select(TRIAL_KEYS)
+        .unique()
+        .height
+    )
+    if n_step_missing_onset > 0:
+        print(f"  Warning: dropping step trials with missing step_onset_local: {n_step_missing_onset}")
+        df = df.filter(~((pl.col("step_TF") == "step") & pl.col("step_onset_local").is_null()))
+
     # Compute per-trial end_frame (step_onset or subject-velocity mean)
     print("  Computing per-trial end_frame [platform_onset → step_onset]...")
     end_frames = _compute_end_frames(df, platform)
@@ -587,19 +609,20 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
     end_pl = pl.from_pandas(end_frames[TRIAL_KEYS + ["end_frame"]])
     df = df.join(end_pl, on=TRIAL_KEYS, how="left")
 
-    print("  Building xCOM/BOS event features (platform_onset, steponset/300ms)...")
+    print("  Building xCOM/BOS event features (platform_onset, step_onset)...")
     df = df.with_columns(
         pl.col("platform_onset_local")
         .cast(pl.Int64, strict=False)
         .alias("platform_eval_frame"),
-        pl.when(pl.col("step_TF") == "step")
-        .then(pl.col("end_frame").cast(pl.Int64, strict=False))
-        .otherwise((pl.col("platform_onset_local") + FIXED_300MS_FRAMES).cast(pl.Int64, strict=False))
-        .alias("steponset_eval_frame"),
+        pl.col("end_frame").cast(pl.Int64, strict=False).alias("steponset_eval_frame"),
         pl.when((pl.col("BOS_maxX") - pl.col("BOS_minX")) > 0)
         .then((pl.col("xCOM_X") - pl.col("BOS_minX")) / (pl.col("BOS_maxX") - pl.col("BOS_minX")))
         .otherwise(None)
         .alias("xCOM_BOS_norm_frame"),
+        pl.when(pl.col("BOS_minX").is_not_null())
+        .then((pl.col("xCOM_X") - pl.col("BOS_minX")) * 100.0)
+        .otherwise(None)
+        .alias("xCOM_BOS_cm_frame"),
     )
 
     event_bounds = (
@@ -621,14 +644,33 @@ def load_and_prepare(csv_path: Path, xlsm_path: Path, specs: list[dict]) -> pd.D
         | (pl.col("steponset_eval_frame") > pl.col("frame_max"))
     ).height
     if n_platform_oob > 0 or n_step_oob > 0:
-        raise ValueError(
-            "Event frame out of trial range: "
-            f"platform={n_platform_oob}, steponset={n_step_oob}"
+        oob = event_bounds.filter(
+            (pl.col("platform_eval_frame") < pl.col("frame_min"))
+            | (pl.col("platform_eval_frame") > pl.col("frame_max"))
+            | (pl.col("steponset_eval_frame") < pl.col("frame_min"))
+            | (pl.col("steponset_eval_frame") > pl.col("frame_max"))
+        ).select(TRIAL_KEYS)
+        print(
+            "  Warning: event frame out of trial range; dropping trials. "
+            f"platform_oob={n_platform_oob}, steponset_oob={n_step_oob}"
         )
-    print(f"  Event frame range validation passed: platform_oob={n_platform_oob}, steponset_oob={n_step_oob}")
+        df = df.join(oob, on=TRIAL_KEYS, how="anti")
+    else:
+        print(f"  Event frame range validation passed: platform_oob={n_platform_oob}, steponset_oob={n_step_oob}")
 
     print("  Aggregating to trial-level features [platform_onset, step_onset] window...")
     trial_pl = aggregate_trial_features(df, specs)
+    trial_window = (
+        df.filter(pl.col("end_frame").is_not_null())
+        .group_by(TRIAL_KEYS)
+        .agg(
+            pl.col("platform_onset_local").drop_nulls().first().cast(pl.Int64).alias("platform_onset_local"),
+            pl.col("end_frame").drop_nulls().first().cast(pl.Int64).alias("end_frame"),
+            pl.col("step_onset_local").drop_nulls().first().cast(pl.Int64).alias("step_onset_local"),
+        )
+        .sort(TRIAL_KEYS)
+    )
+    trial_pl = trial_pl.join(trial_window, on=TRIAL_KEYS, how="left")
     trial_df = trial_pl.to_pandas()
 
     # Normalize types for join
@@ -745,7 +787,8 @@ def fit_lmm_all(trial_df: pd.DataFrame, specs: list[dict]) -> pd.DataFrame:
     """Fit LMM for each DV via Rscript, return results with FDR correction."""
 
     # Prepare data for R: subject, velocity, trial, step_TF + all DVs
-    dv_names = [s["dv"] for s in specs]
+    lmm_specs = [s for s in specs if s.get("run_lmm", True)]
+    dv_names = [s["dv"] for s in lmm_specs]
     cols_to_export = TRIAL_KEYS + ["step_TF"] + dv_names
     export_df = trial_df[cols_to_export].copy()
 
@@ -793,7 +836,7 @@ def fit_lmm_all(trial_df: pd.DataFrame, specs: list[dict]) -> pd.DataFrame:
                 pass
 
     # Add family info
-    dv_to_family = {s["dv"]: s["family"] for s in specs}
+    dv_to_family = {s["dv"]: s["family"] for s in lmm_specs}
     results["family"] = results["dv"].map(dv_to_family)
 
     # Apply BH-FDR per family
@@ -833,7 +876,7 @@ def print_results_table(results: pd.DataFrame) -> None:
     print(fmt.format("DV", "Family", "Estimate", "SE", "t", "Sig"))
     print("-" * 90)
 
-    for fam in [FAMILY_BALANCE, FAMILY_JOINT, FAMILY_FORCE]:
+    for fam in [FAMILY_KINETICS, FAMILY_KINEMATICS]:
         sub = results[results["family"] == fam]
         for _, row in sub.iterrows():
             est = f"{row['estimate']:.4f}" if pd.notna(row["estimate"]) else "FAIL"
@@ -866,9 +909,8 @@ def print_results_table(results: pd.DataFrame) -> None:
 
 COLORS = {"step": "#E74C3C", "nonstep": "#3498DB"}
 FAMILY_COLORS = {
-    FAMILY_BALANCE: "#2ECC71",
-    FAMILY_JOINT: "#9B59B6",
-    FAMILY_FORCE: "#E67E22",
+    FAMILY_KINETICS: "#2ECC71",
+    FAMILY_KINEMATICS: "#9B59B6",
 }
 
 
@@ -1022,6 +1064,153 @@ def fig3_heatmap(results: pd.DataFrame, out_dir: Path, dpi: int) -> None:
     plt.close(fig)
 
 
+def _fmt_ms_from_frames(frames: float, frame_rate_hz: float = FRAME_RATE_HZ) -> str:
+    if pd.isna(frames):
+        return "NA"
+    return f"{(float(frames) / float(frame_rate_hz)) * 1000.0:.1f}"
+
+
+def write_report_md(
+    *,
+    out_path: Path,
+    trial_df: pd.DataFrame,
+    results: pd.DataFrame,
+    specs: list[dict],
+) -> None:
+    """Write/overwrite report.md using the current run results."""
+    def _fmt(x: float | int | None, ndigits: int = 4) -> str:
+        if x is None or pd.isna(x):
+            return ""
+        return f"{float(x):.{ndigits}f}"
+
+    lmm_specs = [s for s in specs if s.get("run_lmm", True)]
+    all_dvs = [s["dv"] for s in lmm_specs]
+
+    n_trials = int(len(trial_df))
+    n_subjects = int(trial_df["subject"].astype(str).nunique())
+    n_step = int((trial_df["step_TF"] == "step").sum())
+    n_nonstep = int((trial_df["step_TF"] == "nonstep").sum())
+
+    # Window duration (frames) is end_frame - platform_onset_local. Both are in MocapFrame units.
+    if "platform_onset_local" in trial_df.columns and "end_frame" in trial_df.columns:
+        durations = (trial_df["end_frame"] - trial_df["platform_onset_local"]).dropna()
+        duration_mean_ms = _fmt_ms_from_frames(durations.mean())
+        duration_sd_ms = _fmt_ms_from_frames(durations.std(ddof=1))
+        duration_min_ms = _fmt_ms_from_frames(durations.min())
+        duration_max_ms = _fmt_ms_from_frames(durations.max())
+    else:
+        duration_mean_ms = duration_sd_ms = duration_min_ms = duration_max_ms = "NA"
+
+    n_sig = int((results["sig"] != "").sum())
+    n_total = int(len(results))
+
+    # Requested key variables
+    key_vars = ["Trunk_peak", "xCOM_BOS_platformonset", "xCOM_BOS_steponset"]
+    key_rows = results[results["dv"].isin(key_vars)].copy()
+
+    # Supplementary cm interpretation variables (descriptive only; not in results)
+    cm_vars = ["xCOM_BOS_cm_platformonset", "xCOM_BOS_cm_steponset"]
+    cm_lines: list[str] = []
+    for v in cm_vars:
+        if v not in trial_df.columns:
+            continue
+        sub = trial_df[trial_df["step_TF"].isin(["step", "nonstep"])].dropna(subset=[v])
+        m_step = sub.loc[sub["step_TF"] == "step", v].mean()
+        sd_step = sub.loc[sub["step_TF"] == "step", v].std(ddof=1)
+        m_ns = sub.loc[sub["step_TF"] == "nonstep", v].mean()
+        sd_ns = sub.loc[sub["step_TF"] == "nonstep", v].std(ddof=1)
+        diff = m_step - m_ns
+        cm_lines.append(
+            f"| `{v}` | {m_step:.2f}±{sd_step:.2f} | {m_ns:.2f}±{sd_ns:.2f} | {diff:.2f} |"
+        )
+
+    # Full results table (markdown)
+    full_table_lines = [
+        "| DV | Family | Estimate | SE | t | p_fdr | Sig |",
+        "|---|---|---:|---:|---:|---:|---|",
+    ]
+    for _, row in results.sort_values(["family", "p_fdr", "dv"]).iterrows():
+        p_fdr = "" if pd.isna(row["p_fdr"]) else f"{float(row['p_fdr']):.6f}"
+        sig = row["sig"] if row["sig"] else "n.s."
+        full_table_lines.append(
+            f"| `{row['dv']}` | {row['family']} | {_fmt(row.get('estimate'), 4)} | {_fmt(row.get('SE'), 4)} | {_fmt(row.get('t_value'), 3)} | {p_fdr} | {sig} |"
+        )
+
+    key_table_lines = [
+        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for _, row in key_rows.sort_values("dv").iterrows():
+        sig = row["sig"] if row["sig"] else "n.s."
+        key_table_lines.append(
+            f"| `{row['dv']}` | {_fmt(row.get('mean_step'), 4)}±{_fmt(row.get('sd_step'), 4)} | {_fmt(row.get('mean_nonstep'), 4)}±{_fmt(row.get('sd_nonstep'), 4)} | {_fmt(row.get('estimate'), 4)} | {sig} |"
+        )
+
+    lines: list[str] = []
+    lines.append("# Step vs. Non-step LMM Analysis (Re-run)")
+    lines.append("")
+    lines.append("## Research Question")
+    lines.append("")
+    lines.append("**동일 perturbation 강도(mixed velocity)에서 step vs non-step 균형회복 전략 간 biomechanical 변수 차이가 있는가?**")
+    lines.append("")
+    lines.append("## Data & Window")
+    lines.append("")
+    lines.append(f"- Input: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`")
+    lines.append(f"- Trials: **{n_trials}** (step={n_step}, nonstep={n_nonstep}), subjects={n_subjects}")
+    lines.append("- Window: `[platform_onset_local, step_onset_local]`")
+    lines.append("  - step: trial의 실제 `step_onset_local`")
+    lines.append("  - nonstep: 동일 (subject, velocity) step trial의 `step_onset_local` 평균을 대입")
+    lines.append(
+        f"- Window duration (ms): mean={duration_mean_ms}, sd={duration_sd_ms}, range=[{duration_min_ms}, {duration_max_ms}]"
+    )
+    lines.append("")
+    lines.append("## Model & Multiple Comparisons")
+    lines.append("")
+    lines.append("- Model (DV별 독립): `DV ~ step_TF + (1|subject)` (REML, R `lmerTest`)")
+    lines.append("- Multiple comparison: Benjamini–Hochberg FDR (BH-FDR), family-wise")
+    lines.append(f"  - {FAMILY_KINETICS}: COM/COP/GRF/MoS/xCOM-BOS 등")
+    lines.append(f"  - {FAMILY_KINEMATICS}: Hip/Knee/Ankle/Trunk/Neck (ROM/peak)")
+    lines.append("")
+    lines.append("## Results (BH-FDR, alpha=0.05)")
+    lines.append("")
+    lines.append(f"- FDR significant: **{n_sig}/{n_total}** (LMM DVs only; supplementary DVs excluded)")
+    lines.append("")
+    lines.append("### Key Variables")
+    lines.append("")
+    lines.extend(key_table_lines)
+    lines.append("")
+    if cm_lines:
+        lines.append("### Supplementary (size interpretation; not used for significance)")
+        lines.append("")
+        lines.append("| Variable | Step (M±SD, cm) | Nonstep (M±SD, cm) | Δ (step−nonstep, cm) |")
+        lines.append("|---|---:|---:|---:|")
+        lines.extend(cm_lines)
+        lines.append("")
+        lines.append("- `xCOM_BOS_cm_*` = `(xCOM_hof - BOS_rear) × 100 [cm]`로 해석 가능한 보조 지표(거리 크기 해석용).")
+        lines.append("")
+    lines.append("### Full LMM Table")
+    lines.append("")
+    lines.extend(full_table_lines)
+    lines.append("")
+    lines.append("## Reproduction")
+    lines.append("")
+    lines.append("```bash")
+    lines.append("conda run --no-capture-output -n module python analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py")
+    lines.append("```")
+    lines.append("")
+    lines.append("## Figures")
+    lines.append("")
+    lines.append("| File | Description |")
+    lines.append("|---|---|")
+    lines.append("| `fig1_lmm_forest_plot.png` | LMM estimate ± 95% CI |")
+    lines.append("| `fig2_violin_significant.png` | Significant DV violin/strip |")
+    lines.append("| `fig3_descriptive_heatmap.png` | z-scored group mean heatmap |")
+    lines.append("")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8-sig")
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -1055,7 +1244,7 @@ def main() -> None:
 
     # Save full LMM results for documentation
     results_csv = out_dir / "lmm_results.csv"
-    results.to_csv(results_csv, index=False)
+    results.to_csv(results_csv, index=False, encoding="utf-8-sig")
     print(f"  Saved results to {results_csv}")
 
     # --- Milestone 3 ---
@@ -1071,6 +1260,10 @@ def main() -> None:
 
         fig3_heatmap(results, out_dir, dpi)
         print("  fig3_descriptive_heatmap.png")
+
+    print("\n[M4] Writing report.md...")
+    write_report_md(out_path=out_dir / "report.md", trial_df=trial_df, results=results, specs=specs)
+    print("  report.md")
 
     print("\n" + "=" * 60)
     print("Analysis complete.")

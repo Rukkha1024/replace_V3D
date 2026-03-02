@@ -1,156 +1,94 @@
-# Step vs. Non-step Biomechanical LMM Analysis
+﻿# Step vs. Non-step LMM Analysis (Re-run)
 
 ## Research Question
 
-**"동일 perturbation 강도에서 step과 non-step 균형회복 전략 간 biomechanical 변수 차이가 있는가?"**
+**동일 perturbation 강도(mixed velocity)에서 step vs non-step 균형회복 전략 간 biomechanical 변수 차이가 있는가?**
 
-이번 분석은 step/non-step가 함께 존재하는 mixed velocity trial에서, pre-step 구간의 biomechanical 반응을 LMM으로 비교하는 목적이다.
+## Data & Window
 
-## Data & Model
-
-- Trials: **125** (step=53, nonstep=72), subjects=24
 - Input: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`
-- DVs: **36개** (Balance/Stability 19, Joint Angles 10, Force/Torque 7)
-- Window: `[platform_onset_local, end_frame]`
-  - step: `end_frame = actual step_onset_local`
-  - nonstep: subject-velocity step 평균 onset, 불가 시 prefilter `platform` fallback
-    - end_frame fill (subject-velocity mean): 68
-    - end_frame fill (prefilter platform subject-velocity mean): 5
-- Model: `DV ~ step_TF + (1|subject)`, REML (`lmerTest`)
-- Multiple comparison: BH-FDR (family-wise, alpha=0.05)
-- Stance-equivalent joint: major step side 기준 (step_r=14, step_l=14, tie=7)
+- Trials: **181** (step=108, nonstep=73), subjects=24
+- Window: `[platform_onset_local, step_onset_local]`
+  - step: trial의 실제 `step_onset_local`
+  - nonstep: 동일 (subject, velocity) step trial의 `step_onset_local` 평균을 대입
+- Window duration (ms): mean=502.9, sd=238.8, range=[150.0, 1400.0]
 
-요청 변수 정의:
-- `θtrunk,max`는 `Trunk_peak = max(|Trunk_X_deg|)`로 대응
-- `xCOM/BOS_platformonset = (xCOM_X - BOS_minX)/(BOS_maxX - BOS_minX)` at `platform_onset_local`
-- `xCOM/BOS_steponset`
-  - step: actual step onset
-  - nonstep: `platform_onset_local + 300 ms (30 frames)`
+## Model & Multiple Comparisons
 
-## Results
+- Model (DV별 독립): `DV ~ step_TF + (1|subject)` (REML, R `lmerTest`)
+- Multiple comparison: Benjamini–Hochberg FDR (BH-FDR), family-wise
+  - 운동역학: COM/COP/GRF/MoS/xCOM-BOS 등
+  - 운동학: Hip/Knee/Ankle/Trunk/Neck (ROM/peak)
 
-### Overall
+## Results (BH-FDR, alpha=0.05)
 
-- **FDR significant: 14/36**
+- FDR significant: **15/38** (LMM DVs only; supplementary DVs excluded)
 
-| Family | Total DVs | Significant DVs |
-|---|---:|---:|
-| Balance/Stability | 19 | 10 |
-| Joint Angles | 10 | 2 |
-| Force/Torque | 7 | 2 |
-
-### Full LMM Results
-
-| DV | Family | Estimate | SE | t | Sig |
-|---|---|---:|---:|---:|---|
-| `COM_X_range` | Balance/Stability | -0.0015 | 0.0015 | -0.972 | n.s. |
-| `COM_X_path_length` | Balance/Stability | 0.0005 | 0.0016 | 0.297 | n.s. |
-| `vCOM_X_peak` | Balance/Stability | -0.0001 | 0.0043 | -0.027 | n.s. |
-| `COM_Y_range` | Balance/Stability | 0.0009 | 0.0011 | 0.826 | n.s. |
-| `COM_Y_path_length` | Balance/Stability | 0.0012 | 0.0011 | 1.084 | n.s. |
-| `vCOM_Y_peak` | Balance/Stability | 0.0230 | 0.0047 | 4.913 | *** |
-| `COP_X_range` | Balance/Stability | 0.0119 | 0.0200 | 0.593 | n.s. |
-| `COP_X_path_length` | Balance/Stability | 0.0349 | 0.0410 | 0.851 | n.s. |
-| `COP_X_peak_velocity` | Balance/Stability | 2.3092 | 2.0353 | 1.135 | n.s. |
-| `COP_X_mean_velocity` | Balance/Stability | 0.1742 | 0.1883 | 0.925 | n.s. |
-| `COP_Y_range` | Balance/Stability | 0.0594 | 0.0060 | 9.971 | *** |
-| `COP_Y_path_length` | Balance/Stability | 0.0685 | 0.0089 | 7.708 | *** |
-| `COP_Y_peak_velocity` | Balance/Stability | 0.7236 | 0.1329 | 5.445 | *** |
-| `COP_Y_mean_velocity` | Balance/Stability | 0.1494 | 0.0192 | 7.786 | *** |
-| `MOS_minDist_signed_min` | Balance/Stability | -0.0141 | 0.0027 | -5.282 | *** |
-| `MOS_AP_v3d_min` | Balance/Stability | -0.0136 | 0.0027 | -5.041 | *** |
-| `MOS_ML_v3d_min` | Balance/Stability | -0.0053 | 0.0022 | -2.389 | * |
-| `xCOM_BOS_platformonset` | Balance/Stability | -0.0513 | 0.0080 | -6.441 | *** |
-| `xCOM_BOS_steponset` | Balance/Stability | -0.1008 | 0.0156 | -6.458 | *** |
-| `Hip_stance_ROM` | Joint Angles | 1.1553 | 0.3391 | 3.407 | ** |
-| `Hip_stance_peak` | Joint Angles | 1.2650 | 0.3295 | 3.839 | ** |
-| `Knee_stance_ROM` | Joint Angles | 0.6453 | 0.3730 | 1.730 | n.s. |
-| `Knee_stance_peak` | Joint Angles | 0.5509 | 0.3651 | 1.509 | n.s. |
-| `Ankle_stance_ROM` | Joint Angles | 0.1893 | 0.5049 | 0.375 | n.s. |
-| `Ankle_stance_peak` | Joint Angles | 0.1941 | 0.4763 | 0.407 | n.s. |
-| `Trunk_ROM` | Joint Angles | 0.7324 | 0.5098 | 1.437 | n.s. |
-| `Trunk_peak` | Joint Angles | 0.5205 | 0.5024 | 1.036 | n.s. |
-| `Neck_ROM` | Joint Angles | 2.5034 | 1.0518 | 2.380 | n.s. |
-| `Neck_peak` | Joint Angles | 2.4130 | 1.0639 | 2.268 | n.s. |
-| `GRF_X_peak` | Force/Torque | 1.8828 | 10.9093 | 0.173 | n.s. |
-| `GRF_X_range` | Force/Torque | 13.8490 | 20.6084 | 0.672 | n.s. |
-| `GRF_Y_peak` | Force/Torque | 26.3340 | 3.5593 | 7.399 | *** |
-| `GRF_Y_range` | Force/Torque | 39.0415 | 4.4292 | 8.815 | *** |
-| `GRF_Z_peak` | Force/Torque | 21.3140 | 17.5549 | 1.214 | n.s. |
-| `GRF_Z_range` | Force/Torque | 22.5322 | 19.4730 | 1.157 | n.s. |
-| `AnkleTorqueMid_Y_peak` | Force/Torque | -0.0681 | 0.0339 | -2.005 | n.s. |
-
-### Requested Variables (Step vs Nonstep)
+### Key Variables
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
-| `θtrunk,max` (`Trunk_peak`) | 8.2162±3.6414 | 7.8527±3.0502 | 0.5205 | n.s. |
-| `xCOM/BOS_platformonset` | 0.6318±0.0681 | 0.7005±0.0727 | -0.0513 | *** |
-| `xCOM/BOS_steponset` | 0.2817±0.2073 | 0.3668±0.1242 | -0.1008 | *** |
+| `Trunk_peak` | 4.4225±5.6911 | 3.8789±4.2274 | 0.6542 | n.s. |
+| `xCOM_BOS_platformonset` | 0.6325±0.0680 | 0.7004±0.0722 | -0.0574 | *** |
+| `xCOM_BOS_steponset` | 0.2833±0.1739 | 0.4048±0.1088 | -0.1240 | *** |
 
-### FDR Significant Variables (p_fdr 순)
+### Supplementary (size interpretation; not used for significance)
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
-|---|---:|---:|---:|---|
-| `COP_Y_range` | 0.1034±0.0409 | 0.0484±0.0354 | 0.0594 | *** |
-| `GRF_Y_range` | 70.4857±38.3969 | 34.2181±19.4201 | 39.0415 | *** |
-| `COP_Y_mean_velocity` | 0.3288±0.1648 | 0.2092±0.1430 | 0.1494 | *** |
-| `COP_Y_path_length` | 0.1535±0.0709 | 0.0964±0.0700 | 0.0685 | *** |
-| `GRF_Y_peak` | 51.0308±29.5295 | 25.8191±15.1209 | 26.3340 | *** |
-| `xCOM_BOS_platformonset` | 0.6318±0.0681 | 0.7005±0.0727 | -0.0513 | *** |
-| `xCOM_BOS_steponset` | 0.2817±0.2073 | 0.3668±0.1242 | -0.1008 | *** |
-| `COP_Y_peak_velocity` | 1.6746±0.9534 | 1.1466±1.0364 | 0.7236 | *** |
-| `MOS_minDist_signed_min` | 0.0335±0.0282 | 0.0489±0.0121 | -0.0141 | *** |
-| `MOS_AP_v3d_min` | 0.0383±0.0282 | 0.0532±0.0126 | -0.0136 | *** |
-| `vCOM_Y_peak` | 0.0561±0.0294 | 0.0340±0.0239 | 0.0230 | *** |
-| `Hip_stance_peak` | 8.2162±3.6414 | 7.8527±3.0502 | 1.2650 | ** |
-| `Hip_stance_ROM` | 8.3574±3.6196 | 8.3193±3.9006 | 1.1553 | ** |
-| `MOS_ML_v3d_min` | 0.1312±0.0171 | 0.1354±0.0153 | -0.0053 | * |
+| Variable | Step (M±SD, cm) | Nonstep (M±SD, cm) | Δ (step−nonstep, cm) |
+|---|---:|---:|---:|
+| `xCOM_BOS_cm_platformonset` | 12.91±1.64 | 14.43±1.61 | -1.51 |
+| `xCOM_BOS_cm_steponset` | 5.92±3.74 | 8.21±2.39 | -2.29 |
 
-### 결과 해석
+- `xCOM_BOS_cm_*` = `(xCOM_hof - BOS_rear) × 100 [cm]`로 해석 가능한 보조 지표(거리 크기 해석용).
 
-**Balance/Stability (10/19 유의)**
-- **AP 방향 (Y축) 변수 집중 유의**: COP_Y_range, COP_Y_path_length, COP_Y_peak_velocity, COP_Y_mean_velocity, vCOM_Y_peak 모두 step > nonstep. step 전략 시 전후 방향 균형 조절이 더 크다.
-- **MoS 감소**: MOS_minDist_signed_min, MOS_AP_v3d_min, MOS_ML_v3d_min 모두 step < nonstep (음수 estimate). step 전략은 stability margin이 더 적다.
-- **xCOM/BOS (AP)**: platform onset과 step onset 시점 모두 step < nonstep. step 전략에서 xCOM이 BOS 내에서 상대적으로 전방에 위치(값이 작음).
-- **AP 방향 (X축) 변수**: COM_X, COP_X 관련 변수는 모두 비유의. 내외측 방향이 주요 차이 방향.
+### Full LMM Table
 
-**Joint Angles (2/10 유의)**
-- **Hip만 유의**: Hip_stance_ROM, Hip_stance_peak 모두 step > nonstep. Hip 전략 사용이 step에서 더 크다.
-- Trunk_peak (θtrunk,max)는 step>nonstep 경향이나 FDR 비유의 (t=1.036).
-- Ankle, Knee는 비유의.
-
-**Force/Torque (2/7 유의)**
-- **GRF_Y만 유의**: GRF_Y_peak(step=51.0N vs nonstep=25.8N), GRF_Y_range 모두 step >> nonstep. AP 방향 지면반력이 step에서 약 2배.
-- GRF_X, GRF_Z, AnkleTorque는 비유의.
-
-## Van Wouwe et al. - 2021 통합 비교
-
-이번 비교는 1:1 재현이 아니라, 요청하신 step/non-step 분리 관점으로 재해석한 대응표다.
-
-| 항목 | Van Wouwe et al. - 2021 | 현재 구현 | 현재 결과 | 판정 |
-|---|---|---|---|---|
-| 분석 단위 | subject별 variability + robust regression | pooled trial LMM (`DV ~ step_TF + (1|subject)`) | 집단 평균 차이 추정 | 구조 차이 |
-| `θtrunk,max` | 전략 변화(ankle/hip/step)의 핵심 지표 | `Trunk_peak=max(\|Trunk_X_deg\|)`로 대응 | step>nonstep 경향이나 FDR 비유의 (t=1.036) | Partially consistent |
-| `xCOM/BOS_onset` 대응 | anterior initial COM가 stepping 경향과 연관 | `xCOM_BOS_platformonset` | step(0.6318) < nonstep(0.7005), `***` | Inconsistent |
-| `xCOM/BOS_300ms` 대응 | later response 전략 관련 핵심 변수 | step=actual onset, nonstep=onset+300ms (`xCOM_BOS_steponset`) | step(0.2817) < nonstep(0.3668), `***` | Partially consistent |
-| 결론 레벨 | 초기 자세 + task-level goal 상호작용 강조 | goal parameter 직접 모델링 없음 | step/nonstep 집단 차이 중심 | 비교 범위 제한 |
-
-## Conclusion
-
-1. 본 데이터에서 step/non-step 분리는 **14/36** DV에서 FDR 유의했다.
-2. 유의 변수는 AP 방향 COP/COM/GRF 및 MoS에 집중되어, step 전략이 전후 방향 균형 반응 크기와 stability margin 감소에서 특징적으로 구분됨을 확인했다. 새로 추가된 COP mean velocity (path_length / window_duration) 역시 AP 방향(Y축)에서 유의했다.
-3. 요청 변수 3개 중 `xCOM/BOS_platformonset`, `xCOM/BOS_steponset`은 유의했고, `θtrunk,max(=Trunk_peak)`는 비유의였다.
-4. Joint 관절 중 Hip만 유의하여, step 전략에서 hip strategy 사용이 더 크다는 해석이 가능하다.
-5. Van Wouwe 2021과의 비교는 가능하지만, 통계 단위가 달라 완전한 1:1 대응은 아니다.
+| DV | Family | Estimate | SE | t | p_fdr | Sig |
+|---|---|---:|---:|---:|---:|---|
+| `COP_Y_range` | 운동역학 | 0.0555 | 0.0049 | 11.361 | 0.000000 | *** |
+| `GRF_Y_range` | 운동역학 | 34.7922 | 3.6148 | 9.625 | 0.000000 | *** |
+| `GRF_Y_peak` | 운동역학 | 25.3449 | 2.6827 | 9.447 | 0.000000 | *** |
+| `xCOM_BOS_platformonset` | 운동역학 | -0.0574 | 0.0066 | -8.736 | 0.000000 | *** |
+| `COP_Y_mean_velocity` | 운동역학 | 0.1454 | 0.0169 | 8.623 | 0.000000 | *** |
+| `xCOM_BOS_steponset` | 운동역학 | -0.1240 | 0.0143 | -8.658 | 0.000000 | *** |
+| `COP_Y_path_length` | 운동역학 | 0.0615 | 0.0083 | 7.398 | 0.000000 | *** |
+| `COP_Y_peak_velocity` | 운동역학 | 0.7913 | 0.1175 | 6.736 | 0.000000 | *** |
+| `vCOM_Y_peak` | 운동역학 | 0.0225 | 0.0036 | 6.203 | 0.000000 | *** |
+| `MOS_minDist_signed_min` | 운동역학 | -0.0121 | 0.0023 | -5.148 | 0.000002 | *** |
+| `MOS_AP_v3d_min` | 운동역학 | -0.0114 | 0.0023 | -4.938 | 0.000005 | *** |
+| `AnkleTorqueMid_Y_peak` | 운동역학 | -0.1271 | 0.0319 | -3.986 | 0.000239 | *** |
+| `MOS_ML_v3d_min` | 운동역학 | -0.0057 | 0.0019 | -3.065 | 0.005508 | ** |
+| `vCOM_Y_mean_abs` | 운동역학 | 0.0022 | 0.0015 | 1.448 | 0.299310 | n.s. |
+| `GRF_Z_peak` | 운동역학 | 14.0132 | 12.1393 | 1.154 | 0.466858 | n.s. |
+| `COM_X_range` | 운동역학 | -0.0012 | 0.0012 | -0.987 | 0.568750 | n.s. |
+| `GRF_Z_range` | 운동역학 | 13.4028 | 14.2731 | 0.939 | 0.575094 | n.s. |
+| `COP_X_mean_velocity` | 운동역학 | 0.0992 | 0.1309 | 0.758 | 0.662470 | n.s. |
+| `COP_X_peak_velocity` | 운동역학 | 1.0990 | 1.4167 | 0.776 | 0.662470 | n.s. |
+| `COM_X_path_length` | 운동역학 | 0.0004 | 0.0012 | 0.329 | 0.885960 | n.s. |
+| `COM_Y_path_length` | 운동역학 | 0.0003 | 0.0010 | 0.336 | 0.885960 | n.s. |
+| `COP_X_path_length` | 운동역학 | 0.0123 | 0.0285 | 0.431 | 0.885960 | n.s. |
+| `GRF_X_peak` | 운동역학 | 2.7440 | 8.6534 | 0.317 | 0.885960 | n.s. |
+| `vCOM_X_peak` | 운동역학 | -0.0010 | 0.0033 | -0.307 | 0.885960 | n.s. |
+| `vCOM_X_mean_abs` | 운동역학 | -0.0004 | 0.0016 | -0.223 | 0.922688 | n.s. |
+| `GRF_X_range` | 운동역학 | 2.8538 | 16.3623 | 0.174 | 0.928055 | n.s. |
+| `COM_Y_range` | 운동역학 | -0.0000 | 0.0010 | -0.035 | 0.976278 | n.s. |
+| `COP_X_range` | 운동역학 | -0.0004 | 0.0139 | -0.030 | 0.976278 | n.s. |
+| `Hip_stance_peak` | 운동학 | 1.1676 | 0.2852 | 4.094 | 0.000677 | *** |
+| `Hip_stance_ROM` | 운동학 | 1.0357 | 0.3028 | 3.420 | 0.003996 | ** |
+| `Neck_ROM` | 운동학 | 1.9024 | 0.9235 | 2.060 | 0.102657 | n.s. |
+| `Neck_peak` | 운동학 | 1.9772 | 0.9220 | 2.145 | 0.102657 | n.s. |
+| `Trunk_ROM` | 운동학 | 0.7528 | 0.5442 | 1.383 | 0.337054 | n.s. |
+| `Trunk_peak` | 운동학 | 0.6542 | 0.5354 | 1.222 | 0.372705 | n.s. |
+| `Ankle_stance_ROM` | 운동학 | -0.3758 | 0.5453 | -0.689 | 0.702431 | n.s. |
+| `Knee_stance_peak` | 운동학 | 0.2143 | 0.3812 | 0.562 | 0.718428 | n.s. |
+| `Ankle_stance_peak` | 운동학 | -0.1640 | 0.5072 | -0.323 | 0.746910 | n.s. |
+| `Knee_stance_ROM` | 운동학 | 0.1488 | 0.3916 | 0.380 | 0.746910 | n.s. |
 
 ## Reproduction
 
 ```bash
 conda run --no-capture-output -n module python analysis/step_vs_nonstep_lmm/analyze_step_vs_nonstep_lmm.py
 ```
-
-- `--no-figures` 옵션으로 figure 없이 통계만 재현 가능.
 
 ## Figures
 
