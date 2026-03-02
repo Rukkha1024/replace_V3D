@@ -616,7 +616,13 @@ def compute_absolute_onset_features(
                 for axis in ANGLE_AXES:
                     attr = f"{seg_key}_{side}_{axis}"
                     col = f"{seg}_{side}_{axis}_abs_onset"
-                    bilateral[col] = float(getattr(angles, attr)[idx0])
+                    v = float(getattr(angles, attr)[idx0])
+                    # Match repository joint-angle sign convention used by the CSV pipeline:
+                    # LEFT Hip/Knee/Ankle Y/Z are negated so that Y/Z sign meaning matches RIGHT.
+                    # This matters when we later mix stance across L/R.
+                    if side == "L" and axis in ("Y", "Z"):
+                        v *= -1.0
+                    bilateral[col] = v
         for seg in MIDLINE_SEGMENTS:
             seg_key = seg.lower()
             for axis in ANGLE_AXES:
@@ -1301,6 +1307,11 @@ def write_segment_angle_markdown(
     step_onset_stats: dict[str, Any],
     verdict_pass: bool,
 ) -> None:
+    """Write segment-angle results markdown while preserving the manual interpretation body.
+
+    The top tables + metadata are refreshed on each run, but the detailed narrative under
+    '# 결과 해석' is user-edited and should not be destroyed by re-runs.
+    """
     platform_dvs = _joint_angle_abs_cols()
     step_dvs = _joint_angle_step_cols()
     table = _build_joint_angle_table(results, platform_dvs)
@@ -1329,6 +1340,20 @@ def write_segment_angle_markdown(
 
     missing_ref_subjects = step_onset_stats.get("missing_ref_subjects", [])
     missing_ref_subjects_str = ", ".join(missing_ref_subjects) if missing_ref_subjects else "(none)"
+
+    preserved_interpretation = ""
+    if segment_md.exists():
+        existing = segment_md.read_text(encoding="utf-8-sig")
+        marker = "# 결과 해석"
+        start = existing.find(marker)
+        if start != -1:
+            end = existing.find("\n# 결론", start)
+            if end == -1:
+                preserved_interpretation = existing[start:].strip()
+            else:
+                preserved_interpretation = existing[start:end].strip()
+    if not preserved_interpretation:
+        preserved_interpretation = "# 결과 해석\n\n(여기에 해석을 작성하세요.)"
 
     text = f"""---
 ---
@@ -1370,6 +1395,8 @@ def write_segment_angle_markdown(
   - platform_onset: {joint_note}
   - step_onset: {step_joint_note}
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
+
+{preserved_interpretation}
 
 # 결론
 

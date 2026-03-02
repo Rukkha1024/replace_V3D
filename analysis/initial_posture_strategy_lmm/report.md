@@ -68,14 +68,14 @@
 | `MOS_ML_v3d` | Balance | testable | n.s. |
 | `xCOM_BOS_norm_onset` | Balance | testable | *** |
 | `Hip_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
-| `Hip_stance_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Hip_stance_Y_abs_onset` | Joint_absolute | testable | * |
 | `Hip_stance_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Knee_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
-| `Knee_stance_Y_abs_onset` | Joint_absolute | testable | *** |
-| `Knee_stance_Z_abs_onset` | Joint_absolute | testable | *** |
+| `Knee_stance_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Knee_stance_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Ankle_stance_X_abs_onset` | Joint_absolute | testable | n.s. |
-| `Ankle_stance_Y_abs_onset` | Joint_absolute | testable | ** |
-| `Ankle_stance_Z_abs_onset` | Joint_absolute | testable | *** |
+| `Ankle_stance_Y_abs_onset` | Joint_absolute | testable | n.s. |
+| `Ankle_stance_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Trunk_X_abs_onset` | Joint_absolute | testable | n.s. |
 | `Trunk_Y_abs_onset` | Joint_absolute | testable | n.s. |
 | `Trunk_Z_abs_onset` | Joint_absolute | testable | n.s. |
@@ -94,7 +94,7 @@
 ### Hypothesis Verdict (strict)
 
 - **Rule**: testable onset 변수 전부가 FDR 유의여야 PASS
-- **Observed**: testable significant ratio = `9/29`, untestable=`0`
+- **Observed**: testable significant ratio = `6/29`, untestable=`0`
 - **Verdict**: **FAIL**
 
 ### Significant Variables Only (BH-FDR < 0.05)
@@ -104,17 +104,14 @@
 | `MOS_minDist_signed` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | *** |
 | `xCOM_BOS_norm_onset` | Balance | 0.63±0.07 | 0.70±0.07 | -0.05 | *** |
 | `MOS_AP_v3d` | Balance | 0.08±0.01 | 0.06±0.02 | 0.01 | *** |
-| `Knee_stance_Y_abs_onset` | Joint_absolute | 2.73±3.74 | -0.40±4.14 | 2.49 | *** |
 | `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.45±0.16 | -2.58±0.17 | 0.09 | *** |
-| `Ankle_stance_Z_abs_onset` | Joint_absolute | 6.37±8.00 | -0.04±7.28 | 4.58 | *** |
-| `Knee_stance_Z_abs_onset` | Joint_absolute | 3.09±4.28 | 0.01±3.28 | 2.32 | *** |
 | `vCOM_X` | Balance | 0.01±0.01 | 0.02±0.01 | -0.00 | ** |
-| `Ankle_stance_Y_abs_onset` | Joint_absolute | -8.58±7.85 | -2.04±10.64 | -4.80 | ** |
+| `Hip_stance_Y_abs_onset` | Joint_absolute | 1.54±4.18 | -0.09±3.50 | 1.55 | * |
 
 ## Interpretation & Conclusion
 
 1. 각도와 force를 absolute onset으로 전환해도 모든 onset 변수가 유의하지는 않았고, strict 기준 가설은 **FAIL**였다.
-2. 관절 각도 변수는 총 15개 중 4개가 유의했고 (`Knee_stance_Y_abs_onset, Knee_stance_Z_abs_onset, Ankle_stance_Z_abs_onset, Ankle_stance_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
+2. 관절 각도 변수는 총 15개 중 1개가 유의했고 (`Hip_stance_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
 3. 따라서 본 데이터에서는 onset 시점의 광범위한 초기 자세 차이가 step/nonstep 전략 차이를 직접 설명한다고 단정하기 어렵다.
 
 ## Limitations
