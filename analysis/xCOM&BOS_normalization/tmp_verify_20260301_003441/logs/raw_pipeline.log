@@ -1,0 +1,38 @@
+[RUN] scripts/run_batch_all_timeseries_csv.py
+[batch_all_timeseries] failed (code=1)
+[batch_all_timeseries] stdout:
+[WARN] Forceplate inertial subtract QC failed for 250828_조민석_perturb_30_002.c3d (COP in-bounds after=0.4444444444444444). Check axis transform / templates.
+[WARN] Forceplate inertial subtract QC failed for 250828_조민석_perturb_30_006.c3d (COP in-bounds after=0.4166666666666667). Check axis transform / templates.
+[WARN] Forceplate inertial subtract QC failed for 250828_조민석_perturb_30_007.c3d (COP in-bounds after=0.4318181818181818). Check axis transform / templates.
+[WARN] Forceplate inertial subtract QC failed for 251112_이지수_perturb_130_004.c3d (COP in-bounds after=0.6923076923076923). Check axis transform / templates.
+[batch_all_timeseries] stderr:
+Traceback (most recent call last):
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/src/replace_v3d/joint_angles/v3d_joint_angles.py", line 161, in _m
+    idx = labels.index(name)
+          ^^^^^^^^^^^^^^^^^^
+ValueError: 'T10' is not in list
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/scripts/run_batch_all_timeseries_csv.py", line 709, in main
+    angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/src/replace_v3d/joint_angles/v3d_joint_angles.py", line 345, in compute_v3d_joint_angles_3d
+    frames = build_segment_frames(points, labels, end_frame=end_frame)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/src/replace_v3d/joint_angles/v3d_joint_angles.py", line 302, in build_segment_frames
+    T10 = _m(pts, labels, "T10")
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/src/replace_v3d/joint_angles/v3d_joint_angles.py", line 163, in _m
+    raise KeyError(f"Required marker not found: {name}") from e
+KeyError: 'Required marker not found: T10'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/scripts/run_batch_all_timeseries_csv.py", line 764, in <module>
+    main()
+  File "/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/scripts/run_batch_all_timeseries_csv.py", line 756, in main
+    raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
+RuntimeError: Failed on file '/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/data/all_data/251128_방주원_perturb_200_005.c3d': 'Required marker not found: T10'

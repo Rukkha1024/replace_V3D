@@ -1,0 +1,58 @@
+========================================================================
+xCOM/BOS Normalization Step-vs-Nonstep LMM
+========================================================================
+
+[M1] Load and prepare data...
+  Loading CSV...
+  Loading platform metadata...
+  Loading anthropometrics from meta sheet...
+  Building trial frame bounds...
+  Computing trial event frames (platform/step onset)...
+  step_onset fill (trial-level prefilter): 0
+  step_onset fill (subject-velocity mean): 68
+  step_onset fill (prefilter platform subject-velocity mean): 5
+  Event range validation passed: platform_oob=0, step_oob=0
+  Joining anthropometrics...
+  Building frame-wise normalized variables...
+  Frames: 29038
+  Trials: 125 (step=53, nonstep=72)
+  DV1_norm_platformonset missing: 0
+  DV1_norm_steponset missing: 0
+  DV1_abs_cm_platformonset missing: 0
+  DV1_abs_cm_steponset missing: 0
+  DV2_com_rear_over_foot_platformonset missing: 0
+  DV2_com_rear_over_foot_steponset missing: 0
+  DV3_vcom_rel_over_sqrtgh_platformonset missing: 0
+  DV3_vcom_rel_over_sqrtgh_steponset missing: 0
+
+[M2] Fit LMMs...
+  Running Rscript for step-effect LMM fitting...
+  Using Rscript: /home/alice/miniconda3/envs/module/bin/Rscript
+  R: LMM fitting complete: 8 rows
+
+================================================================================================
+LMM Results: DV ~ step_TF + (1|subject), REML
+FDR: BH across all DVs
+================================================================================================
+DV                                           Term                           Estimate        SE        t    Sig
+------------------------------------------------------------------------------------------------
+DV1_abs_cm_platformonset                     main_step_effect                -1.1025    0.1648   -6.691    ***
+DV1_abs_cm_steponset                         main_step_effect                -2.2864    0.3867   -5.913    ***
+DV1_norm_platformonset                       main_step_effect                -0.0440    0.0065   -6.758    ***
+DV1_norm_steponset                           main_step_effect                -0.0893    0.0150   -5.974    ***
+DV2_com_rear_over_foot_platformonset         main_step_effect                -0.0395    0.0063   -6.249    ***
+DV2_com_rear_over_foot_steponset             main_step_effect                -0.0225    0.0091   -2.476      *
+DV3_vcom_rel_over_sqrtgh_platformonset       main_step_effect                -0.0001    0.0012   -0.099   n.s.
+DV3_vcom_rel_over_sqrtgh_steponset           main_step_effect                 0.0715    0.0052   13.753    ***
+------------------------------------------------------------------------------------------------
+
+FDR significant coefficients: 7/8
+
+[M3] Generate figures...
+  fig1_main_effect_forest.png
+  fig3_violin_significant.png
+
+========================================================================
+Analysis complete.
+Output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/analysis/xCOM&BOS_normalization/tmp_verify_20260301_003441/main
+========================================================================

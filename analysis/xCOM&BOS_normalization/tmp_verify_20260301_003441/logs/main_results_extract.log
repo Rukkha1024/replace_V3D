@@ -1,0 +1,26 @@
+  Loading CSV...
+  Loading platform metadata...
+  Loading anthropometrics from meta sheet...
+  Building trial frame bounds...
+  Computing trial event frames (platform/step onset)...
+  step_onset fill (trial-level prefilter): 0
+  step_onset fill (subject-velocity mean): 68
+  step_onset fill (prefilter platform subject-velocity mean): 5
+  Event range validation passed: platform_oob=0, step_oob=0
+  Joining anthropometrics...
+  Building frame-wise normalized variables...
+  Frames: 29038
+  Trials: 125 (step=53, nonstep=72)
+  DV1_norm_platformonset missing: 0
+  DV1_norm_steponset missing: 0
+  DV1_abs_cm_platformonset missing: 0
+  DV1_abs_cm_steponset missing: 0
+  DV2_com_rear_over_foot_platformonset missing: 0
+  DV2_com_rear_over_foot_steponset missing: 0
+  DV3_vcom_rel_over_sqrtgh_platformonset missing: 0
+  DV3_vcom_rel_over_sqrtgh_steponset missing: 0
+  Running Rscript for step-effect LMM fitting...
+  Using Rscript: /home/alice/miniconda3/envs/module/bin/Rscript
+  R: LMM fitting complete: 8 rows
+saved=/mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/analysis/xCOM&BOS_normalization/tmp_verify_20260301_003441/main/main_lmm_results_full.csv
+summary={'n_frames': 29038, 'n_trials': 125, 'n_step': 53, 'n_nonstep': 72, 'velocity_mean': 58.28, 'velocity_sd': 43.681877839819364, 'n_subjects': 24}

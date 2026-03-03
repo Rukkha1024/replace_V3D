@@ -1,0 +1,47 @@
+﻿section,event,field,expected,actual,pass
+main,platform onset,step_mean_norm,0.51,0.51,True
+main,platform onset,step_sd_norm,0.06,0.06,True
+main,platform onset,nonstep_mean_norm,0.57,0.57,True
+main,platform onset,nonstep_sd_norm,0.07,0.07,True
+main,platform onset,estimate_norm,-0.04,-0.04,True
+main,platform onset,sig_norm,***,***,True
+main,platform onset,estimate_cm,-1.1,-1.1,True
+main,platform onset,sig_cm,***,***,True
+main,step onset,step_mean_norm,0.24,0.24,True
+main,step onset,step_sd_norm,0.17,0.17,True
+main,step onset,nonstep_mean_norm,0.32,0.32,True
+main,step onset,nonstep_sd_norm,0.1,0.1,True
+main,step onset,estimate_norm,-0.09,-0.09,True
+main,step onset,sig_norm,***,***,True
+main,step onset,estimate_cm,-2.29,-2.29,True
+main,step onset,sig_cm,***,***,True
+additional_raw,platform onset,step_mean_norm,0.52,0.52,True
+additional_raw,platform onset,step_sd_norm,0.06,0.06,True
+additional_raw,platform onset,nonstep_mean_norm,0.58,0.58,True
+additional_raw,platform onset,nonstep_sd_norm,0.07,0.07,True
+additional_raw,platform onset,estimate_norm,-0.05,-0.05,True
+additional_raw,platform onset,sig_norm,***,***,True
+additional_raw,platform onset,step_mean_cm,13.14,13.08,False
+additional_raw,platform onset,step_sd_cm,1.54,1.65,False
+additional_raw,platform onset,nonstep_mean_cm,14.62,14.63,False
+additional_raw,platform onset,nonstep_sd_cm,1.52,1.64,False
+additional_raw,platform onset,estimate_cm,-1.15,-1.19,False
+additional_raw,platform onset,sig_cm,***,***,True
+additional_raw,step onset,step_mean_norm,0.22,0.22,True
+additional_raw,step onset,step_sd_norm,0.16,0.17,False
+additional_raw,step onset,nonstep_mean_norm,0.33,0.34,False
+additional_raw,step onset,nonstep_sd_norm,0.1,0.1,True
+additional_raw,step onset,estimate_norm,-0.12,-0.11,False
+additional_raw,step onset,sig_norm,***,***,True
+additional_raw,step onset,step_mean_cm,5.41,5.63,False
+additional_raw,step onset,step_sd_cm,4.17,4.32,False
+additional_raw,step onset,nonstep_mean_cm,8.45,8.65,False
+additional_raw,step onset,nonstep_sd_cm,2.51,2.67,False
+additional_raw,step onset,estimate_cm,-3.01,-2.9,False
+additional_raw,step onset,sig_cm,***,***,True
+additional_raw,narrative,trials_count,166,184,False
+additional_raw,narrative,subjects_count,22,24,False
+additional_raw,narrative,step_count_onset,100,112,False
+additional_raw,narrative,nonstep_count_onset,66,72,False
+additional_raw,narrative,step_drop_from,100,112,False
+additional_raw,narrative,step_drop_to,98,110,False
