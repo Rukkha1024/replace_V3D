@@ -20,6 +20,20 @@
   - 운동역학: COM/COP/GRF/MoS/xCOM-BOS 등
   - 운동학: Hip/Knee/Ankle/Trunk/Neck (ROM/peak)
 
+## Coordinate Definition (Joint Angle)
+
+- Joint angle는 Visual3D-like **intrinsic XYZ Euler sequence** 기준으로 계산한다.
+- Segment 좌표계는 `X=+Right`, `Y=+Anterior`, `Z=+Up/+Proximal`를 사용한다.
+- `*_X/*_Y/*_Z`는 축 회전 성분이며, 임상 평면(sagittal/frontal/transverse)과 완전한 1:1 대응으로 단정하지 않는다.
+- 본 분석의 관절각 LMM 변수는 `X`축 성분(`Hip/Knee/Ankle stance`, `Trunk/Neck`)만 사용한다.
+
+## Stance-Leg Selection Rule
+
+- `step_r` trial: left 관절각을 stance 값으로 사용한다.
+- `step_l` trial: right 관절각을 stance 값으로 사용한다.
+- `nonstep` trial: subject별 `mixed==1` step trial의 `major_step_side`를 stance 기준으로 사용한다.
+- `major_step_side`가 tie이면 `(left + right)/2` 평균값을 stance 값으로 사용한다.
+
 ## Results (BH-FDR, alpha=0.05)
 
 - FDR significant: **15/38** (LMM DVs only; supplementary DVs excluded)
