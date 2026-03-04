@@ -1279,15 +1279,6 @@ def compute_fixed_gif_axis_limits(
         if xcom_valid_idx.size > 0:
             x_parts.append(display.xcom_x[xcom_valid_idx])
             y_parts.append(display.xcom_y[xcom_valid_idx])
-    if (
-        display.cop_valid_mask is not None
-        and display.cop_x is not None
-        and display.cop_y is not None
-    ):
-        cop_valid_idx = np.flatnonzero(display.cop_valid_mask)
-        if cop_valid_idx.size > 0:
-            x_parts.append(display.cop_x[cop_valid_idx])
-            y_parts.append(display.cop_y[cop_valid_idx])
     if bos_polylines is not None:
         shift_x, shift_y = display.xy_shift_for_onset0
         hull_x = _collect_finite_polyline_values(bos_polylines.hull_x, series.valid_mask)
