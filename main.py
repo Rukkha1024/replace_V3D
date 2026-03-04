@@ -90,6 +90,11 @@ def _make_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--c3d_dir", default=str(_REPO_ROOT / "data" / "all_data"))
     p.add_argument("--event_xlsm", default=str(_REPO_ROOT / "data" / "perturb_inform.xlsm"))
+    p.add_argument(
+        "--config",
+        default=str(_REPO_ROOT / "config.yaml"),
+        help="Config YAML path (forceplate/plot options).",
+    )
     p.add_argument("--out_dir", default=str(_REPO_ROOT / "output"))
     p.add_argument(
         "--out_csv",
@@ -146,6 +151,8 @@ def main() -> None:
         str(c3d_dir),
         "--event_xlsm",
         str(event_xlsm),
+        "--config",
+        str(args.config),
         "--out_csv",
         str(out_csv),
         "--pre_frames",

@@ -307,6 +307,49 @@ def choose_active_force_platform(
     return best
 
 
+def apply_force_platform_corner_overrides(
+    fp_coll: ForcePlatformCollection,
+    corner_overrides: dict[int, np.ndarray] | None,
+) -> ForcePlatformCollection:
+    """Replace selected forceplate corners with provided values."""
+    if not corner_overrides:
+        return fp_coll
+
+    new_platforms: List[ForcePlatform] = []
+    for fp in fp_coll.platforms:
+        override = corner_overrides.get(int(fp.index_1based))
+        if override is None:
+            new_platforms.append(fp)
+            continue
+
+        corners_lab = np.asarray(override, dtype=float)
+        if corners_lab.shape != (4, 3):
+            raise ValueError(
+                f"FP{fp.index_1based} corner override must have shape (4,3), got {corners_lab.shape}"
+            )
+        R = _rotation_from_corners(corners_lab)
+        origin_lab = corners_lab.mean(axis=0) + (R @ np.asarray(fp.origin_plate, dtype=float))
+
+        new_platforms.append(
+            ForcePlatform(
+                index_1based=int(fp.index_1based),
+                fp_type=int(fp.fp_type),
+                corners_lab=corners_lab.astype(float),
+                origin_plate=np.asarray(fp.origin_plate, dtype=float),
+                origin_lab=origin_lab.astype(float),
+                R_pl2lab=R.astype(float),
+                channel_numbers_1based=np.asarray(fp.channel_numbers_1based, dtype=int),
+                channel_indices_0based=np.asarray(fp.channel_indices_0based, dtype=int),
+            )
+        )
+
+    return ForcePlatformCollection(
+        point_rate_hz=float(fp_coll.point_rate_hz),
+        analog=fp_coll.analog,
+        platforms=new_platforms,
+    )
+
+
 def extract_platform_wrenches_lab(
     analog_avg: np.ndarray,
     fp: ForcePlatform,

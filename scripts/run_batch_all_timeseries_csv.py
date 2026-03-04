@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import polars as pl
+import yaml
 
 import _bootstrap
 
@@ -45,6 +46,7 @@ from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_stage01_xy
 from replace_v3d.torque.forceplate import (
+    apply_force_platform_corner_overrides,
     choose_active_force_platform,
     read_force_platforms,
 )
@@ -127,6 +129,66 @@ def _build_meta_prefilter_trials(event_xlsm: Path) -> pl.DataFrame:
         .unique()
         .sort(["subject", "velocity", "trial"])
     )
+
+
+def _parse_corner_triplet(raw: Any, *, fp_key: str, corner_key: str) -> tuple[float, float, float]:
+    if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+        raise ValueError(f"{fp_key}.{corner_key} must be a 3-item list [x,y,z].")
+    try:
+        x, y, z = float(raw[0]), float(raw[1]), float(raw[2])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{fp_key}.{corner_key} must contain numeric values.") from exc
+    return (x, y, z)
+
+
+def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray]:
+    """Load forceplate corner overrides from config.yaml."""
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
+
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(raw, dict):
+        return {}
+
+    forceplate_cfg = raw.get("forceplate")
+    if not isinstance(forceplate_cfg, dict):
+        return {}
+
+    coordination_cfg = forceplate_cfg.get("coordination")
+    if not isinstance(coordination_cfg, dict):
+        return {}
+
+    overrides: dict[int, np.ndarray] = {}
+    for fp_key, fp_cfg in coordination_cfg.items():
+        if not isinstance(fp_cfg, dict):
+            continue
+        if not bool(fp_cfg.get("enabled", False)):
+            continue
+
+        key_text = str(fp_key).strip().lower()
+        if not key_text.startswith("fp") or (not key_text[2:].isdigit()):
+            raise ValueError(
+                f"forceplate.coordination key must look like fp1/fp2/fp3. Got: {fp_key!r}"
+            )
+        fp_idx = int(key_text[2:])
+
+        corners_cfg = fp_cfg.get("corners")
+        if not isinstance(corners_cfg, dict):
+            raise ValueError(f"{fp_key}.corners must be a mapping with corner0..corner3")
+
+        corners = np.asarray(
+            [
+                _parse_corner_triplet(corners_cfg.get("corner0"), fp_key=str(fp_key), corner_key="corner0"),
+                _parse_corner_triplet(corners_cfg.get("corner1"), fp_key=str(fp_key), corner_key="corner1"),
+                _parse_corner_triplet(corners_cfg.get("corner2"), fp_key=str(fp_key), corner_key="corner2"),
+                _parse_corner_triplet(corners_cfg.get("corner3"), fp_key=str(fp_key), corner_key="corner3"),
+            ],
+            dtype=float,
+        )
+        overrides[int(fp_idx)] = corners
+
+    return overrides
 
 
 def _make_timeseries_dataframe(
@@ -296,8 +358,10 @@ def _compute_ankle_torque_payload(
     fp_inertial_qc_fz_threshold_n: float,
     fp_inertial_qc_margin_m: float,
     fp_inertial_qc_strict: bool,
+    fp_corner_overrides: dict[int, np.ndarray] | None,
 ) -> tuple[int, dict[str, np.ndarray]]:
     fp_coll = read_force_platforms(c3d_file)
+    fp_coll = apply_force_platform_corner_overrides(fp_coll, fp_corner_overrides)
     analog_avg = fp_coll.analog.values
     n_frames = int(points.shape[0])
     if analog_avg.shape[0] != n_frames:
@@ -467,6 +531,11 @@ def main() -> None:
     parser.add_argument("--c3d_dir", required=True, help="Directory containing C3D files (recursive).")
     parser.add_argument("--event_xlsm", required=True, help="Event workbook (perturb_inform.xlsm).")
     parser.add_argument(
+        "--config",
+        default=str(_REPO_ROOT / "config.yaml"),
+        help="Config YAML path (forceplate.coordination overrides).",
+    )
+    parser.add_argument(
         "--out_csv",
         default=str(_REPO_ROOT / "output" / "all_trials_timeseries.csv"),
         help="Output CSV path (default: output/all_trials_timeseries.csv).",
@@ -561,6 +630,7 @@ def main() -> None:
 
     c3d_dir = Path(args.c3d_dir)
     event_xlsm = Path(args.event_xlsm)
+    config_path = Path(args.config)
     out_csv = Path(args.out_csv)
     pre_frames = int(args.pre_frames)
 
@@ -568,6 +638,8 @@ def main() -> None:
         raise FileNotFoundError(f"C3D directory not found: {c3d_dir}")
     if not event_xlsm.exists():
         raise FileNotFoundError(f"Event workbook not found: {event_xlsm}")
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
 
     if out_csv.exists():
         if args.overwrite:
@@ -597,6 +669,10 @@ def main() -> None:
     if not tmpl_path.exists():
         raise FileNotFoundError(f"Inertial templates not found: {tmpl_path}")
     fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
+    fp_corner_overrides = _load_forceplate_corner_overrides(config_path)
+    if fp_corner_overrides:
+        enabled = ", ".join([f"FP{idx}" for idx in sorted(fp_corner_overrides.keys())])
+        print(f"[INFO] forceplate corner override enabled: {enabled}")
 
     allowed_trial_keys: set[str] | None = None
     trial_meta_lookup: dict[str, dict[str, Any]] | None = None
@@ -705,6 +781,7 @@ def main() -> None:
                 fp_inertial_qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
                 fp_inertial_qc_margin_m=float(args.fp_inertial_qc_margin_m),
                 fp_inertial_qc_strict=bool(args.fp_inertial_qc_strict),
+                fp_corner_overrides=fp_corner_overrides,
             )
         except Exception as exc:
             raise RuntimeError(f"Forceplate/torque extraction failed for '{c3d_file.name}': {exc}") from exc

@@ -3,6 +3,30 @@ signal_processing:
     cutoff_hz: 6
     order: 4
 
+forceplate:
+  coordination:
+    fp1:
+      enabled: false
+      corners:
+        corner0: null
+        corner1: null
+        corner2: null
+        corner3: null
+    fp2:
+      enabled: false
+      corners:
+        corner0: null
+        corner1: null
+        corner2: null
+        corner3: null
+    fp3:
+      enabled: true
+      corners:
+        corner0: [1189.321, 157.76, 676.141]
+        corner1: [1189.321, 157.76, 276.141]
+        corner2: [1789.321, 157.76, 276.141]
+        corner3: [1789.321, 157.76, 676.141]
+
 plot_grid_timeseries:
   out_dir: output/figures/grid_timeseries
   categories:
