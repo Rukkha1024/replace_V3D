@@ -600,8 +600,23 @@ def build_trial_series(
         cop_x_arr = np.asarray(trial_df.get_column(cop_col_x).to_list(), dtype=float)
         cop_y_arr = np.asarray(trial_df.get_column(cop_col_y).to_list(), dtype=float)
         cop_finite_mask = np.isfinite(cop_x_arr) & np.isfinite(cop_y_arr)
+        cop_draw_x = cop_x_arr
+        cop_draw_y = cop_y_arr
         cop_compare_x = cop_x_arr
         cop_compare_y = cop_y_arr
+
+        if cop_source_norm == "absolute":
+            fp_origin_cols = ("FP_origin_X_m", "FP_origin_Y_m")
+            missing_origin = [col for col in fp_origin_cols if col not in trial_df.columns]
+            if not missing_origin:
+                fp_origin_x = np.asarray(trial_df.get_column("FP_origin_X_m").to_list(), dtype=float)
+                fp_origin_y = np.asarray(trial_df.get_column("FP_origin_Y_m").to_list(), dtype=float)
+                origin_finite_mask = np.isfinite(fp_origin_x) & np.isfinite(fp_origin_y)
+                cop_finite_mask = cop_finite_mask & origin_finite_mask
+                cop_draw_x = cop_x_arr + fp_origin_x
+                cop_draw_y = cop_y_arr + fp_origin_y
+                cop_compare_x = cop_draw_x
+                cop_compare_y = cop_draw_y
 
         if cop_source_norm == "onset0":
             abs_col_x, abs_col_y = COP_COLUMNS_BY_SOURCE["absolute"]
@@ -636,8 +651,8 @@ def build_trial_series(
 
         if cop_disabled_reason is None:
             cop_enabled = True
-            cop_x = cop_x_arr
-            cop_y = cop_y_arr
+            cop_x = cop_draw_x
+            cop_y = cop_draw_y
             cop_valid_mask = valid_mask & cop_finite_mask
             cop_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
             cop_inside_mask[cop_valid_mask] = (
