@@ -45,7 +45,7 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
-DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_sample"
+DEFAULT_OUT = REPO_ROOT / "output" / "figures" / "bos_com_xy_all_axismap"
 DEFAULT_EVENT_XLSM = REPO_ROOT / "data" / "perturb_inform.xlsm"
 DEFAULT_C3D_DIR = REPO_ROOT / "data" / "all_data"
 GIF_BOS_MODES = ("freeze", "live")
