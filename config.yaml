@@ -22,6 +22,7 @@ forceplate:
     fp3:
       enabled: true
       units: mm
+      axis_map: ["-X", "Z", "Y"]
       corners:
         corner0: [1189.321, 157.76, 676.141]
         corner1: [1189.321, 157.76, 276.141]

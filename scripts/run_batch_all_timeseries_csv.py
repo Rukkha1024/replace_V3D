@@ -141,6 +141,37 @@ def _parse_corner_triplet(raw: Any, *, fp_key: str, corner_key: str) -> tuple[fl
     return (x, y, z)
 
 
+def _parse_axis_map_token(raw: Any, *, fp_key: str) -> tuple[float, int]:
+    text = str(raw).strip().upper()
+    sign = -1.0 if text.startswith("-") else 1.0
+    axis = text[1:] if text.startswith("-") else text
+    axis_to_idx = {"X": 0, "Y": 1, "Z": 2}
+    if axis not in axis_to_idx:
+        raise ValueError(
+            f"{fp_key}.axis_map tokens must be one of: X, Y, Z, -X, -Y, -Z. Got: {raw!r}"
+        )
+    return (sign, axis_to_idx[axis])
+
+
+def _apply_axis_map(corners: np.ndarray, axis_map: Any, *, fp_key: str) -> np.ndarray:
+    """Apply an axis swap/sign flip mapping to a (N,3) corner array."""
+    if not isinstance(axis_map, (list, tuple)) or len(axis_map) != 3:
+        raise ValueError(
+            f"{fp_key}.axis_map must be a 3-item list like ['X','Y','Z'] or ['-X','Z','Y']. Got: {axis_map!r}"
+        )
+
+    mapped = np.empty_like(corners, dtype=float)
+    used: set[int] = set()
+    for out_axis_idx, tok in enumerate(axis_map):
+        sign, in_axis_idx = _parse_axis_map_token(tok, fp_key=fp_key)
+        if in_axis_idx in used:
+            raise ValueError(f"{fp_key}.axis_map must not repeat axes. Got: {axis_map!r}")
+        used.add(in_axis_idx)
+        mapped[:, out_axis_idx] = float(sign) * corners[:, in_axis_idx]
+
+    return mapped
+
+
 def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray]:
     """Load forceplate corner overrides from config.yaml.
 
@@ -200,6 +231,8 @@ def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray
             dtype=float,
         )
         corners = corners * float(unit_scale)
+        if "axis_map" in fp_cfg:
+            corners = _apply_axis_map(corners, fp_cfg.get("axis_map"), fp_key=str(fp_key))
         overrides[int(fp_idx)] = corners
 
     return overrides
