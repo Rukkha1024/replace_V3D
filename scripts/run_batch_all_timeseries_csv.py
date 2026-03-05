@@ -142,7 +142,12 @@ def _parse_corner_triplet(raw: Any, *, fp_key: str, corner_key: str) -> tuple[fl
 
 
 def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray]:
-    """Load forceplate corner overrides from config.yaml."""
+    """Load forceplate corner overrides from config.yaml.
+
+    Supports per-plate `units` conversion (mm -> m) so corner values can be
+    specified in the same units as Visual3D exports while keeping the pipeline
+    in meters.
+    """
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config not found: {config_path}")
@@ -173,6 +178,14 @@ def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray
             )
         fp_idx = int(key_text[2:])
 
+        units_text = str(fp_cfg.get("units", "m")).strip().lower()
+        if units_text in ("m", "meter", "meters"):
+            unit_scale = 1.0
+        elif units_text in ("mm", "millimeter", "millimeters"):
+            unit_scale = 0.001
+        else:
+            raise ValueError(f"{fp_key}.units must be one of: m, mm. Got: {fp_cfg.get('units')!r}")
+
         corners_cfg = fp_cfg.get("corners")
         if not isinstance(corners_cfg, dict):
             raise ValueError(f"{fp_key}.corners must be a mapping with corner0..corner3")
@@ -186,6 +199,7 @@ def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray
             ],
             dtype=float,
         )
+        corners = corners * float(unit_scale)
         overrides[int(fp_idx)] = corners
 
     return overrides
@@ -463,12 +477,12 @@ def _compute_ankle_torque_payload(
         "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
         "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
         "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-        # NOTE: COP_X_m/COP_Y_m follow Stage01 Cx/Cy semantics.
-        "COP_X_m": COP_stage01_xy[:end, 0],
-        "COP_Y_m": COP_stage01_xy[:end, 1],
-        "FP_origin_X_m": np.full(end, float(res.fp_origin_lab[0])),
-        "FP_origin_Y_m": np.full(end, float(res.fp_origin_lab[1])),
-        "FP_origin_Z_m": np.full(end, float(res.fp_origin_lab[2])),
+        # NOTE:
+        # COP is exported in absolute (lab) coordinates so it is directly
+        # comparable to COM_X/COM_Y. Stage01 COP is origin-relative (Cx/Cy),
+        # so we add the selected forceplate origin (lab) translation.
+        "COP_X_m": COP_stage01_xy[:end, 0] + float(res.fp_origin_lab[0]),
+        "COP_Y_m": COP_stage01_xy[:end, 1] + float(res.fp_origin_lab[1]),
         "L_ankleJC_X_m": res.ankle_L[:end, 0],
         "L_ankleJC_Y_m": res.ankle_L[:end, 1],
         "L_ankleJC_Z_m": res.ankle_L[:end, 2],
@@ -507,11 +521,6 @@ def _compute_ankle_torque_payload(
     for key in list(payload.keys()):
         if key.startswith(("GRF_", "GRM_", "AnkleTorque")):
             payload[key] = subtract_baseline_at_index(payload[key], onset0)
-
-    # Keep absolute COP_*_m, but add onset-zeroed COP columns for displacement use-cases.
-    for key in ("COP_X_m", "COP_Y_m"):
-        if key in payload:
-            payload[f"{key}_onset0"] = subtract_baseline_at_index(payload[key], onset0)
 
     return int(fp.index_1based), payload
 

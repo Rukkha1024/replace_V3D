@@ -21,6 +21,7 @@ forceplate:
         corner3: null
     fp3:
       enabled: true
+      units: mm
       corners:
         corner0: [1189.321, 157.76, 676.141]
         corner1: [1189.321, 157.76, 276.141]

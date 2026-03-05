@@ -58,10 +58,10 @@ XCOM_TRAIL_COLOR = "teal"
 XCOM_INSIDE_COLOR = "teal"
 XCOM_OUTSIDE_COLOR = "mediumvioletred"
 XCOM_GHOST_COLOR = "purple"
-COP_SOURCE_CHOICES = ("absolute", "onset0")
+# COP is exported as absolute (lab) XY in the pipeline.
+COP_SOURCE_CHOICES = ("absolute",)
 COP_COLUMNS_BY_SOURCE: dict[str, tuple[str, str]] = {
     "absolute": ("COP_X_m", "COP_Y_m"),
-    "onset0": ("COP_X_m_onset0", "COP_Y_m_onset0"),
 }
 COP_TRAIL_COLOR = "tab:brown"
 COP_INSIDE_COLOR = "peru"
@@ -288,8 +288,8 @@ def parse_args() -> argparse.Namespace:
         choices=list(COP_SOURCE_CHOICES),
         default="absolute",
         help=(
-            "Corrected COP source for overlay. "
-            "'absolute' uses COP_X/Y_m; 'onset0' uses COP_X/Y_m_onset0."
+            "COP source for overlay. "
+            "'absolute' uses COP_X_m/COP_Y_m (already in lab coordinates)."
         ),
     )
     return ap.parse_args()
@@ -600,59 +600,13 @@ def build_trial_series(
         cop_x_arr = np.asarray(trial_df.get_column(cop_col_x).to_list(), dtype=float)
         cop_y_arr = np.asarray(trial_df.get_column(cop_col_y).to_list(), dtype=float)
         cop_finite_mask = np.isfinite(cop_x_arr) & np.isfinite(cop_y_arr)
-        cop_draw_x = cop_x_arr
-        cop_draw_y = cop_y_arr
         cop_compare_x = cop_x_arr
         cop_compare_y = cop_y_arr
 
-        if cop_source_norm == "absolute":
-            fp_origin_cols = ("FP_origin_X_m", "FP_origin_Y_m")
-            missing_origin = [col for col in fp_origin_cols if col not in trial_df.columns]
-            if not missing_origin:
-                fp_origin_x = np.asarray(trial_df.get_column("FP_origin_X_m").to_list(), dtype=float)
-                fp_origin_y = np.asarray(trial_df.get_column("FP_origin_Y_m").to_list(), dtype=float)
-                origin_finite_mask = np.isfinite(fp_origin_x) & np.isfinite(fp_origin_y)
-                cop_finite_mask = cop_finite_mask & origin_finite_mask
-                cop_draw_x = cop_x_arr + fp_origin_x
-                cop_draw_y = cop_y_arr + fp_origin_y
-                cop_compare_x = cop_draw_x
-                cop_compare_y = cop_draw_y
-
-        if cop_source_norm == "onset0":
-            abs_col_x, abs_col_y = COP_COLUMNS_BY_SOURCE["absolute"]
-            missing_abs = [col for col in (abs_col_x, abs_col_y) if col not in trial_df.columns]
-            if missing_abs:
-                cop_disabled_reason = (
-                    "onset0 alignment requires absolute COP columns: "
-                    + ", ".join(missing_abs)
-                )
-            else:
-                cop_abs_x = np.asarray(trial_df.get_column(abs_col_x).to_list(), dtype=float)
-                cop_abs_y = np.asarray(trial_df.get_column(abs_col_y).to_list(), dtype=float)
-                onset_idx = np.flatnonzero(mocap == int(platform_onset))
-                if onset_idx.size == 0:
-                    cop_disabled_reason = (
-                        "platform_onset_local frame not found in MocapFrame; "
-                        "cannot align onset0 COP to global XY."
-                    )
-                else:
-                    onset_i = int(onset_idx[0])
-                    shift_x = float(cop_abs_x[onset_i])
-                    shift_y = float(cop_abs_y[onset_i])
-                    if not (np.isfinite(shift_x) and np.isfinite(shift_y)):
-                        cop_disabled_reason = (
-                            "absolute COP at platform_onset_local is non-finite; "
-                            "cannot align onset0 COP."
-                        )
-                    else:
-                        xy_shift_for_onset0 = (shift_x, shift_y)
-                        cop_compare_x = cop_x_arr + shift_x
-                        cop_compare_y = cop_y_arr + shift_y
-
         if cop_disabled_reason is None:
             cop_enabled = True
-            cop_x = cop_draw_x
-            cop_y = cop_draw_y
+            cop_x = cop_x_arr
+            cop_y = cop_y_arr
             cop_valid_mask = valid_mask & cop_finite_mask
             cop_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
             cop_inside_mask[cop_valid_mask] = (
@@ -821,24 +775,6 @@ def build_display_series(series: TrialSeries, rotate_ccw_deg: int) -> DisplaySer
     )
     shift_disp_x = 0.0
     shift_disp_y = 0.0
-    if series.cop_enabled and series.cop_source == "onset0":
-        shift_abs_x, shift_abs_y = series.xy_shift_for_onset0
-        shift_x_arr, shift_y_arr = rotate_xy(
-            np.asarray([shift_abs_x], dtype=float),
-            np.asarray([shift_abs_y], dtype=float),
-            rotate_ccw_deg=deg,
-        )
-        shift_disp_x = float(shift_x_arr[0])
-        shift_disp_y = float(shift_y_arr[0])
-        com_x = com_x - shift_disp_x
-        com_y = com_y - shift_disp_y
-        bos_minx = bos_minx - shift_disp_x
-        bos_maxx = bos_maxx - shift_disp_x
-        bos_miny = bos_miny - shift_disp_y
-        bos_maxy = bos_maxy - shift_disp_y
-        if xcom_x is not None and xcom_y is not None:
-            xcom_x = xcom_x - shift_disp_x
-            xcom_y = xcom_y - shift_disp_y
     x_lim, y_lim = compute_axis_limits_from_arrays(
         com_x=com_x,
         com_y=com_y,
@@ -1295,19 +1231,18 @@ def compute_fixed_gif_axis_limits(
             x_parts.append(display.xcom_x[xcom_valid_idx])
             y_parts.append(display.xcom_y[xcom_valid_idx])
     if bos_polylines is not None:
-        shift_x, shift_y = display.xy_shift_for_onset0
         hull_x = _collect_finite_polyline_values(bos_polylines.hull_x, series.valid_mask)
         hull_y = _collect_finite_polyline_values(bos_polylines.hull_y, series.valid_mask)
         union_x = _collect_finite_polyline_values(bos_polylines.union_x, series.valid_mask)
         union_y = _collect_finite_polyline_values(bos_polylines.union_y, series.valid_mask)
         if hull_x.size > 0:
-            x_parts.append(hull_x - shift_x)
+            x_parts.append(hull_x)
         if hull_y.size > 0:
-            y_parts.append(hull_y - shift_y)
+            y_parts.append(hull_y)
         if union_x.size > 0:
-            x_parts.append(union_x - shift_x)
+            x_parts.append(union_x)
         if union_y.size > 0:
-            y_parts.append(union_y - shift_y)
+            y_parts.append(union_y)
 
     x_values = np.concatenate(x_parts)
     y_values = np.concatenate(y_parts)
@@ -1998,14 +1933,13 @@ def render_gif(
         bos_rect.set_width(max_x - min_x)
         bos_rect.set_height(max_y - min_y)
         if bos_polylines is not None and bos_union_line is not None and bos_hull_line is not None:
-            shift_x, shift_y = display.xy_shift_for_onset0
             bos_union_line.set_data(
-                bos_polylines.union_x[bos_idx] - shift_x,
-                bos_polylines.union_y[bos_idx] - shift_y,
+                bos_polylines.union_x[bos_idx],
+                bos_polylines.union_y[bos_idx],
             )
             bos_hull_line.set_data(
-                bos_polylines.hull_x[bos_idx] - shift_x,
-                bos_polylines.hull_y[bos_idx] - shift_y,
+                bos_polylines.hull_x[bos_idx],
+                bos_polylines.hull_y[bos_idx],
             )
 
         local_idx = frame_no + 1
@@ -2142,17 +2076,15 @@ def render_gif(
                     ghost_label.set_text(f"step@{int(series.mocap_frame[step_onset_idx])}")
                     ghost_label.set_visible(True)
                 if ghost_bos_union_line is not None and bos_polylines is not None:
-                    shift_x, shift_y = display.xy_shift_for_onset0
                     ghost_bos_union_line.set_data(
-                        bos_polylines.union_x[step_onset_idx] - shift_x,
-                        bos_polylines.union_y[step_onset_idx] - shift_y,
+                        bos_polylines.union_x[step_onset_idx],
+                        bos_polylines.union_y[step_onset_idx],
                     )
                     ghost_bos_union_line.set_alpha(0.5)
                 if ghost_bos_hull_line is not None and bos_polylines is not None:
-                    shift_x, shift_y = display.xy_shift_for_onset0
                     ghost_bos_hull_line.set_data(
-                        bos_polylines.hull_x[step_onset_idx] - shift_x,
-                        bos_polylines.hull_y[step_onset_idx] - shift_y,
+                        bos_polylines.hull_x[step_onset_idx],
+                        bos_polylines.hull_y[step_onset_idx],
                     )
                     ghost_bos_hull_line.set_alpha(0.5)
             else:
@@ -2346,7 +2278,7 @@ def render_one_trial(
         if series.cop_enabled:
             print(
                 "COP overlay: enabled "
-                f"(source={series.cop_source}, onset0_shift_xy={series.xy_shift_for_onset0})"
+                f"(source={series.cop_source})"
             )
         else:
             print(
