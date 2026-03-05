@@ -40,6 +40,8 @@ from replace_v3d.io.events_excel import (
 )
 
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "Malgun Gothic"
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 REPO_ROOT = _bootstrap.REPO_ROOT
 DEFAULT_CSV = REPO_ROOT / "output" / "all_trials_timeseries.csv"
