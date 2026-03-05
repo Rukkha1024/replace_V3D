@@ -230,7 +230,7 @@ def parse_args() -> argparse.Namespace:
         "--jobs",
         type=int,
         default=None,
-        help="Worker count for --all mode (default: CPU count).",
+        help="Worker count for --all mode (default: 4).",
     )
     ap.add_argument("--fps", type=int, default=20, help="GIF FPS")
     ap.add_argument("--frame_step", type=int, default=1, help="Use every Nth valid frame for GIF")
@@ -458,7 +458,7 @@ def collect_trial_keys(df: pl.DataFrame) -> list[TrialKey]:
 
 def resolve_jobs(requested_jobs: int | None) -> int:
     if requested_jobs is None:
-        return max(1, int(os.cpu_count() or 1))
+        return 4
     jobs = int(requested_jobs)
     if jobs < 1:
         raise ValueError("--jobs must be >= 1.")
