@@ -264,7 +264,7 @@ conda run -n module python scripts/plot_grid_timeseries.py \
 | MoS | `MOS_minDist_signed`, `MOS_AP_v3d`, `MOS_ML_v3d`, `MOS_v3d` | m | 아니오 |
 | 관절 각도 | `Hip_L_X_deg`, ..., `Neck_Z_deg` | deg | 예 |
 | GRF | `GRF_X_N`, `GRF_Y_N`, `GRF_Z_N` | N | 예 |
-| COP | `COP_X_m`, `COP_Y_m`, `COP_X_m_onset0`, `COP_Y_m_onset0` | m | 양쪽 |
+| COP | `COP_X_m`, `COP_Y_m` | m | 아니오 |
 | GRM | `GRM_X_Nm`, `GRM_Y_Nm`, `GRM_Z_Nm` | Nm | 예 |
 | 발목 토크 | `AnkleTorqueMid_*_Nm`, `AnkleTorqueL_*_Nm`, `AnkleTorqueR_*_Nm` | Nm | 예 |
 
