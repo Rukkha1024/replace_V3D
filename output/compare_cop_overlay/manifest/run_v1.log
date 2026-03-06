@@ -1,0 +1,138 @@
+[v1] subject=이재유 velocity=20.0 trial=5 state=nonstep cop_source=absolute
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 51060 (\N{HANGUL SYLLABLE I}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 51116 (\N{HANGUL SYLLABLE JAE}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50976 (\N{HANGUL SYLLABLE YU}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=이재유, velocity=20, trial=5, auto_selected=False
+Validity summary: total_frames=257, valid_frames=257, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=157, step_onset_local=None
+Display rotation: CCW 90 deg
+Trial state: nonstep
+COP source: absolute
+COP overlay: enabled (source=absolute, onset0_shift_xy=(0.0, 0.0))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/이재유
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251209_이재유_perturb_20_005.c3d
+Fixed axis limits: x=(-0.7014, -0.2894), y=(-1.7131, -1.1331)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=absolute
+Inside/outside summary: inside=257, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/이재유/이재유__velocity-20__trial-5__variant-v1__copsrc-absolute__copsrc-absolute__step_vis-phase_bos__live.gif (frames=129, fps=15, frame_step=2)
+
+[v1] subject=이재유 velocity=20.0 trial=5 state=nonstep cop_source=onset0
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 51060 (\N{HANGUL SYLLABLE I}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 51116 (\N{HANGUL SYLLABLE JAE}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50976 (\N{HANGUL SYLLABLE YU}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=이재유, velocity=20, trial=5, auto_selected=False
+Validity summary: total_frames=257, valid_frames=257, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=157, step_onset_local=None
+Display rotation: CCW 90 deg
+Trial state: nonstep
+COP source: onset0
+COP overlay: enabled (source=onset0, onset0_shift_xy=(-1.2609643053308852, 0.5710063375815916))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/이재유
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251209_이재유_perturb_20_005.c3d
+Fixed axis limits: x=(-0.1304, 0.2816), y=(-0.4522, 0.1278)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=onset0
+Inside/outside summary: inside=257, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/이재유/이재유__velocity-20__trial-5__variant-v1__copsrc-onset0__copsrc-onset0__step_vis-phase_bos__live.gif (frames=129, fps=15, frame_step=2)
+
+[v1] subject=가윤호 velocity=60.0 trial=10 state=step_L cop_source=absolute
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 44032 (\N{HANGUL SYLLABLE GA}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50980 (\N{HANGUL SYLLABLE YUN}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 54840 (\N{HANGUL SYLLABLE HO}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=가윤호, velocity=60, trial=10, auto_selected=False
+Validity summary: total_frames=222, valid_frames=222, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=123, step_onset_local=124
+Display rotation: CCW 90 deg
+Trial state: step_L
+COP source: absolute
+COP overlay: enabled (source=absolute, onset0_shift_xy=(0.0, 0.0))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251128_가윤호_perturb_60_010.c3d
+Fixed axis limits: x=(-0.6876, -0.3229), y=(-1.6834, -1.0788)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=absolute
+Inside/outside summary: inside=222, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호/가윤호__velocity-60__trial-10__variant-v1__copsrc-absolute__copsrc-absolute__step_vis-phase_bos__live.gif (frames=112, fps=15, frame_step=2)
+
+[v1] subject=가윤호 velocity=60.0 trial=10 state=step_L cop_source=onset0
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 44032 (\N{HANGUL SYLLABLE GA}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50980 (\N{HANGUL SYLLABLE YUN}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 54840 (\N{HANGUL SYLLABLE HO}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=가윤호, velocity=60, trial=10, auto_selected=False
+Validity summary: total_frames=222, valid_frames=222, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=123, step_onset_local=124
+Display rotation: CCW 90 deg
+Trial state: step_L
+COP source: onset0
+COP overlay: enabled (source=onset0, onset0_shift_xy=(-1.2476585492227255, 0.6097479234435998))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251128_가윤호_perturb_60_010.c3d
+Fixed axis limits: x=(-0.0779, 0.2869), y=(-0.4357, 0.1689)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=onset0
+Inside/outside summary: inside=222, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호/가윤호__velocity-60__trial-10__variant-v1__copsrc-onset0__copsrc-onset0__step_vis-phase_bos__live.gif (frames=112, fps=15, frame_step=2)
+
+[v1] subject=가윤호 velocity=60.0 trial=1 state=step_R cop_source=absolute
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 44032 (\N{HANGUL SYLLABLE GA}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50980 (\N{HANGUL SYLLABLE YUN}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 54840 (\N{HANGUL SYLLABLE HO}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=가윤호, velocity=60, trial=1, auto_selected=False
+Validity summary: total_frames=223, valid_frames=223, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=123, step_onset_local=126
+Display rotation: CCW 90 deg
+Trial state: step_R
+COP source: absolute
+COP overlay: enabled (source=absolute, onset0_shift_xy=(0.0, 0.0))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251128_가윤호_perturb_60_001.c3d
+Fixed axis limits: x=(-0.7378, -0.3185), y=(-1.6909, -0.9795)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=absolute
+Inside/outside summary: inside=223, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호/가윤호__velocity-60__trial-1__variant-v1__copsrc-absolute__copsrc-absolute__step_vis-phase_bos__live.gif (frames=112, fps=15, frame_step=2)
+
+[v1] subject=가윤호 velocity=60.0 trial=1 state=step_R cop_source=onset0
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 44032 (\N{HANGUL SYLLABLE GA}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 50980 (\N{HANGUL SYLLABLE YUN}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+/tmp/replace_V3D_v1_1e8e8da/scripts/plot_bos_com_xy_sample.py:2223: UserWarning: Glyph 54840 (\N{HANGUL SYLLABLE HO}) missing from font(s) DejaVu Sans.
+  ani.save(str(out_path), writer=PillowWriter(fps=fps), dpi=dpi)
+
+Trial selection: subject=가윤호, velocity=60, trial=1, auto_selected=False
+Validity summary: total_frames=223, valid_frames=223, nan_invalid=0, bos_invalid=0
+Events: platform_onset_local=101, platform_offset_local=123, step_onset_local=126
+Display rotation: CCW 90 deg
+Trial state: step_R
+COP source: onset0
+COP overlay: enabled (source=onset0, onset0_shift_xy=(-1.2803495563577292, 0.5896488173178999))
+Output root: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source
+Subject output directory: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호
+[BOS overlay] using C3D: /tmp/replace_V3D_v1_1e8e8da/data/all_data/251128_가윤호_perturb_60_001.c3d
+Fixed axis limits: x=(-0.1481, 0.2712), y=(-0.4106, 0.3008)
+GIF outputs: step_vis=phase_bos, bos_mode=freeze/live, cop_source=onset0
+Inside/outside summary: inside=223, outside=0, inside_ratio=100.00%
+Saved GIF[live]: /mnt/c/Users/Alice/OneDrive - 청주대학교/근전도 분석 코드/replace_V3D/output/compare_cop_overlay/v1_dual_source/가윤호/가윤호__velocity-60__trial-1__variant-v1__copsrc-onset0__copsrc-onset0__step_vis-phase_bos__live.gif (frames=112, fps=15, frame_step=2)
+
