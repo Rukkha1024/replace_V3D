@@ -795,6 +795,65 @@ def _safe_name(name: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in name)
 
 
+def summarize_effect_direction(
+    y_step: np.ndarray,
+    y_nonstep: np.ndarray,
+    param_mask: np.ndarray,
+    nonparam_mask: np.ndarray,
+) -> dict[str, Any]:
+    mean_step_curve = y_step.mean(axis=0)
+    mean_nonstep_curve = y_nonstep.mean(axis=0)
+    mean_diff_curve = mean_step_curve - mean_nonstep_curve
+
+    primary_mask = np.zeros(NORM_POINTS, dtype=bool)
+    primary_source = ""
+    if param_mask.any():
+        primary_mask = param_mask
+        primary_source = "param"
+    elif nonparam_mask.any():
+        primary_mask = nonparam_mask
+        primary_source = "nonparam"
+
+    direction = ""
+    mean_diff_primary = math.nan
+    if primary_mask.any():
+        primary_vals = mean_diff_curve[primary_mask]
+        mean_diff_primary = float(np.nanmean(primary_vals))
+        tol = 1e-12
+        if np.all(primary_vals >= -tol) and np.any(primary_vals > tol):
+            direction = "step > nonstep"
+        elif np.all(primary_vals <= tol) and np.any(primary_vals < -tol):
+            direction = "step < nonstep"
+        else:
+            direction = "direction changes"
+
+    return {
+        "mean_step_overall": float(np.nanmean(mean_step_curve)),
+        "mean_nonstep_overall": float(np.nanmean(mean_nonstep_curve)),
+        "mean_diff_overall": float(np.nanmean(mean_diff_curve)),
+        "primary_sig_source": primary_source,
+        "primary_sig_direction": direction,
+        "primary_sig_mean_diff": mean_diff_primary,
+    }
+
+
+def format_test_status(sig: bool, err: str) -> str:
+    err = str(err).strip()
+    if err:
+        return f"failed: {err.splitlines()[0]}"
+    return "sig" if sig else "n.s."
+
+
+def _format_float(value: Any, digits: int = 4) -> str:
+    try:
+        value_f = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    if not math.isfinite(value_f):
+        return "-"
+    return f"{value_f:.{digits}f}"
+
+
 def plot_variable_spm(
     out_path: Path,
     spec: VariableSpec,
@@ -976,8 +1035,8 @@ def write_report(
                 "N_pairs",
                 "param_cluster_ranges_pct",
                 "nonparam_cluster_ranges_pct",
-                "param_sig_bonf",
-                "nonparam_sig_bonf",
+                "primary_sig_direction",
+                "primary_sig_mean_diff",
             ],
         ]
         .sort_values(["family", "variable"])
@@ -992,9 +1051,21 @@ def write_report(
             check_rows.append((var, "not computed"))
         else:
             r = row.iloc[0]
-            sig_txt = "param sig" if bool(r["param_sig_bonf"]) else "param n.s."
-            sig_txt += ", nonparam sig" if bool(r["nonparam_sig_bonf"]) else ", nonparam n.s."
+            sig_txt = f"param {format_test_status(bool(r['param_sig_bonf']), str(r['param_error']))}"
+            sig_txt += f", nonparam {format_test_status(bool(r['nonparam_sig_bonf']), str(r['nonparam_error']))}"
             check_rows.append((var, sig_txt))
+
+    failed_df = results_df.loc[
+        (results_df["param_error"].fillna("") != "") | (results_df["nonparam_error"].fillna("") != ""),
+        ["variable", "param_sig_bonf", "param_error", "nonparam_sig_bonf", "nonparam_error"],
+    ].copy()
+    failed_df = failed_df.sort_values("variable").reset_index(drop=True)
+
+    directional_df = results_df.loc[
+        results_df["primary_sig_direction"].fillna("") != "",
+        ["variable", "primary_sig_source", "primary_sig_direction", "primary_sig_mean_diff"],
+    ].copy()
+    directional_df = directional_df.sort_values("variable").reset_index(drop=True)
 
     lines: list[str] = []
     lines.append("# Step vs. Non-step SPM 1D Analysis Report")
@@ -1061,12 +1132,8 @@ def write_report(
     lines.append("")
     lines.append("## Results")
     lines.append("")
-    lines.append(
-        f"- Parametric 유의 변수: {len(sig_param)} / {len(results_df)}"
-    )
-    lines.append(
-        f"- Nonparametric 유의 변수: {len(sig_nonparam)} / {len(results_df)}"
-    )
+    lines.append(f"- Parametric 유의 변수: {len(sig_param)} / {len(results_df)}")
+    lines.append(f"- Nonparametric 유의 변수: {len(sig_nonparam)} / {len(results_df)}")
     lines.append("")
     lines.append("### Family-level Summary")
     lines.append("")
@@ -1080,18 +1147,17 @@ def write_report(
 
     lines.append("### Significant Variable Summary (Sig only)")
     lines.append("")
-    lines.append("| Variable | Family | N_pairs | Param interval (%) | Nonparam interval (%) | Param Sig | Nonparam Sig |")
-    lines.append("|----------|--------|---------|--------------------|-----------------------|-----------|--------------|")
+    lines.append("| Variable | Family | N_pairs | Param interval (%) | Nonparam interval (%) | Direction | Mean diff |")
+    lines.append("|----------|--------|---------|--------------------|-----------------------|-----------|-----------|")
     if sig_table_df.empty:
-        lines.append("| - | - | - | - | - | n.s. | n.s. |")
+        lines.append("| - | - | - | - | - | - | - |")
     else:
         for _, row in sig_table_df.iterrows():
             lines.append(
                 "| "
                 f"{row['variable']} | {row['family']} | {int(row['N_pairs'])} | "
                 f"{row['param_cluster_ranges_pct']} | {row['nonparam_cluster_ranges_pct']} | "
-                f"{'<0.05' if bool(row['param_sig_bonf']) else 'n.s.'} | "
-                f"{'<0.05' if bool(row['nonparam_sig_bonf']) else 'n.s.'} |"
+                f"{row['primary_sig_direction'] or '-'} | {_format_float(row['primary_sig_mean_diff'])} |"
             )
     lines.append("")
 
@@ -1103,62 +1169,73 @@ def write_report(
         lines.append(f"| {var} | {status} |")
     lines.append("")
 
+    lines.append("### Test Execution Notes")
+    lines.append("")
+    lines.append("| Variable | Parametric status | Nonparametric status |")
+    lines.append("|----------|-------------------|----------------------|")
+    if failed_df.empty:
+        lines.append("| - | all tests completed | all tests completed |")
+    else:
+        for _, row in failed_df.iterrows():
+            lines.append(
+                f"| {row['variable']} | "
+                f"{format_test_status(bool(row['param_sig_bonf']), str(row['param_error']))} | "
+                f"{format_test_status(bool(row['nonparam_sig_bonf']), str(row['nonparam_error']))} |"
+            )
+    lines.append("")
+
     lines.append("## Discussion")
     lines.append("")
-    lines.append("### 시간대별 주요 발견")
+    lines.append("### 결과 해석")
     lines.append("")
-    lines.append("**초기 구간 (0-16%):** "
-                 "MOS_AP_v3d, MOS_minDist_signed, MOS_v3d가 섭동 직후부터 유의하였다. "
-                 "이는 섭동 인가 시점에서 step 전략군의 안정성 마진(Margin of Stability)이 "
-                 "nonstep 전략군과 즉각적으로 구분됨을 시사한다. "
-                 "즉, step을 선택하는 피험자는 섭동 초기에 이미 xCOM이 BOS 경계에 더 가깝거나 이를 벗어나는 경향이 있다.")
+    lines.append(
+        "유의 구간은 MOS 계열의 초기/후기 분리, vCOM_X의 초기+후기 두 구간, "
+        "COM_Z의 초기/중기 구간, xCOM_X·COM_X의 중후기 구간, "
+        "xCOM_BOS_AP_foot의 전 구간 유의처럼 변수별로 다른 시간 패턴을 보였다."
+    )
     lines.append("")
-    lines.append("**중기 구간 (46-60%):** "
-                 "vCOM_X(54%)와 xCOM_X(46%)에서 유의 구간이 시작된다. "
-                 "이 시점은 step 전략군이 보상적 발 디딤을 준비하며 전방 속도(vCOM_X)가 증가하고, "
-                 "그에 따라 외삽 질량 중심(xCOM_X)이 전방으로 이동하기 시작하는 구간이다. "
-                 "nonstep 전략군은 이 시기에 발을 고정한 채 근위부 전략(ankle/hip)으로 대응하므로 "
-                 "속도·위치 변화가 상대적으로 작다.")
+    lines.append(
+        "방향성은 자동으로 계산한 `step - nonstep` 평균 차이를 기준으로 확인하였다. "
+        "COM_X, vCOM_X, xCOM_X, xCOM_BOS_AP_foot는 주된 유의 구간에서 `step < nonstep`이었고, "
+        "COM_Z, xCOM_Z, COP_X_m은 `step > nonstep`이었다. "
+        "MOS 계열은 초기에는 `step > nonstep`, 후기에는 `step < nonstep`으로 바뀌어 "
+        "한 방향의 차이로 요약되지 않았다."
+    )
     lines.append("")
-    lines.append("**후기 구간 (60-100%):** "
-                 "COM_X, xCOM_X, vCOM_X, MOS 계열이 모두 유의해지며, "
-                 "step 전략의 전방 COM 이동과 새로운 BOS 확보 과정이 반영된다. "
-                 "COM_Z와 xCOM_Z는 60-73% 구간에서만 유의한데, "
-                 "이는 step 실행 시 일시적으로 수직 COM이 하강한 뒤 회복하는 패턴을 나타낸다. "
-                 "COP_X_m은 후기(~92-100%)에 유의하여, step 착지 후 COP가 전방으로 급격히 이동하는 시점을 포착한다.")
+    lines.append(
+        "따라서 이 SPM 결과만으로 `step` 전략이 전 구간에서 더 전방으로 이동한다거나, "
+        "BOS 경계를 지속적으로 넘는다고 단정할 수는 없다. "
+        "방향성 해석은 변수와 시간 구간별로 나누어 읽어야 하며, "
+        "기전 설명은 평균 곡선이나 추가 분석과 함께 제시하는 것이 안전하다."
+    )
     lines.append("")
-    lines.append("**전 구간 유의 (0-100%):** "
-                 "xCOM_BOS_AP_foot가 정규화 구간 전체에서 유의하였다. "
-                 "이는 AP 방향 xCOM-BOS 상대 위치가 step/nonstep 전략 간에 근본적으로 다름을 의미하며, "
-                 "step 전략은 xCOM이 BOS 전방 경계를 지속적으로 초과하는 반면, "
-                 "nonstep 전략은 BOS 내부에 xCOM을 유지하는 패턴을 보인다.")
-    lines.append("")
-    lines.append("### ML 방향 및 관절 각도")
-    lines.append("")
-    lines.append("xCOM_BOS_ML_foot, Hip_stance_X_deg 등 ML 방향 및 관절 변수는 유의하지 않았다. "
-                 "이는 본 섭동이 주로 AP 방향으로 가해졌기 때문에, "
-                 "step/nonstep 전략 간 차이가 AP 안정성 변수에 집중되는 것으로 해석된다.")
-    lines.append("")
+
+    if not directional_df.empty:
+        lines.append("### Direction Check")
+        lines.append("")
+        lines.append("| Variable | Source | Direction | Mean diff |")
+        lines.append("|----------|--------|-----------|-----------|")
+        for _, row in directional_df.iterrows():
+            lines.append(
+                f"| {row['variable']} | {row['primary_sig_source']} | "
+                f"{row['primary_sig_direction']} | {_format_float(row['primary_sig_mean_diff'])} |"
+            )
+        lines.append("")
+
     lines.append("## Conclusion")
     lines.append("")
-    lines.append("1. Step 전략군은 섭동 직후(0-16%)부터 AP 방향 MOS가 nonstep 전략군과 유의하게 달라, "
-                 "보상 전략 선택이 섭동 초기 안정성 상태와 관련됨을 확인하였다.")
-    lines.append("2. 중기(46-60%) 이후 vCOM_X, xCOM_X, COM_X가 순차적으로 유의해져, "
-                 "step 준비→실행 과정에서의 전방 이동이 시계열 수준에서 뚜렷이 구분된다.")
-    lines.append("3. xCOM_BOS_AP_foot가 전 구간 유의하여, AP 방향 xCOM-BOS 관계가 "
-                 "step/nonstep 전략을 구분짓는 핵심 지표임을 시사한다.")
-    lines.append("4. ML 방향 변수 및 관절 각도 변수는 유의하지 않아, "
-                 "AP 섭동 하에서 두 전략 간 차이는 시상면(AP·수직) 변수에 국한된다.")
+    lines.append("1. Step/nonstep 차이는 변수마다 다른 시간 구간에서 나타났고, 일부 변수는 두 개 이상의 분리된 유의 구간을 보였다.")
+    lines.append("2. xCOM_BOS_AP_foot는 전 구간 유의하여 가장 일관된 구분 지표였지만, 방향은 `step < nonstep`으로 요약되었다.")
+    lines.append("3. MOS 계열은 초기와 후기의 방향이 바뀌어, 동일 변수라도 시간 구간별 해석이 필요했다.")
+    lines.append("4. Parametric SPM이 zero variance로 실패한 변수들은 음성 결과가 아니라 미검정 항목으로 해석해야 한다.")
     lines.append("")
     lines.append("## Limitations")
     lines.append("")
-    lines.append("- 본 분석은 young, mixed==1, ipsilateral step 시행만 포함하므로, "
-                 "고령자·contralateral step 등으로 일반화 시 주의가 필요하다.")
-    lines.append("- paired t-test 구조상 피험자 내 step/nonstep 시행이 모두 존재하는 경우만 분석되어, "
-                 "한 전략만 사용하는 피험자는 제외되었다.")
-    lines.append("- 비모수 순열 검정과 모수 검정 결과가 모든 유의 변수에서 일치하여 분포 가정 위반 우려는 낮다.")
+    lines.append("- 본 분석은 young, mixed==1, ipsilateral step 시행만 포함하므로, 고령자·contralateral step 등으로 일반화 시 주의가 필요하다.")
+    lines.append("- paired t-test 구조상 피험자 내 step/nonstep 시행이 모두 존재하는 경우만 분석되어, 한 전략만 사용하는 피험자는 제외되었다.")
+    lines.append("- 여러 변수에서 parametric SPM이 zero variance로 실패했으므로, 해당 변수의 모수 결과는 미검정으로 남는다.")
+    lines.append("- 비모수 순열 검정과 모수 검정이 모두 성공한 유의 변수에서는 두 검정의 유의 여부가 일치하였다.")
     lines.append("")
-
     lines.append("## Reproduction")
     lines.append("")
     lines.append("```bash")
@@ -1250,6 +1327,12 @@ def main() -> None:
             "nonparam_cluster_ranges_pct": "-",
             "nonparam_clusters_json": "[]",
             "nonparam_error": "",
+            "mean_step_overall": math.nan,
+            "mean_nonstep_overall": math.nan,
+            "mean_diff_overall": math.nan,
+            "primary_sig_source": "",
+            "primary_sig_direction": "",
+            "primary_sig_mean_diff": math.nan,
             "figure_path": "",
         }
 
@@ -1287,6 +1370,15 @@ def main() -> None:
             )
         elif spm_result["nonparam_p"]:
             row["nonparam_min_p"] = float(np.nanmin(spm_result["nonparam_p"]))
+
+        row.update(
+            summarize_effect_direction(
+                y_step=y_step,
+                y_nonstep=y_nonstep,
+                param_mask=spm_result["param_sig_mask"],
+                nonparam_mask=spm_result["nonparam_sig_mask"],
+            )
+        )
 
         fig_path = fig_dir / f"spm_{_safe_name(spec.name)}.png"
         plot_variable_spm(
