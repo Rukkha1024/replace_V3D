@@ -1,7 +1,7 @@
 ﻿---
 cssclass: clean-embeds
 date created: 2026-01-19. 00.31
-date revised: 2026-03-01
+date revised: 2026-03-06
 ---
 
 # 1. 가설
@@ -48,21 +48,22 @@ DV1–DV3 확인 분석 전에, COM + xCOM + xCOM/BOS 계열에서 step/nonstep 
 | xCOM/BOS (AP/ML, foot 정규화) | `platform_onset`, `step_onset`, `window_mean` |
 
 - 다중비교: 24개 DV 전체 BH-FDR 보정.
-- 전체 결과 파일: `com_xcom_screening_lmm_results.csv`
+- 전체 결과 파일: `analysis/_tmp_result_docs_rewrite_20260306/xcom_screening/com_xcom_screening_lmm_results.csv`
+- 현재 재실행 표본: trials = `126` (step = `53`, nonstep = `73`), subjects = `24`
 
 ### FDR 유의 변수 (9/24개)
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
 |---|---:|---:|---:|---|
-| `xCOM_Y_peak_velocity` | 0.2705±0.0940 | 0.1483±0.0703 | 0.1269 | *** |
-| `xCOM_BOS_AP_foot_mean_window` | 0.3292±0.1256 | 0.4036±0.0996 | −0.0666 | *** |
-| `xCOM_BOS_AP_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | −0.0440 | *** |
-| `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | −0.0893 | *** |
-| `xCOM_Y_mean_velocity` | 0.0703±0.0320 | 0.0450±0.0233 | 0.0277 | *** |
-| `COM_Y_peak_velocity` | 0.0561±0.0294 | 0.0340±0.0239 | 0.0230 | *** |
-| `xCOM_Y_max_min` | 0.0235±0.0116 | 0.0161±0.0124 | 0.0078 | ** |
+| `xCOM_Y_peak_velocity` | 0.2705±0.0940 | 0.1470±0.0707 | 0.1279 | *** |
+| `xCOM_BOS_AP_foot_mean_window` | 0.3292±0.1256 | 0.4014±0.1006 | −0.0666 | *** |
+| `xCOM_BOS_AP_foot_platformonset` | 0.5091±0.0596 | 0.5709±0.0651 | −0.0439 | *** |
+| `xCOM_BOS_AP_foot_steponset` | 0.2354±0.1720 | 0.3219±0.0995 | −0.0894 | *** |
+| `xCOM_Y_mean_velocity` | 0.0703±0.0320 | 0.0447±0.0233 | 0.0278 | *** |
+| `COM_Y_peak_velocity` | 0.0561±0.0294 | 0.0338±0.0238 | 0.0231 | *** |
+| `xCOM_Y_max_min` | 0.0235±0.0116 | 0.0160±0.0124 | 0.0079 | ** |
 | `COM_Z_mean_velocity` | 0.0250±0.0118 | 0.0220±0.0082 | 0.0036 | * |
-| `xCOM_X_mean_velocity` | 0.1286±0.0778 | 0.1347±0.0694 | 0.0133 | * |
+| `xCOM_X_mean_velocity` | 0.1286±0.0778 | 0.1341±0.0691 | 0.0133 | * |
 
 ### 스크리닝 해석
 
@@ -89,22 +90,22 @@ DV1–DV3 확인 분석 전에, COM + xCOM + xCOM/BOS 계열에서 step/nonstep 
 ### 모델 정보
 
 - 모델: `DV ~ step_TF + (1|subject)`, REML
-- 표본: trials = 125 (step = 53, nonstep = 72), subjects = 24
+- 표본: trials = `126` (step = `53`, nonstep = `73`), subjects = `24`
 - 참조 수준: nonstep (Estimate = step − nonstep)
-- 다중비교: 6개 DV 전체 BH-FDR 보정
+- 다중비교: primary 6개 DV 전체 BH-FDR 보정
 
 ### 주효과 결과 (6개 DV)
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig |
 |---|---:|---:|---:|---|
-| `DV1_xcom_hof_rear_over_foot_platformonset` | 0.5091±0.0596 | 0.5715±0.0654 | −0.0440 | *** |
-| `DV1_xcom_hof_rear_over_foot_steponset` | 0.2354±0.1720 | 0.3232±0.0996 | −0.0893 | *** |
-| `DV2_com_rear_over_foot_platformonset` | 0.4976±0.0583 | 0.5525±0.0627 | −0.0395 | *** |
-| `DV2_com_rear_over_foot_steponset` | 0.2648±0.1109 | 0.2872±0.0745 | −0.0225 | * |
-| `DV3_vcom_rel_over_sqrtgh_platformonset` | −0.0245±0.0159 | −0.0291±0.0195 | −0.0001 | n.s. |
-| `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | −0.0039±0.0184 | 0.0715 | *** |
+| `DV1_xcom_hof_rear_over_foot_platformonset` | 0.5091±0.0596 | 0.5709±0.0651 | −0.0439 | *** |
+| `DV1_xcom_hof_rear_over_foot_steponset` | 0.2354±0.1720 | 0.3219±0.0995 | −0.0894 | *** |
+| `DV2_com_rear_over_foot_platformonset` | 0.4976±0.0583 | 0.5514±0.0629 | −0.0394 | *** |
+| `DV2_com_rear_over_foot_steponset` | 0.2648±0.1109 | 0.2861±0.0746 | −0.0225 | * |
+| `DV3_vcom_rel_over_sqrtgh_platformonset` | −0.0245±0.0159 | −0.0299±0.0206 | −0.0001 | n.s. |
+| `DV3_vcom_rel_over_sqrtgh_steponset` | 0.0684±0.0429 | −0.0038±0.0183 | 0.0715 | *** |
 
-- FDR 유의: **5/6**
+- Primary FDR 유의: **5/6**
 
 ### DV1 해석 (위치 + 속도 통합항)
 
@@ -133,40 +134,41 @@ DV1–DV3 확인 분석 전에, COM + xCOM + xCOM/BOS 계열에서 step/nonstep 
 
 ---
 
-## 2.3 DV1 Supplementary — 절대 크기 (cm) 및 확장 표본 검증
+## 2.3 DV1 Supplementary — 절대 크기 (cm) 및 보조 raw/no-filtering 검토
 
-### Primary 표본 (125 trials) — norm + abs_cm 병행
+### Primary 표본 (126 trials) — norm + abs_cm 병행
 
 | Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig |
 |---|---:|---:|---:|---|---:|---:|---:|---|
-| platform onset | 0.51±0.06 | 0.57±0.07 | −0.04 | *** | 12.91±1.62 | 14.44±1.62 | −1.10 | *** |
-| step onset | 0.24±0.17 | 0.32±0.10 | −0.09 | *** | 5.95±4.45 | 8.19±2.61 | −2.29 | *** |
+| platform onset | 0.51±0.06 | 0.57±0.07 | −0.04 | *** | 12.91±1.62 | 14.43±1.61 | −1.10 | *** |
+| step onset | 0.24±0.17 | 0.32±0.10 | −0.09 | *** | 5.95±4.45 | 8.15±2.60 | −2.29 | *** |
 
 - 절대 크기: platform onset에서 약 1.1 cm, step onset에서 약 2.3 cm 차이.
 
-### Additional Check — 확장 표본 (184 trials, Raw/No Filtering)
+### Additional Check — 보존된 supplementary result CSV (`184 trials, Raw/No Filtering` 섹션 유지)
 
-Stance leg 필터를 해제하고 전체 step trial(mixed == 1)을 포함하여 방향 일관성을 재확인하였다.
+이 블록은 사용자가 유지하길 원한 기존 `184 trials, Raw/No Filtering` 보조 섹션이다. 다만 현재 기본 rerun chain과는 별도의 **아카이브 supplementary 결과 CSV**(`analysis/xCOM&BOS_normalization/tmp_raw_dv1_norm_vs_cm_lmm_results.csv`)에 근거한다. 현재 저장소에서 다시 실행 가능한 preserved raw-input chain은 `166 trials`만 재현되므로, 아래 표는 **현재 primary rerun 결과와 별개인 보조/보존 결과**로 읽어야 한다.
 
-- 표본: trials = 184, subjects = 24 (step = 112, nonstep = 72)
-- step_onset DVs: step onset 미보유 trial 제외로 step n = 110.
+- 아카이브 supplementary 표본: trials = `184`, subjects = `24` (step = `112`, nonstep = `72`)
+- step_onset DVs: step onset 미보유 trial 제외로 step n = `110`, nonstep n = `72`
 
 | Event | Step (M±SD) | Nonstep (M±SD) | Estimate | Sig | Step (M±SD, cm) | Nonstep (M±SD, cm) | Estimate (cm) | Sig |
 |---|---:|---:|---:|---|---:|---:|---:|---|
 | platform onset | 0.52±0.06 | 0.58±0.07 | −0.05 | *** | 13.08±1.65 | 14.63±1.64 | −1.19 | *** |
 | step onset | 0.22±0.17 | 0.34±0.10 | −0.11 | *** | 5.63±4.32 | 8.65±2.67 | −2.90 | *** |
 
-- 확장 표본에서도 두 이벤트 모두 step군이 nonstep보다 DV1이 낮았다(후방). 방향 일관성이 확인되었다.
-- 절대 크기: platform onset에서 약 1.2 cm, step onset에서 약 2.9 cm 차이.
+- 이 아카이브 supplementary 결과에서도 두 이벤트 모두 step군이 nonstep보다 DV1이 낮았다(후방). 방향 일관성은 유지되었다.
+- 현재 보존된 raw-input 재실행 경로는 `166 trials (step=100, nonstep=66, subjects=22)`를 재현하지만, 그 결과 역시 두 이벤트 모두 `step < nonstep` 방향을 유지하였다. 따라서 supplementary chain의 핵심 메시지는 “방향 일관성 유지”로만 제한해 해석하는 것이 안전하다.
 
 ---
 
 # 3. 결론
 
-1. **DV1 (xCOM/BOS):** 두 이벤트 모두 step군이 nonstep보다 유의하게 작았다(`***`). Step trial은 xCOM이 BOS rear에 더 가까운, 즉 후방 불안정 위치에 있었다.
+1. **DV1 (xCOM/BOS):** 현재 primary rerun(`126 trials`)에서 두 이벤트 모두 step군이 nonstep보다 유의하게 작았다(`***`). Step trial은 xCOM이 BOS rear에 더 가까운, 즉 후방 불안정 위치에 있었다.
 2. **DV2 (위치항):** 두 이벤트 모두 유의하였다(`***`, `*`). Platform onset 시점에서 COM 위치 차이가 전략 분화의 주요 원인이었다.
 3. **DV3 (속도항):** Step onset에서만 유의하였다(`***`). 섭동 진행 중 step군의 COM이 BOS 대비 전방으로 더 빠르게 이동하여, 후방 stepping이 필요한 동적 불안정 상태에 이르렀다.
-4. **종합:** Platform onset 초기 xCOM–BOS 상대 위치(DV1, DV2)는 전략 선택과 연관되어 있었다. 섭동이 진행될수록 속도항(DV3)이 추가로 분화되면서 step 전략의 동적 불안정을 반영하였다. 6개 DV 중 5개가 FDR 유의(5/6)하여, xCOM/BOS 정규화 지표가 step vs nonstep 전략을 구분하는 유효한 지표임을 확인하였다.
+4. **스크리닝:** 24개 후보 중 9개가 FDR 유의였고, 유의 신호는 `xCOM_Y` 및 `xCOM_BOS_AP_foot` 계열에 집중되었다.
+5. **종합:** 현재 primary rerun에서는 primary 6개 DV 중 5개가 FDR 유의였다. xCOM/BOS 정규화 지표는 step vs nonstep 전략을 구분하는 데 유효했지만, 보조 raw/no-filtering 블록은 현재 default rerun chain이 아니라 보존된 supplementary 결과로 해석해야 한다.
 
 ---
 
@@ -174,11 +176,11 @@ Stance leg 필터를 해제하고 전체 step trial(mixed == 1)을 포함하여 
 
 | 비교 항목 | 선행연구 결과 | 본 연구 결과 | 판정 |
 |---|---|---|---|
-| Hof 기반 xCOM/BOS의 전략 구분력 (Van Wouwe, 2021) | onset/early 시점 안정성 지표로 유효 | DV1이 onset/step_onset 모두 유의(`***`) | Consistent |
+| Hof 기반 xCOM/BOS의 전략 구분력 (Van Wouwe, 2021) | onset/early 시점 안정성 지표로 유효 | DV1이 platform onset, step onset 모두 유의(`***`) | Consistent |
 | COM 위치항 정규화의 차이 (Joshi, 2018) | `(COM−BOS)/foot_length` 위치 지표 사용 보고 | DV2가 두 이벤트 모두 유의(`***`, `*`) | Consistent |
 | 속도 정규화 항의 분리 해석 (Joshi, 2018) | `VCOM/BOS`를 별도 지표로 해석 | DV3는 step_onset에서만 유의(`***`), onset은 n.s. | Partially consistent |
 | 초기 자세와 전략 variability의 연관 (Van Wouwe, 2021) | 초기 xCOM/BOS 상태가 trial-by-trial 전략 변동을 설명 | Platform onset DV1에서 step < nonstep(`***`) — 초기 위치 차이와 전략 연관 확인 | Consistent |
-| Foot-length 정규화의 유효성 (Salot, 2016; Patel, 2015) | foot-length normalized xCOM/BOS가 집단 간 비교에 유효 | Primary(norm)과 Supplementary(abs_cm) 모두 동일 방향 유의 | Consistent |
+| Foot-length 정규화의 유효성 (Salot, 2016; Patel, 2015) | foot-length normalized xCOM/BOS가 집단 간 비교에 유효 | Primary(norm)과 abs_cm supplementary 모두 동일 방향 유의 | Consistent |
 
 ### 차이점
 
