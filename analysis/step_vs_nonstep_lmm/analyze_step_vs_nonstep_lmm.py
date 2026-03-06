@@ -181,9 +181,9 @@ def build_dv_specs() -> list[dict]:
         # "COM mean velocity" in the paper plan is treated as mean(|vCOM|) within the window.
         specs.append({"dv": f"vCOM_{ax}_mean_abs", "col": f"vCOM_{ax}", "agg": "mean_abs", "family": FAMILY_KINETICS})
 
-    # COP (onset-zeroed)
+    # COP (use the exported COP columns present in the current CSV)
     for ax in _COP_AXES:
-        col = f"COP_{ax}_m_onset0"
+        col = f"COP_{ax}_m"
         specs.append({"dv": f"COP_{ax}_range", "col": col, "agg": "range", "family": FAMILY_KINETICS})
         specs.append({"dv": f"COP_{ax}_path_length", "col": col, "agg": "path_length", "family": FAMILY_KINETICS})
         specs.append({"dv": f"COP_{ax}_peak_velocity", "col": col, "agg": "abs_peak_velocity", "family": FAMILY_KINETICS})

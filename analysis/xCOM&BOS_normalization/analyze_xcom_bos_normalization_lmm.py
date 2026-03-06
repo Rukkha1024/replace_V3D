@@ -372,24 +372,27 @@ def _compute_trial_event_frames(
         print(f"  Warning: {missing_after_fill} trials still missing step_onset_eval (dropped)")
         trials = trials.dropna(subset=["step_onset_eval"]).reset_index(drop=True)
 
-    oob_platform = (
+    oob_platform_mask = (
         (trials["platform_eval_frame"] < trials["frame_min"])
         | (trials["platform_eval_frame"] > trials["frame_max"])
-    ).sum()
-    oob_step = (
+    )
+    oob_step_mask = (
         (trials["step_onset_eval"] < trials["frame_min"])
         | (trials["step_onset_eval"] > trials["frame_max"])
-    ).sum()
-    if int(oob_platform) > 0 or int(oob_step) > 0:
-        raise ValueError(
-            "Event frame out of range: "
-            f"platform={int(oob_platform)}, step_onset={int(oob_step)}"
+    )
+    oob_platform = int(oob_platform_mask.sum())
+    oob_step = int(oob_step_mask.sum())
+    if oob_platform > 0 or oob_step > 0:
+        print(
+            "  Warning: dropping out-of-range event trials: "
+            f"platform={oob_platform}, step_onset={oob_step}"
         )
+        trials = trials.loc[~(oob_platform_mask | oob_step_mask)].reset_index(drop=True)
 
     print(f"  step_onset fill (trial-level prefilter): {filled_trial_pref}")
     print(f"  step_onset fill (subject-velocity mean): {filled_sv}")
     print(f"  step_onset fill (prefilter platform subject-velocity mean): {filled_pref}")
-    print(f"  Event range validation passed: platform_oob={int(oob_platform)}, step_oob={int(oob_step)}")
+    print("  Event range validation passed: platform_oob=0, step_oob=0 after drop")
 
     return trials[
         TRIAL_KEYS

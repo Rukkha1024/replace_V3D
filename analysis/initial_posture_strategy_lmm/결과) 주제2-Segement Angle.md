@@ -10,41 +10,41 @@
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
-| `Hip_stance_X_abs_onset` | 10.75±5.87 | 9.94±6.99 | 0.12 | n.s. |
-| `Hip_stance_Y_abs_onset` | 1.54±4.18 | -0.09±3.50 | 1.55 | * |
-| `Hip_stance_Z_abs_onset` | -0.08±9.49 | 0.74±8.90 | -1.17 | n.s. |
-| `Knee_stance_X_abs_onset` | -4.51±5.71 | -3.17±5.01 | -0.12 | n.s. |
-| `Knee_stance_Y_abs_onset` | -2.85±3.64 | -2.96±3.71 | 0.36 | n.s. |
-| `Knee_stance_Z_abs_onset` | -4.38±2.93 | -3.93±3.03 | -0.40 | n.s. |
-| `Ankle_stance_X_abs_onset` | 4.29±3.03 | 4.04±3.08 | 0.01 | n.s. |
-| `Ankle_stance_Y_abs_onset` | 10.72±4.42 | 11.21±5.25 | -0.25 | n.s. |
-| `Ankle_stance_Z_abs_onset` | -8.49±5.65 | -8.00±5.81 | 0.14 | n.s. |
-| `Trunk_X_abs_onset` | 2.79±6.49 | 2.49±6.40 | -0.18 | n.s. |
-| `Trunk_Y_abs_onset` | -1.00±4.07 | 0.33±3.51 | -0.36 | n.s. |
-| `Trunk_Z_abs_onset` | 1.15±3.58 | 0.79±3.59 | 0.24 | n.s. |
-| `Neck_X_abs_onset` | 17.59±27.66 | 23.02±7.51 | -5.25 | n.s. |
-| `Neck_Y_abs_onset` | 2.17±6.95 | 1.83±5.05 | -0.35 | n.s. |
-| `Neck_Z_abs_onset` | 0.92±13.45 | 0.31±4.99 | 1.30 | n.s. |
+| `Hip_stance_X_abs_onset` | 10.25±7.28 | 9.94±6.99 | 0.25 | n.s. |
+| `Hip_stance_Y_abs_onset` | 0.30±4.22 | -0.09±3.50 | 0.88 | n.s. |
+| `Hip_stance_Z_abs_onset` | 1.41±8.68 | 0.74±8.90 | -0.52 | n.s. |
+| `Knee_stance_X_abs_onset` | -3.06±5.24 | -3.17±5.01 | 0.14 | n.s. |
+| `Knee_stance_Y_abs_onset` | -2.55±3.40 | -2.96±3.71 | 0.24 | n.s. |
+| `Knee_stance_Z_abs_onset` | -4.17±2.99 | -3.93±3.03 | -0.28 | n.s. |
+| `Ankle_stance_X_abs_onset` | 3.72±3.12 | 4.04±3.08 | -0.48 | n.s. |
+| `Ankle_stance_Y_abs_onset` | 10.79±4.52 | 11.21±5.25 | -0.29 | n.s. |
+| `Ankle_stance_Z_abs_onset` | -8.29±5.86 | -8.00±5.81 | -0.08 | n.s. |
+| `Trunk_X_abs_onset` | 2.70±7.19 | 2.49±6.40 | -0.34 | n.s. |
+| `Trunk_Y_abs_onset` | -0.72±4.39 | 0.33±3.51 | -0.12 | n.s. |
+| `Trunk_Z_abs_onset` | 0.64±3.20 | 0.79±3.59 | -0.06 | n.s. |
+| `Neck_X_abs_onset` | 19.73±19.80 | 23.02±7.51 | -2.56 | n.s. |
+| `Neck_Y_abs_onset` | 2.02±5.64 | 1.83±5.05 | -0.23 | n.s. |
+| `Neck_Z_abs_onset` | 0.36±9.89 | 0.31±4.99 | 0.55 | n.s. |
 
 ## step_onset 단일시점 LMM
 
 | Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---:|---:|---:|---|
-| `Hip_stance_X_step_onset` | 7.73±3.94 | 4.02±3.81 | 3.76 | *** |
-| `Hip_stance_Y_step_onset` | -0.17±2.01 | -0.01±1.12 | 0.11 | n.s. |
-| `Hip_stance_Z_step_onset` | -1.53±4.00 | 0.50±2.47 | -2.15 | *** |
-| `Knee_stance_X_step_onset` | -9.86±7.45 | -8.72±4.87 | -3.22 | *** |
-| `Knee_stance_Y_step_onset` | -0.58±1.65 | -1.02±1.09 | 0.07 | n.s. |
-| `Knee_stance_Z_step_onset` | -1.24±1.98 | -0.75±1.15 | -0.52 | n.s. |
-| `Ankle_stance_X_step_onset` | 8.15±5.21 | 6.81±4.59 | 1.19 | n.s. |
-| `Ankle_stance_Y_step_onset` | 1.77±3.13 | 1.15±1.59 | 0.60 | n.s. |
-| `Ankle_stance_Z_step_onset` | -0.07±4.61 | 0.88±2.04 | -0.52 | n.s. |
-| `Trunk_X_step_onset` | 3.06±5.63 | 1.11±4.19 | 1.41 | n.s. |
-| `Trunk_Y_step_onset` | 0.69±2.15 | 0.21±1.62 | 0.66 | n.s. |
-| `Trunk_Z_step_onset` | -0.46±2.16 | -0.36±1.90 | -0.00 | n.s. |
-| `Neck_X_step_onset` | -8.32±11.82 | -9.28±9.08 | -1.94 | n.s. |
-| `Neck_Y_step_onset` | -0.21±3.08 | -0.19±2.10 | -0.10 | n.s. |
-| `Neck_Z_step_onset` | 0.80±2.25 | 0.85±2.20 | -0.04 | n.s. |
+| `Hip_stance_X_step_onset` | 7.29±4.08 | 4.08±4.07 | 2.98 | *** |
+| `Hip_stance_Y_step_onset` | -0.27±1.71 | -0.03±1.13 | -0.10 | n.s. |
+| `Hip_stance_Z_step_onset` | -1.37±3.70 | 0.70±2.92 | -1.93 | *** |
+| `Knee_stance_X_step_onset` | -9.36±6.17 | -8.29±4.66 | -1.89 | ** |
+| `Knee_stance_Y_step_onset` | -0.50±1.47 | -0.83±1.05 | 0.08 | n.s. |
+| `Knee_stance_Z_step_onset` | -1.25±1.68 | -0.81±1.24 | -0.43 | n.s. |
+| `Ankle_stance_X_step_onset` | 7.29±4.98 | 7.10±4.79 | 0.23 | n.s. |
+| `Ankle_stance_Y_step_onset` | 1.61±3.85 | 1.04±1.80 | 0.65 | n.s. |
+| `Ankle_stance_Z_step_onset` | -0.09±3.85 | 0.57±2.22 | -0.59 | n.s. |
+| `Trunk_X_step_onset` | 2.70±6.18 | 1.62±4.65 | 1.25 | n.s. |
+| `Trunk_Y_step_onset` | 0.22±2.07 | 0.14±1.55 | 0.25 | n.s. |
+| `Trunk_Z_step_onset` | -0.73±2.61 | -0.29±1.96 | -0.21 | n.s. |
+| `Neck_X_step_onset` | -8.72±10.75 | -9.12±9.75 | -2.04 | n.s. |
+| `Neck_Y_step_onset` | -0.22±3.06 | 0.03±2.23 | -0.29 | n.s. |
+| `Neck_Z_step_onset` | 0.53±2.48 | 0.67±2.35 | -0.15 | n.s. |
 
 ## coordinate 해석 기준
 
@@ -63,13 +63,13 @@
 - step_onset 비교 규칙:
   - step trial: 해당 trial의 `step_onset_local` 사용
   - nonstep trial: 동일 subject의 step trial `step_onset_local` 평균값을 대입한 후 frame으로 반올림
-  - step_onset 기준 유효 trial: `119/125` (step=`52`, nonstep=`67`)
-  - 제외 trial: `6` (step_onset 결측 step=`1`, step 참조 부재 nonstep=`5`, frame 불일치=`0`)
-  - nonstep step_onset 참조 부재 subject: `권유영, 김종철, 방주원`
+  - step_onset 기준 유효 trial: `181/185` (step=`108`, nonstep=`73`)
+  - 제외 trial: `4` (step_onset 결측 step=`2`, step 참조 부재 nonstep=`0`, frame 불일치=`2`)
+  - nonstep step_onset 참조 부재 subject: `(none)`
 
 - 해석 노트:
-  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 1개가 FDR 유의였다: `Hip_stance_Y_abs_onset`.
-  - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 3개가 FDR 유의였다: `Hip_stance_X_step_onset, Knee_stance_X_step_onset, Hip_stance_Z_step_onset`.
+  - platform_onset: 15개 segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다.
+  - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 3개가 FDR 유의였다: `Hip_stance_X_step_onset, Hip_stance_Z_step_onset, Knee_stance_X_step_onset`.
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 # 결과 해석

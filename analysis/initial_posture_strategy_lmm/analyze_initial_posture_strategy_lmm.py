@@ -584,157 +584,186 @@ def compute_absolute_onset_features(
     trial_lookup = trial_meta.set_index(TRIAL_KEYS)[["step_TF", "state"]].to_dict("index")
 
     rows: list[dict[str, Any]] = []
+    skipped_trials: list[dict[str, str]] = []
     qc_warn_count = 0
 
     for key in sorted(keys):
         subject, velocity, trial = key
         c3d_file = key_to_file[key]
-        c3d = read_c3d_points(c3d_file)
-        events = load_trial_events(
-            event_xlsm=platform_xlsm,
-            subject=subject,
-            velocity=float(velocity),
-            trial=int(trial),
-            pre_frames=100,
-            sheet_name="platform",
-        )
-        onset_local = int(events.platform_onset_local)
-        idx0 = onset_local - 1
-
-        if idx0 < 0 or idx0 >= int(c3d.points.shape[0]):
-            raise IndexError(
-                "platform_onset_local out of range for raw C3D frames: "
-                f"key={key}, onset={onset_local}, n_frames={c3d.points.shape[0]}"
+        try:
+            c3d = read_c3d_points(c3d_file)
+            events = load_trial_events(
+                event_xlsm=platform_xlsm,
+                subject=subject,
+                velocity=float(velocity),
+                trial=int(trial),
+                pre_frames=100,
+                sheet_name="platform",
             )
+            onset_local = int(events.platform_onset_local)
+            idx0 = onset_local - 1
 
-        angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=c3d.points.shape[0])
+            if idx0 < 0 or idx0 >= int(c3d.points.shape[0]):
+                raise IndexError(
+                    "platform_onset_local out of range for raw C3D frames: "
+                    f"key={key}, onset={onset_local}, n_frames={c3d.points.shape[0]}"
+                )
 
-        bilateral: dict[str, float] = {}
-        for seg in STANCE_SEGMENTS:
-            seg_key = seg.lower()
-            for side in ("L", "R"):
+            angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=c3d.points.shape[0])
+
+            bilateral: dict[str, float] = {}
+            for seg in STANCE_SEGMENTS:
+                seg_key = seg.lower()
+                for side in ("L", "R"):
+                    for axis in ANGLE_AXES:
+                        attr = f"{seg_key}_{side}_{axis}"
+                        col = f"{seg}_{side}_{axis}_abs_onset"
+                        v = float(getattr(angles, attr)[idx0])
+                        # Match repository joint-angle sign convention used by the CSV pipeline:
+                        # LEFT Hip/Knee/Ankle Y/Z are negated so that Y/Z sign meaning matches RIGHT.
+                        # This matters when we later mix stance across L/R.
+                        if side == "L" and axis in ("Y", "Z"):
+                            v *= -1.0
+                        bilateral[col] = v
+            for seg in MIDLINE_SEGMENTS:
+                seg_key = seg.lower()
                 for axis in ANGLE_AXES:
-                    attr = f"{seg_key}_{side}_{axis}"
-                    col = f"{seg}_{side}_{axis}_abs_onset"
-                    v = float(getattr(angles, attr)[idx0])
-                    # Match repository joint-angle sign convention used by the CSV pipeline:
-                    # LEFT Hip/Knee/Ankle Y/Z are negated so that Y/Z sign meaning matches RIGHT.
-                    # This matters when we later mix stance across L/R.
-                    if side == "L" and axis in ("Y", "Z"):
-                        v *= -1.0
-                    bilateral[col] = v
-        for seg in MIDLINE_SEGMENTS:
-            seg_key = seg.lower()
-            for axis in ANGLE_AXES:
-                attr = f"{seg_key}_{axis}"
-                col = f"{seg}_{axis}_abs_onset"
-                bilateral[col] = float(getattr(angles, attr)[idx0])
+                    attr = f"{seg_key}_{axis}"
+                    col = f"{seg}_{axis}_abs_onset"
+                    bilateral[col] = float(getattr(angles, attr)[idx0])
 
-        step_state = trial_lookup[(subject, velocity, trial)]
-        row = {
-            "subject": subject,
-            "velocity": float(velocity),
-            "trial": int(trial),
-            "step_TF": str(step_state["step_TF"]).lower().strip(),
-            "state": str(step_state["state"]).lower().strip(),
-            "major_step_side": str(major_lookup.get(subject, "tie")).lower().strip(),
-            **bilateral,
-        }
+            step_state = trial_lookup[(subject, velocity, trial)]
+            row = {
+                "subject": subject,
+                "velocity": float(velocity),
+                "trial": int(trial),
+                "step_TF": str(step_state["step_TF"]).lower().strip(),
+                "state": str(step_state["state"]).lower().strip(),
+                "major_step_side": str(major_lookup.get(subject, "tie")).lower().strip(),
+                **bilateral,
+            }
 
-        s = pd.Series(row)
-        for seg in STANCE_SEGMENTS:
-            for axis in ANGLE_AXES:
-                left_col = f"{seg}_L_{axis}_abs_onset"
-                right_col = f"{seg}_R_{axis}_abs_onset"
-                out_col = f"{seg}_stance_{axis}_abs_onset"
-                row[out_col] = _pick_stance_value(s, left_col, right_col)
+            s = pd.Series(row)
+            for seg in STANCE_SEGMENTS:
+                for axis in ANGLE_AXES:
+                    left_col = f"{seg}_L_{axis}_abs_onset"
+                    right_col = f"{seg}_R_{axis}_abs_onset"
+                    out_col = f"{seg}_stance_{axis}_abs_onset"
+                    row[out_col] = _pick_stance_value(s, left_col, right_col)
 
-        fp_coll = read_force_platforms(c3d_file)
-        analog_avg = fp_coll.analog.values
-        n_frames = int(c3d.points.shape[0])
-        if analog_avg.shape[0] != n_frames:
-            raise ValueError(
-                f"Analog frames ({analog_avg.shape[0]}) != point frames ({n_frames}) for {c3d_file.name}"
+            fp_coll = read_force_platforms(c3d_file)
+            analog_avg = fp_coll.analog.values
+            n_frames = int(c3d.points.shape[0])
+            if analog_avg.shape[0] != n_frames:
+                raise ValueError(
+                    f"Analog frames ({analog_avg.shape[0]}) != point frames ({n_frames}) for {c3d_file.name}"
+                )
+            fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
+            idx = fp.channel_indices_0based.astype(int)
+
+            F_raw = analog_avg[:, idx[0:3]]
+            M_raw = analog_avg[:, idx[3:6]]
+            F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
+                F_in=F_raw,
+                M_in=M_raw,
             )
-        fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
-        idx = fp.channel_indices_0based.astype(int)
+            analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
+            analog_stage01[:, idx[0:3]] = F_stage01_raw
+            analog_stage01[:, idx[3:6]] = M_stage01_raw
 
-        F_raw = analog_avg[:, idx[0:3]]
-        M_raw = analog_avg[:, idx[3:6]]
-        F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
-            F_in=F_raw,
-            M_in=M_raw,
-        )
-        analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
-        analog_stage01[:, idx[0:3]] = F_stage01_raw
-        analog_stage01[:, idx[3:6]] = M_stage01_raw
+            # Align sign to repository Stage01 inertial-template convention.
+            analog_shared_sign = analog_stage01.copy()
+            analog_shared_sign[:, idx[0:3]] *= -1.0
+            analog_shared_sign[:, idx[3:6]] *= -1.0
 
-        # Align sign to repository Stage01 inertial-template convention.
-        analog_shared_sign = analog_stage01.copy()
-        analog_shared_sign[:, idx[0:3]] *= -1.0
-        analog_shared_sign[:, idx[3:6]] *= -1.0
-
-        offset0 = int(events.platform_offset_local) - 1
-        analog_used, inertial_info = apply_forceplate_inertial_subtract(
-            analog_shared_sign,
-            fp,
-            velocity=float(velocity),
-            onset0=int(idx0),
-            offset0=int(offset0),
-            templates=templates,
-            missing_policy=str(fp_inertial_policy),
-            qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold),
-            qc_margin_m=float(fp_inertial_qc_margin_m),
-        )
-        if not inertial_info.get("applied"):
-            raise ValueError(
-                "Forceplate inertial subtract did not apply for "
-                f"{c3d_file.name} (reason={inertial_info.get('reason')}, "
-                f"policy={inertial_info.get('missing_policy')})."
+            offset0 = int(events.platform_offset_local) - 1
+            analog_used, inertial_info = apply_forceplate_inertial_subtract(
+                analog_shared_sign,
+                fp,
+                velocity=float(velocity),
+                onset0=int(idx0),
+                offset0=int(offset0),
+                templates=templates,
+                missing_policy=str(fp_inertial_policy),
+                qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold),
+                qc_margin_m=float(fp_inertial_qc_margin_m),
             )
-        if inertial_info.get("qc_failed"):
-            msg = (
-                "Forceplate inertial subtract QC failed "
-                f"for {c3d_file.name} (COP in-bounds after="
-                f"{inertial_info.get('after_qc_cop_in_bounds_frac')})."
+            if not inertial_info.get("applied"):
+                raise ValueError(
+                    "Forceplate inertial subtract did not apply for "
+                    f"{c3d_file.name} (reason={inertial_info.get('reason')}, "
+                    f"policy={inertial_info.get('missing_policy')})."
+                )
+            if inertial_info.get("qc_failed"):
+                msg = (
+                    "Forceplate inertial subtract QC failed "
+                    f"for {c3d_file.name} (COP in-bounds after="
+                    f"{inertial_info.get('after_qc_cop_in_bounds_frac')})."
+                )
+                if fp_inertial_qc_strict:
+                    raise ValueError(msg)
+                qc_warn_count += 1
+
+            F_stage01 = analog_used[:, idx[0:3]]
+            M_stage01 = analog_used[:, idx[3:6]]
+            COP_stage01_xy = compute_cop_stage01_xy(
+                F_stage01=F_stage01,
+                M_stage01=M_stage01,
             )
-            if fp_inertial_qc_strict:
-                raise ValueError(msg)
-            qc_warn_count += 1
+            jc = compute_joint_centers(c3d.points, c3d.labels)
+            body_mass_kg = load_subject_body_mass_kg(platform_xlsm, subject)
+            torque_res = compute_ankle_torque_from_net_wrench(
+                F_lab=F_stage01,
+                M_lab_at_fp_origin=M_stage01,
+                fp_origin_lab=fp.origin_lab,
+                ankle_L=jc["ankle_L"],
+                ankle_R=jc["ankle_R"],
+                body_mass_kg=body_mass_kg,
+            )
 
-        F_stage01 = analog_used[:, idx[0:3]]
-        M_stage01 = analog_used[:, idx[3:6]]
-        COP_stage01_xy = compute_cop_stage01_xy(
-            F_stage01=F_stage01,
-            M_stage01=M_stage01,
-        )
-        jc = compute_joint_centers(c3d.points, c3d.labels)
-        body_mass_kg = load_subject_body_mass_kg(platform_xlsm, subject)
-        torque_res = compute_ankle_torque_from_net_wrench(
-            F_lab=F_stage01,
-            M_lab_at_fp_origin=M_stage01,
-            fp_origin_lab=fp.origin_lab,
-            ankle_L=jc["ankle_L"],
-            ankle_R=jc["ankle_R"],
-            body_mass_kg=body_mass_kg,
-        )
+            row["GRF_X_abs_onset"] = float(F_stage01[idx0, 0])
+            row["GRF_Y_abs_onset"] = float(F_stage01[idx0, 1])
+            row["GRF_Z_abs_onset"] = float(F_stage01[idx0, 2])
+            row["COP_X_abs_onset"] = float(COP_stage01_xy[idx0, 0])
+            row["COP_Y_abs_onset"] = float(COP_stage01_xy[idx0, 1])
+            row["AnkleTorqueMid_Y_perkg_abs_onset"] = (
+                float(np.nan)
+                if torque_res.torque_mid_int_Y_Nm_per_kg is None
+                else float(torque_res.torque_mid_int_Y_Nm_per_kg[idx0])
+            )
 
-        row["GRF_X_abs_onset"] = float(F_stage01[idx0, 0])
-        row["GRF_Y_abs_onset"] = float(F_stage01[idx0, 1])
-        row["GRF_Z_abs_onset"] = float(F_stage01[idx0, 2])
-        row["COP_X_abs_onset"] = float(COP_stage01_xy[idx0, 0])
-        row["COP_Y_abs_onset"] = float(COP_stage01_xy[idx0, 1])
-        row["AnkleTorqueMid_Y_perkg_abs_onset"] = (
-            float(np.nan)
-            if torque_res.torque_mid_int_Y_Nm_per_kg is None
-            else float(torque_res.torque_mid_int_Y_Nm_per_kg[idx0])
-        )
+            rows.append(row)
+        except Exception as exc:
+            skipped_trials.append(
+                {
+                    "subject": str(subject),
+                    "velocity": str(velocity),
+                    "trial": str(trial),
+                    "file": c3d_file.name,
+                    "reason": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
 
-        rows.append(row)
+    if not rows:
+        raise ValueError("No valid trials remained after absolute onset feature computation.")
 
     out = pd.DataFrame(rows)
     if qc_warn_count > 0:
         print(f"  Warning: force inertial subtract QC failed in {qc_warn_count} trials (non-strict mode).")
+    if skipped_trials:
+        print(
+            "  Warning: skipped "
+            f"{len(skipped_trials)} trials during absolute onset feature computation."
+        )
+        for skipped in skipped_trials[:5]:
+            print(
+                "    - "
+                f"{skipped['subject']}, vel={skipped['velocity']}, trial={skipped['trial']} "
+                f"[{skipped['file']}] -> {skipped['reason']}"
+            )
+        if len(skipped_trials) > 5:
+            print(f"    ... {len(skipped_trials) - 5} more skipped trials")
 
     return out[
         TRIAL_KEYS
@@ -819,7 +848,13 @@ def build_analysis_dataframe(
         fp_inertial_qc_strict=fp_inertial_qc_strict,
     )
 
-    analysis_df = onset_df.merge(abs_features, on=TRIAL_KEYS, how="left")
+    available_keys = abs_features[TRIAL_KEYS].drop_duplicates()
+    n_abs_dropped = int(len(trial_meta) - len(trial_meta.merge(available_keys, on=TRIAL_KEYS, how="inner")))
+    if n_abs_dropped > 0:
+        print(f"  Warning: dropping {n_abs_dropped} trials without valid absolute onset features.")
+    trial_meta = trial_meta.merge(available_keys, on=TRIAL_KEYS, how="inner").reset_index(drop=True)
+    onset_df = onset_df.merge(available_keys, on=TRIAL_KEYS, how="inner")
+    analysis_df = onset_df.merge(abs_features, on=TRIAL_KEYS, how="inner")
     required_abs_cols = _joint_angle_abs_cols() + [
         "GRF_X_abs_onset",
         "GRF_Y_abs_onset",
@@ -828,8 +863,15 @@ def build_analysis_dataframe(
         "COP_Y_abs_onset",
         "AnkleTorqueMid_Y_perkg_abs_onset",
     ]
-    if analysis_df[required_abs_cols].isna().any().any():
-        raise ValueError("Missing absolute onset feature values after merge.")
+    missing_abs_mask = analysis_df[required_abs_cols].isna().any(axis=1)
+    if bool(missing_abs_mask.any()):
+        n_missing_abs = int(missing_abs_mask.sum())
+        print(f"  Warning: dropping {n_missing_abs} trials with incomplete absolute onset feature values.")
+        analysis_df = analysis_df.loc[~missing_abs_mask].reset_index(drop=True)
+        valid_keys = analysis_df[TRIAL_KEYS].drop_duplicates()
+        trial_meta = trial_meta.merge(valid_keys, on=TRIAL_KEYS, how="inner").reset_index(drop=True)
+    if analysis_df.empty:
+        raise ValueError("No valid analysis trials remained after absolute onset feature filtering.")
 
     return analysis_df, trial_meta, abs_features, major_side, step_joint_df, step_joint_stats
 

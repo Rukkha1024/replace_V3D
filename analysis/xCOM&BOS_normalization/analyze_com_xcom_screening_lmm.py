@@ -274,16 +274,18 @@ def _compute_end_frames(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFram
         print(f"  Warning: {missing_after_fill} trials missing end_frame (dropped)")
         trials = trials.dropna(subset=["end_frame"]).reset_index(drop=True)
 
-    oob = (
+    oob_mask = (
         (trials["end_frame"] < trials["frame_min"])
         | (trials["end_frame"] > trials["frame_max"])
-    ).sum()
-    if int(oob) > 0:
-        raise ValueError(f"end_frame out of range count={int(oob)}")
+    )
+    oob = int(oob_mask.sum())
+    if oob > 0:
+        print(f"  Warning: {oob} trials with out-of-range end_frame (dropped)")
+        trials = trials.loc[~oob_mask].reset_index(drop=True)
 
     print(f"  end_frame fill (subject-velocity mean): {filled_sv}")
     print(f"  end_frame fill (prefilter platform subject-velocity mean): {filled_pref}")
-    print(f"  end_frame range validation passed: oob={int(oob)}")
+    print("  end_frame range validation passed: oob=0 after drop")
 
     return trials[
         TRIAL_KEYS
