@@ -20,6 +20,8 @@
   - Step trial: `end_frame = step_onset_local`
   - Nonstep trial: 같은 `(subject, velocity)`의 step onset 평균값(부족 시 platform sheet fallback)
 - 시간 정규화: 0-100% (101 points), NaN 20% 초과 trial 제외, 그 외 선형보간
+- 정규화 구간 역추적: 각 trial에서 `absolute frame = platform_onset_local + (pct/100) * (end_frame - platform_onset_local)`로 환산할 수 있다. 모캡 100 Hz 기준 `1 frame = 10 ms`이므로 `time_from_platform_onset_s`로 다시 표현 가능하다.
+- 절대시점 해석 주의: `%`는 공통 축이지만 absolute time은 trial별 window 길이에 따라 달라진다. 아래 대표 absolute time은 분석에 포함된 trial의 window 길이 중앙값 0.460 s(IQR 0.330-0.610 s)를 기준으로 환산했다.
 - 짝지음 단위: 피험자 내 step/nonstep 평균 곡선
 - SPM 검정: paired t-test (parametric + nonparametric permutation)
 - 비모수 순열 횟수: 10000
@@ -95,6 +97,24 @@ Joint/Force/Torque Sign Conventions
 | xCOM_Z | xCOM | 24 | 62.9-72.5 | 60.6-73.9 | step > nonstep | 0.0043 |
 | xCOM_BOS_AP_foot | xCOM_BOS | 24 | 0.0-100.0 | 0.0-100.0 | step < nonstep | -0.0664 |
 
+### Significant Interval Timing (Representative Absolute Time)
+
+아래 absolute time은 parametric 유의 구간을 분석 window 길이의 중앙값 0.460 s에 역매핑한 대표값이다. Nonparametric 구간도 거의 동일했으므로, 본문 해석은 이 대표값을 기준으로 읽어도 무방하다.
+
+| Variable | Param interval (%) | Representative time from platform onset (s) |
+|----------|--------------------|---------------------------------------------|
+| COM_X | 59.8-100.0 | 0.275-0.460 |
+| COM_Z | 0.0-4.8, 28.0-37.2 | 0.000-0.022, 0.129-0.171 |
+| COP_X_m | 99.5-100.0 | 0.458-0.460 |
+| MOS_AP_v3d | 0.0-15.9, 61.6-100.0 | 0.000-0.073, 0.283-0.460 |
+| MOS_minDist_signed | 0.0-16.4, 61.8-100.0 | 0.000-0.075, 0.284-0.460 |
+| MOS_v3d | 0.0-15.9, 61.6-100.0 | 0.000-0.073, 0.283-0.460 |
+| vCOM_X | 1.6-18.4, 54.0-100.0 | 0.008-0.085, 0.248-0.460 |
+| vCOM_Z | 64.6-69.3 | 0.297-0.319 |
+| xCOM_X | 46.4-100.0 | 0.213-0.460 |
+| xCOM_Z | 62.9-72.5 | 0.289-0.334 |
+| xCOM_BOS_AP_foot | 0.0-100.0 | 0.000-0.460 |
+
 ### Cross-check with prior LMM focus variables
 
 | Variable | SPM status |
@@ -129,6 +149,10 @@ Joint/Force/Torque Sign Conventions
 ### 결과 해석
 
 유의 구간은 MOS 계열의 초기/후기 분리, vCOM_X의 초기+후기 두 구간, COM_Z의 초기/중기 구간, xCOM_X·COM_X의 중후기 구간, xCOM_BOS_AP_foot의 전 구간 유의처럼 변수별로 다른 시간 패턴을 보였다.
+
+이를 대표 absolute time으로 다시 쓰면, `COM_X`는 platform onset 후 약 0.275-0.460 s에서, `vCOM_X`는 0.008-0.085 s와 0.248-0.460 s에서, `xCOM_X`는 0.213-0.460 s에서 유의했다. `xCOM_BOS_AP_foot`는 0.000-0.460 s 전 구간에서 유의했고, MOS 계열(`MOS_AP_v3d`, `MOS_minDist_signed`, `MOS_v3d`)은 공통적으로 초기 약 0.000-0.073/0.075 s와 후기 약 0.283/0.284-0.460 s에서 유의했다.
+
+`COM_Z`는 onset 직후 0.000-0.022 s와 중기 0.129-0.171 s에서, `vCOM_Z`는 0.297-0.319 s에서, `xCOM_Z`는 0.289-0.334 s에서, `COP_X_m`는 거의 종점인 0.458-0.460 s에서 차이가 나타났다. 따라서 결과의 핵심은 단순히 "유의했다"가 아니라, 어떤 변수는 onset 직후에만, 어떤 변수는 중후기에만, 어떤 변수는 전 구간에서 전략 차이가 분리되었다는 점이다.
 
 방향성은 자동으로 계산한 `step - nonstep` 평균 차이를 기준으로 확인하였다. COM_X, vCOM_X, xCOM_X, xCOM_BOS_AP_foot는 주된 유의 구간에서 `step < nonstep`이었고, COM_Z, xCOM_Z, COP_X_m은 `step > nonstep`이었다. MOS 계열은 초기에는 `step > nonstep`, 후기에는 `step < nonstep`으로 바뀌어 한 방향의 차이로 요약되지 않았다.
 
