@@ -11,7 +11,7 @@
 - 피험자 수: 24
 - 제외 시행: step onset 누락 2개, event 범위 이탈 2개
 - 입력 데이터: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`
-- 전처리 필터(`scripts/apply_post_filter_from_meta.py`): mixed==1, age_group==young, ipsilateral step only
+- 전처리 필터(`scripts/apply_post_filter_from_meta.py`): `mixed==1`, `age_group==young`, `ipsilateral step only`
 - 분석 변수 수: 38
 
 ## Analysis Methodology
@@ -132,7 +132,13 @@ Joint/Force/Torque Sign Conventions
 
 방향성은 자동으로 계산한 `step - nonstep` 평균 차이를 기준으로 확인하였다. COM_X, vCOM_X, xCOM_X, xCOM_BOS_AP_foot는 주된 유의 구간에서 `step < nonstep`이었고, COM_Z, xCOM_Z, COP_X_m은 `step > nonstep`이었다. MOS 계열은 초기에는 `step > nonstep`, 후기에는 `step < nonstep`으로 바뀌어 한 방향의 차이로 요약되지 않았다.
 
-따라서 이 SPM 결과만으로 `step` 전략이 전 구간에서 더 전방으로 이동한다거나, BOS 경계를 지속적으로 넘는다고 단정할 수는 없다. 방향성 해석은 변수와 시간 구간별로 나누어 읽어야 하며, 기전 설명은 평균 곡선이나 추가 분석과 함께 제시하는 것이 안전하다.
+이 패턴은 `step` 전략의 차이가 반응 전 구간에 균일하게 나타난다기보다, step onset에 가까워질수록 AP 안정성 관련 변수에서 더 뚜렷하게 분리된다는 점을 보여준다. 특히 `xCOM_BOS_AP_foot`가 0-100% 전 구간에서 `step < nonstep`이었던 결과는, 동일한 perturbation 강도에서도 step trial이 nonstep보다 BOS 후방 경계에 더 가까운 상태로 회복 과정을 진행했음을 시사한다. 이는 step trial에서 전후방 안정 여유가 처음부터 끝까지 더 작았고, 고정 지지 전략만으로는 회복을 마무리하기 어려운 조건이 지속되었음을 의미한다.
+
+같은 해석은 `COM_X`, `vCOM_X`, `xCOM_X`의 중후기 유의 구간과도 일치한다. 세 변수 모두 주로 후반부에서 `step < nonstep`이었으므로, 두 전략의 분리는 섭동 직후의 자동 반응보다 step 준비 구간에서 더 크게 나타난 것으로 해석할 수 있다. 즉 nonstep은 BOS 안에서 COM/xCOM을 다시 제어하는 방향으로 수렴한 반면, step은 후반부로 갈수록 BOS 내부 안정 여유를 유지하지 못하고 보상 스텝이 필요한 상태로 진행되었다고 볼 수 있다.
+
+한편 MOS 계열은 초기에는 `step > nonstep`, 후기에는 `step < nonstep`으로 역전되었다. 이는 step trial이 섭동 직후에는 일시적으로 AP 안정 여유를 확보하는 보정을 보이더라도, 그 차이가 step onset 직전까지 유지되지는 않았음을 뜻한다. 다시 말해 step 전략은 초기 대응이 없는 반응이 아니라, 초기 보정 이후 후기 구간에서 안정 여유가 다시 줄어들며 최종적으로 BOS 재구성이 필요한 회복 경로로 전환된 패턴에 가깝다.
+
+`COM_Z`, `xCOM_Z`, `COP_X_m`에서 관찰된 `step > nonstep` 결과도 이러한 해석을 보완한다. step trial에서는 step onset에 가까워질수록 COM 높이와 extrapolated COM의 수직 성분, 그리고 COP 조절이 함께 커졌으며, 이는 단순한 위치 차이만이 아니라 보상 스텝을 준비하는 체중 재배치가 동반되었을 가능성과 합치된다. 다만 이 차이만으로 전략 선택의 단일 원인을 직접 입증하는 것은 아니므로, 해석은 각 변수와 시간 구간에 한정해 읽는 것이 적절하다.
 
 ### Direction Check
 
@@ -153,9 +159,10 @@ Joint/Force/Torque Sign Conventions
 ## Conclusion
 
 1. Step/nonstep 차이는 변수마다 다른 시간 구간에서 나타났고, 일부 변수는 두 개 이상의 분리된 유의 구간을 보였다.
-2. xCOM_BOS_AP_foot는 전 구간 유의하여 가장 일관된 구분 지표였지만, 방향은 `step < nonstep`으로 요약되었다.
-3. MOS 계열은 초기와 후기의 방향이 바뀌어, 동일 변수라도 시간 구간별 해석이 필요했다.
-4. Parametric SPM이 zero variance로 실패한 변수들은 음성 결과가 아니라 미검정 항목으로 해석해야 한다.
+2. `xCOM_BOS_AP_foot`는 전 구간에서 `step < nonstep`이었으며, step trial이 회복 과정 전반에서 BOS 후방 경계에 더 가까운 상태로 진행되었음을 보여주는 가장 일관된 구분 지표였다.
+3. `COM_X`, `vCOM_X`, `xCOM_X`의 중후기 분리는 두 전략의 차이가 섭동 직후보다 step onset에 가까운 준비 구간에서 더 뚜렷해짐을 보여주며, step 전략이 BOS 내부 안정 여유를 끝까지 유지하지 못한 회복 경로였음을 시사했다.
+4. MOS 계열은 초기의 일시적 보정 이후 후기에는 step 쪽 안정 여유가 더 작아지는 양상을 보여, step 반응이 단순한 초기 실패가 아니라 회복 과정 후반의 안정성 저하와 연결된 전략임을 나타냈다.
+5. Parametric SPM이 zero variance로 실패한 변수들은 음성 결과가 아니라 미검정 항목으로 해석해야 한다.
 
 ## Limitations
 
@@ -176,4 +183,3 @@ conda run --no-capture-output -n module python analysis/step_vs_nonstep_spm/anal
 - `analysis/step_vs_nonstep_spm/figures/spm_<variable>.png`
 - `analysis/step_vs_nonstep_spm/figures/heatmap_significant.png`
 - `analysis/step_vs_nonstep_spm/report.md`
-
