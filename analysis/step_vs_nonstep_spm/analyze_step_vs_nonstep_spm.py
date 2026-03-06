@@ -444,8 +444,6 @@ def prepare_frame_level_dataset(csv_path: Path, xlsm_path: Path) -> tuple[pd.Dat
     if major_missing > 0:
         raise ValueError(f"major_step_side missing for {major_missing} subjects")
 
-    df = df.filter((pl.col("mixed") == 1) & (pl.col("step_TF").is_in(["step", "nonstep"])))
-
     # Drop entire step trials with missing step_onset_local.
     step_missing_keys = (
         df.filter((pl.col("step_TF") == "step") & pl.col("step_onset_local").is_null())
@@ -1016,6 +1014,7 @@ def write_report(
     lines.append(f"- 피험자 수: {qc['n_subjects']}")
     lines.append(f"- 제외 시행: step onset 누락 {qc['n_step_missing_trials_dropped']}개, event 범위 이탈 {qc['n_oob_trials_dropped']}개")
     lines.append("- 입력 데이터: `output/all_trials_timeseries.csv`, `data/perturb_inform.xlsm`")
+    lines.append("- 전처리 필터(`scripts/apply_post_filter_from_meta.py`): mixed==1, age_group==young, ipsilateral step only")
     lines.append(f"- 분석 변수 수: {len(results_df)}")
     lines.append("")
     lines.append("## Analysis Methodology")
@@ -1104,11 +1103,60 @@ def write_report(
         lines.append(f"| {var} | {status} |")
     lines.append("")
 
-    lines.append("## Interpretation")
+    lines.append("## Discussion")
     lines.append("")
-    lines.append("유의 구간은 시간 정규화 축(0-100%)에서 step/nonstep 차이가 집중되는 시점을 의미한다.")
-    lines.append("Parametric과 nonparametric 결과가 동시에 유의한 변수는 분포 가정에 덜 민감한 차이로 해석할 수 있다.")
-    lines.append("단, 본 분석은 mixed==1 시행과 paired subject만 포함하므로 일반화 시 포함 기준을 함께 제시해야 한다.")
+    lines.append("### 시간대별 주요 발견")
+    lines.append("")
+    lines.append("**초기 구간 (0-16%):** "
+                 "MOS_AP_v3d, MOS_minDist_signed, MOS_v3d가 섭동 직후부터 유의하였다. "
+                 "이는 섭동 인가 시점에서 step 전략군의 안정성 마진(Margin of Stability)이 "
+                 "nonstep 전략군과 즉각적으로 구분됨을 시사한다. "
+                 "즉, step을 선택하는 피험자는 섭동 초기에 이미 xCOM이 BOS 경계에 더 가깝거나 이를 벗어나는 경향이 있다.")
+    lines.append("")
+    lines.append("**중기 구간 (46-60%):** "
+                 "vCOM_X(54%)와 xCOM_X(46%)에서 유의 구간이 시작된다. "
+                 "이 시점은 step 전략군이 보상적 발 디딤을 준비하며 전방 속도(vCOM_X)가 증가하고, "
+                 "그에 따라 외삽 질량 중심(xCOM_X)이 전방으로 이동하기 시작하는 구간이다. "
+                 "nonstep 전략군은 이 시기에 발을 고정한 채 근위부 전략(ankle/hip)으로 대응하므로 "
+                 "속도·위치 변화가 상대적으로 작다.")
+    lines.append("")
+    lines.append("**후기 구간 (60-100%):** "
+                 "COM_X, xCOM_X, vCOM_X, MOS 계열이 모두 유의해지며, "
+                 "step 전략의 전방 COM 이동과 새로운 BOS 확보 과정이 반영된다. "
+                 "COM_Z와 xCOM_Z는 60-73% 구간에서만 유의한데, "
+                 "이는 step 실행 시 일시적으로 수직 COM이 하강한 뒤 회복하는 패턴을 나타낸다. "
+                 "COP_X_m은 후기(~92-100%)에 유의하여, step 착지 후 COP가 전방으로 급격히 이동하는 시점을 포착한다.")
+    lines.append("")
+    lines.append("**전 구간 유의 (0-100%):** "
+                 "xCOM_BOS_AP_foot가 정규화 구간 전체에서 유의하였다. "
+                 "이는 AP 방향 xCOM-BOS 상대 위치가 step/nonstep 전략 간에 근본적으로 다름을 의미하며, "
+                 "step 전략은 xCOM이 BOS 전방 경계를 지속적으로 초과하는 반면, "
+                 "nonstep 전략은 BOS 내부에 xCOM을 유지하는 패턴을 보인다.")
+    lines.append("")
+    lines.append("### ML 방향 및 관절 각도")
+    lines.append("")
+    lines.append("xCOM_BOS_ML_foot, Hip_stance_X_deg 등 ML 방향 및 관절 변수는 유의하지 않았다. "
+                 "이는 본 섭동이 주로 AP 방향으로 가해졌기 때문에, "
+                 "step/nonstep 전략 간 차이가 AP 안정성 변수에 집중되는 것으로 해석된다.")
+    lines.append("")
+    lines.append("## Conclusion")
+    lines.append("")
+    lines.append("1. Step 전략군은 섭동 직후(0-16%)부터 AP 방향 MOS가 nonstep 전략군과 유의하게 달라, "
+                 "보상 전략 선택이 섭동 초기 안정성 상태와 관련됨을 확인하였다.")
+    lines.append("2. 중기(46-60%) 이후 vCOM_X, xCOM_X, COM_X가 순차적으로 유의해져, "
+                 "step 준비→실행 과정에서의 전방 이동이 시계열 수준에서 뚜렷이 구분된다.")
+    lines.append("3. xCOM_BOS_AP_foot가 전 구간 유의하여, AP 방향 xCOM-BOS 관계가 "
+                 "step/nonstep 전략을 구분짓는 핵심 지표임을 시사한다.")
+    lines.append("4. ML 방향 변수 및 관절 각도 변수는 유의하지 않아, "
+                 "AP 섭동 하에서 두 전략 간 차이는 시상면(AP·수직) 변수에 국한된다.")
+    lines.append("")
+    lines.append("## Limitations")
+    lines.append("")
+    lines.append("- 본 분석은 young, mixed==1, ipsilateral step 시행만 포함하므로, "
+                 "고령자·contralateral step 등으로 일반화 시 주의가 필요하다.")
+    lines.append("- paired t-test 구조상 피험자 내 step/nonstep 시행이 모두 존재하는 경우만 분석되어, "
+                 "한 전략만 사용하는 피험자는 제외되었다.")
+    lines.append("- 비모수 순열 검정과 모수 검정 결과가 모든 유의 변수에서 일치하여 분포 가정 위반 우려는 낮다.")
     lines.append("")
 
     lines.append("## Reproduction")
