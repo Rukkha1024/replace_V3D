@@ -117,13 +117,12 @@ def _build_meta_prefilter_trials(event_xlsm: Path) -> pl.DataFrame:
     mask_base = (pl.col("mixed") == 1) & (pl.col("age_group") == "young")
     is_nonstep = pl.col("step_TF") == "nonstep"
     is_step = pl.col("step_TF") == "step"
+    ipsilateral_step = is_step & (
+        ((pl.col("주손 or 주발") == "R") & (pl.col("state") == "step_R"))
+        | ((pl.col("주손 or 주발") == "L") & (pl.col("state") == "step_L"))
+    )
     return (
-        # NOTE:
-        # Previously, step trials were limited to ipsilateral stepping (dominant side),
-        # which can drop valid mixed-velocity step trials for some subjects and break
-        # within-subject step vs nonstep comparisons. For "주제 2" analyses, include
-        # all mixed==1 young step/nonstep trials at the selected mixed velocity.
-        merged.filter(mask_base & (is_step | is_nonstep))
+        merged.filter(mask_base & (ipsilateral_step | is_nonstep))
         .select(["subject", "velocity", "trial", "age_group", "주손 or 주발", "step_TF", "state", "mixed"])
         .drop_nulls(["subject", "velocity", "trial"])
         .unique()
@@ -665,7 +664,7 @@ def main() -> None:
         default=False,
         help=(
             "Apply add_meta.ipynb-equivalent trial filter before per-file computation "
-            "(mixed==1, age_group==young, ipsilateral-step/nonstep)."
+            "(mixed==1, age_group==young, step=ipsilateral only, nonstep=keep)."
         ),
     )
     args = parser.parse_args()
