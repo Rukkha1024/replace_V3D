@@ -1,10 +1,10 @@
-﻿# Initial Posture Strategy LMM (Platform Onset + Step Onset)
+﻿# Initial Posture Strategy LMM (Single-Frame Comparison)
 
 ## Research Question
 
-**"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 단일 프레임 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
+**"Van Wouwe et al. (2021) 관점에서, single-frame posture 지표가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 중 어떤 시점에서 분화가 더 뚜렷한가?"**
 
-이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 LMM 결과를 보고한다.
+이번 보고서는 `platform_onset_local`과 `step_onset_target_local`의 **단일 프레임 LMM** 결과를 다룬다. baseline range mean 결과는 별도 문서인 `report_baseline.md`에서 다루며, 본 문서에는 `95% CI`를 포함하지 않는다.
 
 ## Prior Studies
 
@@ -34,9 +34,12 @@
 
 ## Analysis Methodology
 
+이 보고서의 질문은 onset 전 평균 posture가 아니라 **특정 단일 프레임에서 step/nonstep 차이가 얼마나 드러나는지**를 보는 것이다. 따라서 baseline 평균 분석과는 목적이 다르며, `report_baseline.md`와 직접 같은 질문으로 읽으면 안 된다.
+
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
+- **Confidence interval policy**: 본 단일 프레임 보고서에서는 `Estimate`와 `Sig`만 보고하고, `95% CI`는 baseline range mean 보고서에서만 제시
 - **Multiple comparison correction**: BH-FDR (29개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -251,16 +254,17 @@
 
 ## Interpretation & Conclusion
 
-1. 각 변수별 이상치를 제외하고 보아도 platform onset 29개 변수의 strict 기준 가설은 **FAIL**였다.
-2. platform onset에서는 관절 각도 변수는 총 15개 중 2개가 유의했고 (`Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
-3. step onset 29개 변수에서는 총 `18`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`).
-4. 따라서 본 데이터에서는 초기 자세 차이가 시점에 따라 다르게 나타날 수 있지만, 단일 시점 변수만으로 step/nonstep 전략 차이를 광범위하게 설명한다고 단정하기는 어렵다.
+1. platform onset 단일 프레임에서는 29개 변수 중 `10`개만 유의해 strict 기준 가설은 **FAIL**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
+2. platform onset에서는 관절 각도 변수는 총 15개 중 2개가 유의했고 (`Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
+3. step onset 단일 프레임에서는 총 `18`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 두 시점 모두 29개 전 변수가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 
 1. 원문의 task-level goal 파라미터를 직접 모델링하지 않았다.
 2. 본 분석은 Van Wouwe 2021의 simulation 기반 인과 프레임을 1:1 재현한 결과가 아니다.
-3. step onset은 nonstep trial에서 subject 평균 `step_onset_local`을 참조하므로, 직접 관측 step 시점과 완전히 같지는 않다.
+3. step onset은 nonstep trial에서 subject 평균 `step_onset_local`을 참조하므로, step trial의 실제 발 들기 순간과 완전히 같은 관측점은 아니다.
+4. 본 문서는 single-frame 분석만 다루며, onset 전 구간 평균과 `95% CI` 해석은 `report_baseline.md`를 따로 봐야 한다.
 
 ## Reproduction
 

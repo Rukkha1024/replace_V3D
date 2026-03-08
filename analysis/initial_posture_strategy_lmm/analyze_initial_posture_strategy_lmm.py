@@ -1449,13 +1449,13 @@ def write_report_markdown(
     step_missing_ref_subjects = step_onset_stats.get("missing_ref_subjects", [])
     step_missing_ref_subjects_str = ", ".join(step_missing_ref_subjects) if step_missing_ref_subjects else "(none)"
 
-    report_text = f"""# Initial Posture Strategy LMM (Platform Onset + Step Onset)
+    report_text = f"""# Initial Posture Strategy LMM (Single-Frame Comparison)
 
 ## Research Question
 
-**"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 단일 프레임 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
+**"Van Wouwe et al. (2021) 관점에서, single-frame posture 지표가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 중 어떤 시점에서 분화가 더 뚜렷한가?"**
 
-이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 LMM 결과를 보고한다.
+이번 보고서는 `platform_onset_local`과 `step_onset_target_local`의 **단일 프레임 LMM** 결과를 다룬다. baseline range mean 결과는 별도 문서인 `report_baseline.md`에서 다루며, 본 문서에는 `95% CI`를 포함하지 않는다.
 
 ## Prior Studies
 
@@ -1485,9 +1485,12 @@ def write_report_markdown(
 
 ## Analysis Methodology
 
+이 보고서의 질문은 onset 전 평균 posture가 아니라 **특정 단일 프레임에서 step/nonstep 차이가 얼마나 드러나는지**를 보는 것이다. 따라서 baseline 평균 분석과는 목적이 다르며, `report_baseline.md`와 직접 같은 질문으로 읽으면 안 된다.
+
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
+- **Confidence interval policy**: 본 단일 프레임 보고서에서는 `Estimate`와 `Sig`만 보고하고, `95% CI`는 baseline range mean 보고서에서만 제시
 - **Multiple comparison correction**: BH-FDR ({len(specs)}개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -1552,16 +1555,17 @@ def write_report_markdown(
 
 ## Interpretation & Conclusion
 
-1. 각 변수별 이상치를 제외하고 보아도 platform onset 29개 변수의 strict 기준 가설은 **{verdict}**였다.
-2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
-3. step onset 29개 변수에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`).
-4. 따라서 본 데이터에서는 초기 자세 차이가 시점에 따라 다르게 나타날 수 있지만, 단일 시점 변수만으로 step/nonstep 전략 차이를 광범위하게 설명한다고 단정하기는 어렵다.
+1. platform onset 단일 프레임에서는 29개 변수 중 `{n_sig}`개만 유의해 strict 기준 가설은 **{verdict}**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
+2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
+3. step onset 단일 프레임에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 두 시점 모두 29개 전 변수가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 
 1. 원문의 task-level goal 파라미터를 직접 모델링하지 않았다.
 2. 본 분석은 Van Wouwe 2021의 simulation 기반 인과 프레임을 1:1 재현한 결과가 아니다.
-3. step onset은 nonstep trial에서 subject 평균 `step_onset_local`을 참조하므로, 직접 관측 step 시점과 완전히 같지는 않다.
+3. step onset은 nonstep trial에서 subject 평균 `step_onset_local`을 참조하므로, step trial의 실제 발 들기 순간과 완전히 같은 관측점은 아니다.
+4. 본 문서는 single-frame 분석만 다루며, onset 전 구간 평균과 `95% CI` 해석은 `report_baseline.md`를 따로 봐야 한다.
 
 ## Reproduction
 
@@ -1626,20 +1630,21 @@ def write_segment_angle_markdown(
 ## platform_onset 해석
 
 - platform onset joint-angle 15개 변수 중 `{joint_sig_count}`개가 FDR 유의였다: `{', '.join(joint_sig_names) if joint_sig_names else '(none)'}`.
-- 이번 버전은 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 비교 결과다.
-- 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 광범위한 초기 자세 분화로 해석하기에는 근거가 제한적이다.
+- 이 시점은 baseline 평균이 아니라 섭동 직후의 posture snapshot에 가깝다.
+- 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 전략 분화의 출발점이라기보다 제한적인 초기 반응 차이로 해석하는 편이 안전하다.
 
 ## step_onset 해석
 
 - step onset joint-angle 15개 변수 중 `{step_joint_sig_count}`개가 FDR 유의였다: `{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`.
 - step onset은 `step` trial의 실제 `step_onset_local`과, `nonstep` trial의 subject 평균 step onset 참조 frame을 사용한다.
-- 따라서 baseline이나 platform onset보다 전략 분화 신호가 더 많이 나타나더라도, 이는 실제 발 들기 시작 직전의 준비 자세와 더 가깝다는 점을 함께 고려해야 한다.
+- 따라서 이 결과는 평균적인 초기 자세라기보다 실제 발 들기 직전의 준비 자세 또는 전략 실행 직전 posture 차이에 더 가깝다.
 
 ## 종합 해석
 
-- 같은 이상치 제외 규칙에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
-- 즉, 전략 차이는 섭동 직후 정적 초기자세보다 실제 발 들기 직전 단일 프레임에서 더 뚜렷하게 나타나는 경향이 있다.
+- 같은 단일 프레임 이상치 제외 규칙에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
+- 즉, 전략 차이는 섭동 직후 정적 snapshot보다 실제 발 들기 직전 single-frame에서 더 뚜렷하게 나타나는 경향이 있다.
 - 다만 두 시점 모두 전축이 일관되게 유의하지는 않으므로, 관절각만으로 step/nonstep 전략 차이를 완전히 설명한다고 단정하기는 어렵다.
+- onset 전 구간 평균과 `95% CI` 해석은 baseline 보고서와 분리해서 읽어야 한다.
 """
 
     text = f"""---
@@ -1683,6 +1688,7 @@ def write_segment_angle_markdown(
   - platform_onset: {joint_note}
   - step_onset: {step_joint_note}
   - 두 시점 모두에서 `Estimate`와 `Sig`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
+  - `95% CI`는 single-frame 보고서에 포함하지 않으며, baseline range mean 보고서에서만 제시한다.
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 {interpretation_body}
@@ -1690,11 +1696,11 @@ def write_segment_angle_markdown(
 # 결론
 
 - 가설 1 결과: **{verdict}**
-- platform_onset 및 step_onset 관절각 비교를 함께 보아도, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
+- single-frame 비교에서는 step onset이 platform onset보다 더 강한 분화를 보였지만, 관절각만으로 전략 차이를 단정하기에는 근거가 제한적이다.
 
 # keypapers
 
-1. Van Wouwe et al. (2021): 초기 자세와 전략 variability의 상호작용을 제시했지만, 본 onset 단일시점 집단 비교에서는 segment angle에서 유의 차이가 재현되지 않았다.
+1. Van Wouwe et al. (2021): 초기 자세와 전략 variability의 상호작용을 제시했으며, 본 문서는 그 질문을 두 개의 single-frame 시점으로 나누어 비교한다.
 
 ---
 Auto-generated by analyze_initial_posture_strategy_lmm.py.

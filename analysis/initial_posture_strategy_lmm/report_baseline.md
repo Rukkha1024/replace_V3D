@@ -4,7 +4,8 @@
 
 **"Van Wouwe et al. (2021) 관점에서, platform onset 직전 300 ms baseline posture 평균이 step/nonstep 전략 차이를 설명한다면 baseline 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
 
-이번 버전은 `platform_onset_local` 단일 프레임 대신 onset 전 `[-0.30, 0.00] s` 구간 평균을 사용해 초기 자세를 단일 샘플이 아니라 baseline posture로 요약한다.
+이번 보고서는 `platform_onset_local` 단일 프레임 대신 onset 전 `[-0.30, 0.00] s` **구간 평균(range mean)** 을 사용해 초기 자세를 baseline posture로 요약한다.
+`95% CI`는 이 baseline range mean 비교에서만 제시하며, single-frame 결과는 `report.md`에서 별도로 다룬다.
 
 ## Prior Studies
 
@@ -26,7 +27,7 @@
 | 초기 posture와 안정성 지표를 함께 해석 | COM/MOS/xCOM-BOS + joint angle + force/torque를 같은 LMM 틀에서 비교 | 동일 조건 step/nonstep 차이를 여러 biomechanical domain에서 동시에 비교하기 위해 |
 | 실험/시뮬레이션 기반 posture 정의 | `output/all_trials_timeseries.csv`의 export 값을 frame-wise 평균 | 현재 저장소의 재현 가능한 분석 입력을 유지하고 새 파일 export를 만들지 않기 위해 |
 
-This analysis adopts the prior study's focus on initial posture and stability metrics, but modifies the operational definition from a single onset frame to a 300 ms pre-onset baseline mean because the current repository stores posture signals as onset-aligned timeseries exports.
+This analysis adopts the prior study's focus on initial posture and stability metrics, but changes the operational definition from a single onset frame to a 300 ms pre-onset range mean. In this project, the baseline report is also the only report that presents Wald `95% CI`.
 
 ## Data Summary
 
@@ -47,7 +48,7 @@ This analysis adopts the prior study's focus on initial posture and stability me
 - **Analysis window**: `time_from_platform_onset_s ∈ [-0.30, 0.00]`
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별로 `step`/`nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
-- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
+- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`를 baseline range mean 비교에 한해 함께 보고
 - **Multiple comparison correction**: BH-FDR (29개 baseline 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -182,15 +183,17 @@ This analysis adopts the prior study's focus on initial posture and stability me
 
 ## Interpretation & Conclusion
 
-1. baseline 평균으로 초기 자세를 요약해도 strict 기준 가설은 **FAIL**였다.
-2. baseline joint-angle 변수는 총 `15`개 중 `1`개가 FDR 유의였다.
-3. 따라서 본 데이터에서는 onset 직전 baseline posture 차이가 step/nonstep 전략 차이를 완전히 설명한다고 단정하기 어렵고, prior study가 제시한 posture-goal interaction의 일부만 현재 집단 비교에서 포착된 것으로 해석하는 것이 안전하다.
+1. onset 전 `[-0.30, 0.00] s` 구간 평균으로 초기 자세를 요약해도 strict 기준 가설은 **FAIL**였다.
+2. baseline joint-angle 변수는 총 `15`개 중 `1`개가 FDR 유의였고, 유의 변수는 `Knee_stance_X_baseline`였다.
+3. 반면 balance 계열에서는 `MOS_minDist_signed_baseline`, `MOS_AP_v3d_baseline`, `xCOM_BOS_norm_baseline`, `vCOM_X_baseline`가 유의해, baseline posture 차이가 전혀 없다고 보기는 어렵다.
+4. 따라서 본 데이터에서는 onset 직전 baseline posture 차이가 step/nonstep 전략 차이를 완전히 설명한다고 단정하기 어렵고, prior study가 제시한 posture-goal interaction의 일부만 현재 집단 비교에서 포착된 것으로 해석하는 것이 안전하다.
 
 ## Limitations
 
 1. 본 분석은 `output/all_trials_timeseries.csv`의 export 값을 평균한 결과로, C3D 재계산 기반 onset absolute 변수와 직접 동일하지 않다.
 2. task-level goal 파라미터를 직접 모델링하지 않았다.
 3. baseline 평균은 초기 자세를 안정적으로 요약하지만, onset 직전 순간적인 준비 동작은 희석할 수 있다.
+4. single-frame 결과와 baseline mean 결과는 질문 자체가 다르므로, 두 보고서의 유의 변수 수를 직접 같은 의미로 해석하면 안 된다.
 
 ## Reproduction
 
