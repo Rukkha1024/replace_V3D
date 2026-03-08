@@ -364,6 +364,69 @@ def audit_variables(analysis_df: pd.DataFrame, specs: list[dict[str, str]]) -> p
     return pd.DataFrame(rows)
 
 
+def _group_outlier_mask(series: pd.Series) -> pd.Series:
+    """Mark non-outlier values using the 1.5*IQR rule within one group."""
+    values = pd.to_numeric(series, errors="coerce")
+    keep = pd.Series(False, index=values.index, dtype=bool)
+    finite = values.dropna()
+    if finite.empty:
+        return keep
+
+    q1 = float(finite.quantile(0.25))
+    q3 = float(finite.quantile(0.75))
+    iqr = q3 - q1
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    keep.loc[finite.index] = (finite >= lower) & (finite <= upper)
+    return keep
+
+
+def compute_outlier_summary(analysis_df: pd.DataFrame, specs: list[dict[str, str]]) -> pd.DataFrame:
+    """Summarize per-variable outlier counts within step/nonstep groups."""
+    rows: list[dict[str, Any]] = []
+    for spec in specs:
+        dv = spec["dv"]
+        sub = analysis_df[TRIAL_KEYS + ["step_TF", dv]].copy()
+        sub[dv] = pd.to_numeric(sub[dv], errors="coerce")
+        sub = sub[sub["step_TF"].isin(["step", "nonstep"]) & sub[dv].notna()].copy()
+
+        if sub.empty:
+            rows.append(
+                {
+                    "dv": dv,
+                    "n_step_raw": 0,
+                    "n_nonstep_raw": 0,
+                    "n_step_outliers": 0,
+                    "n_nonstep_outliers": 0,
+                    "n_step_kept": 0,
+                    "n_nonstep_kept": 0,
+                }
+            )
+            continue
+
+        keep = pd.Series(False, index=sub.index, dtype=bool)
+        for group in ("step", "nonstep"):
+            group_idx = sub.index[sub["step_TF"] == group]
+            keep.loc[group_idx] = _group_outlier_mask(sub.loc[group_idx, dv])
+
+        n_step_raw = int((sub["step_TF"] == "step").sum())
+        n_nonstep_raw = int((sub["step_TF"] == "nonstep").sum())
+        n_step_kept = int(((sub["step_TF"] == "step") & keep).sum())
+        n_nonstep_kept = int(((sub["step_TF"] == "nonstep") & keep).sum())
+        rows.append(
+            {
+                "dv": dv,
+                "n_step_raw": n_step_raw,
+                "n_nonstep_raw": n_nonstep_raw,
+                "n_step_outliers": n_step_raw - n_step_kept,
+                "n_nonstep_outliers": n_nonstep_raw - n_nonstep_kept,
+                "n_step_kept": n_step_kept,
+                "n_nonstep_kept": n_nonstep_kept,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _candidate_rscripts() -> list[Path]:
     candidates: list[Path] = []
 
@@ -456,17 +519,41 @@ data$step_TF <- tolower(trimws(as.character(data$step_TF)))
 data$step_TF <- factor(data$step_TF, levels = c("nonstep", "step"))
 dv_cols <- colnames(data)[!colnames(data) %in% c("subject", "velocity", "trial", "step_TF")]
 
+iqr_keep <- function(x) {{
+  keep <- rep(FALSE, length(x))
+  finite_idx <- which(is.finite(x))
+  if (length(finite_idx) == 0) {{
+    return(keep)
+  }}
+  vals <- x[finite_idx]
+  q1 <- unname(quantile(vals, 0.25, na.rm = TRUE, type = 7))
+  q3 <- unname(quantile(vals, 0.75, na.rm = TRUE, type = 7))
+  iqr <- q3 - q1
+  lower <- q1 - 1.5 * iqr
+  upper <- q3 + 1.5 * iqr
+  keep_vals <- vals >= lower & vals <= upper
+  keep[finite_idx] <- keep_vals
+  keep
+}}
+
 results <- data.frame(
   dv = character(),
+  analysis_status = character(),
   estimate = numeric(),
   SE = numeric(),
   df = numeric(),
   t_value = numeric(),
   p_value = numeric(),
+  ci_lower = numeric(),
+  ci_upper = numeric(),
   mean_step = numeric(),
   sd_step = numeric(),
   mean_nonstep = numeric(),
   sd_nonstep = numeric(),
+  n_step_raw = integer(),
+  n_nonstep_raw = integer(),
+  n_step_outliers = integer(),
+  n_nonstep_outliers = integer(),
   n_step = integer(),
   n_nonstep = integer(),
   converged = logical(),
@@ -475,6 +562,19 @@ results <- data.frame(
 
 for (dv in dv_cols) {{
   sub <- data[!is.na(data[[dv]]) & !is.na(data$step_TF), ]
+  step_mask <- sub$step_TF == "step"
+  nonstep_mask <- sub$step_TF == "nonstep"
+  n_step_raw <- sum(step_mask)
+  n_nonstep_raw <- sum(nonstep_mask)
+
+  keep_mask <- rep(FALSE, nrow(sub))
+  keep_mask[step_mask] <- iqr_keep(sub[[dv]][step_mask])
+  keep_mask[nonstep_mask] <- iqr_keep(sub[[dv]][nonstep_mask])
+
+  n_step_outliers <- n_step_raw - sum(keep_mask[step_mask])
+  n_nonstep_outliers <- n_nonstep_raw - sum(keep_mask[nonstep_mask])
+  sub <- sub[keep_mask, ]
+
   n_s <- sum(sub$step_TF == "step")
   n_ns <- sum(sub$step_TF == "nonstep")
 
@@ -485,10 +585,28 @@ for (dv in dv_cols) {{
 
   if (n_s == 0 || n_ns == 0) {{
     results <- rbind(results, data.frame(
-      dv = dv, estimate = NA, SE = NA, df = NA,
+      dv = dv, analysis_status = "group_empty_after_outlier", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
+      n_step = n_s, n_nonstep = n_ns, converged = FALSE,
+      stringsAsFactors = FALSE
+    ))
+    next
+  }}
+
+  if (length(unique(sub[[dv]])) <= 1) {{
+    results <- rbind(results, data.frame(
+      dv = dv, analysis_status = "constant_after_outlier", estimate = NA, SE = NA, df = NA,
+      t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
+      mean_step = m_s, sd_step = sd_s,
+      mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = FALSE,
       stringsAsFactors = FALSE
     ))
@@ -508,24 +626,32 @@ for (dv in dv_cols) {{
       df_val <- co[row_name, "df"]
       t_val <- co[row_name, "t value"]
       p_val <- co[row_name, "Pr(>|t|)"]
+      ci_low <- est - 1.96 * se
+      ci_high <- est + 1.96 * se
     }} else {{
-      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA
+      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA; ci_low <- NA; ci_high <- NA
     }}
 
     results <- rbind(results, data.frame(
-      dv = dv, estimate = est, SE = se, df = df_val,
+      dv = dv, analysis_status = "ok", estimate = est, SE = se, df = df_val,
       t_value = t_val, p_value = p_val,
+      ci_lower = ci_low, ci_upper = ci_high,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = TRUE,
       stringsAsFactors = FALSE
     ))
   }}, error = function(e) {{
     results <<- rbind(results, data.frame(
-      dv = dv, estimate = NA, SE = NA, df = NA,
+      dv = dv, analysis_status = "model_error", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = FALSE,
       stringsAsFactors = FALSE
     ))
@@ -609,8 +735,8 @@ def print_significant_only(results: pd.DataFrame) -> None:
         print("No significant variables under BH-FDR < 0.05.")
         return
 
-    fmt = "{:<32s} {:<18s} {:>10s} {:>10s} {:>8s} {:>5s}"
-    print(fmt.format("DV", "Family", "Estimate", "SE", "t", "Sig"))
+    fmt = "{:<32s} {:<18s} {:>10s} {:>22s} {:>5s}"
+    print(fmt.format("DV", "Family", "Estimate", "95% CI", "Sig"))
     print("-" * 96)
     for _, row in sig_df.iterrows():
         print(
@@ -618,8 +744,7 @@ def print_significant_only(results: pd.DataFrame) -> None:
                 str(row["dv"])[:32],
                 str(row["family"])[:18],
                 f"{row['estimate']:.2f}" if pd.notna(row["estimate"]) else "NA",
-                f"{row['SE']:.2f}" if pd.notna(row["SE"]) else "NA",
-                f"{row['t_value']:.2f}" if pd.notna(row["t_value"]) else "NA",
+                _fmt_ci(row["ci_lower"], row["ci_upper"], 2),
                 str(row["sig"]),
             )
         )
@@ -636,9 +761,17 @@ def _fmt_mean_sd(mean_v: Any, sd_v: Any, digits: int = 2) -> str:
     return f"{_fmt_num(mean_v, digits)}±{_fmt_num(sd_v, digits)}"
 
 
+def _fmt_ci(lower: Any, upper: Any, digits: int = 2) -> str:
+    return f"[{_fmt_num(lower, digits)}, {_fmt_num(upper, digits)}]"
+
+
 def _result_status_map(results: pd.DataFrame) -> dict[str, str]:
     out: dict[str, str] = {}
     for row in results.itertuples(index=False):
+        status = str(getattr(row, "analysis_status", "ok"))
+        if status != "ok":
+            out[str(row.dv)] = status
+            continue
         sig = str(row.sig) if not pd.isna(row.sig) else ""
         out[str(row.dv)] = sig if sig else "n.s."
     return out
@@ -666,8 +799,8 @@ def _build_analyzed_variables_table(
 def _build_significant_table(results: pd.DataFrame) -> str:
     sig_df = results[results["sig"] != ""].copy().sort_values("p_fdr")
     lines = [
-        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
-        "|---|---|---:|---:|---:|---|",
+        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
+        "|---|---|---:|---:|---:|---:|---|",
     ]
     for row in sig_df.itertuples(index=False):
         lines.append(
@@ -675,31 +808,52 @@ def _build_significant_table(results: pd.DataFrame) -> str:
             f"`{row.dv}` | {row.family} | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | {row.sig} |"
+            f"{_fmt_num(row.estimate, 2)} | "
+            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {row.sig} |"
         )
     if sig_df.empty:
-        lines.append("| (none) | - | - | - | - | - |")
+        lines.append("| (none) | - | - | - | - | - | - |")
     return "\n".join(lines)
 
 
 def _build_joint_angle_table(results: pd.DataFrame, dvs: list[str]) -> str:
     lookup = {str(row.dv): row for row in results.itertuples(index=False)}
     lines = [
-        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
-        "|---|---:|---:|---:|---|",
+        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
+        "|---|---:|---:|---:|---:|---|",
     ]
     for dv in dvs:
         row = lookup.get(dv)
         if row is None:
-            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | untestable |")
+            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | `[NA, NA]` | untestable |")
             continue
         sig = row.sig if isinstance(row.sig, str) and row.sig else "n.s."
+        if str(getattr(row, "analysis_status", "ok")) != "ok":
+            sig = str(getattr(row, "analysis_status"))
         lines.append(
             "| "
             f"`{dv}` | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | {sig} |"
+            f"{_fmt_num(row.estimate, 2)} | "
+            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {sig} |"
+        )
+    return "\n".join(lines)
+
+
+def _build_outlier_table(results: pd.DataFrame) -> str:
+    outlier_df = results[
+        ["dv", "n_step_raw", "n_step_outliers", "n_step", "n_nonstep_raw", "n_nonstep_outliers", "n_nonstep"]
+    ].copy()
+    outlier_df = outlier_df.sort_values("dv")
+    lines = [
+        "| Variable | Step raw | Step outliers | Step kept | Nonstep raw | Nonstep outliers | Nonstep kept |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in outlier_df.itertuples(index=False):
+        lines.append(
+            f"| `{row.dv}` | {int(row.n_step_raw)} | {int(row.n_step_outliers)} | {int(row.n_step)} | "
+            f"{int(row.n_nonstep_raw)} | {int(row.n_nonstep_outliers)} | {int(row.n_nonstep)} |"
         )
     return "\n".join(lines)
 
@@ -732,6 +886,7 @@ def write_report_markdown(
     result_status = _result_status_map(results)
     analyzed_table = _build_analyzed_variables_table(specs, audit_df, result_status)
     significant_table = _build_significant_table(results)
+    outlier_table = _build_outlier_table(results)
     joint_total, joint_sig_count, joint_sig_names = _joint_angle_significance(results, _joint_angle_baseline_cols())
     sig_names = results.loc[results["sig"] != "", "dv"].tolist()
     sig_names_str = ", ".join(sig_names) if sig_names else "(none)"
@@ -788,6 +943,8 @@ This analysis adopts the prior study's focus on initial posture and stability me
 
 - **Analysis window**: `time_from_platform_onset_s ∈ [{trial_stats["window_start_s"]:.2f}, {trial_stats["window_end_s"]:.2f}]`
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
+- **Outlier rule**: 각 변수별로 `step`/`nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
+- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
 - **Multiple comparison correction**: BH-FDR ({len(specs)}개 baseline 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -841,6 +998,10 @@ This analysis adopts the prior study's focus on initial posture and stability me
 ### Significant Variables Only (BH-FDR < 0.05)
 
 {significant_table}
+
+### Outlier Exclusion Summary
+
+{outlier_table}
 
 ## Comparison with Prior Studies
 
@@ -922,6 +1083,7 @@ def write_segment_angle_markdown(
 - 관절각 계산은 `output/all_trials_timeseries.csv`에 export된 `*_deg` 값을 사용한다.
 - baseline window는 `time_from_platform_onset_s ∈ [{trial_stats["window_start_s"]:.2f}, {trial_stats["window_end_s"]:.2f}]` 이다.
 - `X/Y/Z`는 export된 joint-angle 축 회전 성분이며, 이번 baseline 분석에서는 추가 C3D 재계산 없이 frame-wise 평균만 수행한다.
+- 변수별로 `step/nonstep` 그룹 내부 `1.5×IQR` 밖 trial은 LMM 적합 전에 제외한다.
 
 ## stance 기준
 
@@ -1038,6 +1200,9 @@ def main() -> None:
         f"used={baseline_stats['n_trials_used']}/{baseline_stats['n_trials_total']} "
         f"(step={baseline_stats['n_step_used']}, nonstep={baseline_stats['n_nonstep_used']})"
     )
+    outlier_summary = compute_outlier_summary(analysis_df=analysis_df, specs=specs)
+    total_outliers = int(outlier_summary["n_step_outliers"].sum() + outlier_summary["n_nonstep_outliers"].sum())
+    print(f"  Outlier candidates across variables: {total_outliers}")
 
     major_summary = summarize_major_step_side(major_side)
     print(

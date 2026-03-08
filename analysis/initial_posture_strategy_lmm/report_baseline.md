@@ -46,6 +46,8 @@ This analysis adopts the prior study's focus on initial posture and stability me
 
 - **Analysis window**: `time_from_platform_onset_s ∈ [-0.30, 0.00]`
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
+- **Outlier rule**: 각 변수별로 `step`/`nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
+- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
 - **Multiple comparison correction**: BH-FDR (29개 baseline 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -99,7 +101,7 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | `Hip_stance_X_baseline` | Joint_baseline | testable | n.s. |
 | `Hip_stance_Y_baseline` | Joint_baseline | testable | n.s. |
 | `Hip_stance_Z_baseline` | Joint_baseline | testable | n.s. |
-| `Knee_stance_X_baseline` | Joint_baseline | testable | n.s. |
+| `Knee_stance_X_baseline` | Joint_baseline | testable | ** |
 | `Knee_stance_Y_baseline` | Joint_baseline | testable | n.s. |
 | `Knee_stance_Z_baseline` | Joint_baseline | testable | n.s. |
 | `Ankle_stance_X_baseline` | Joint_baseline | testable | n.s. |
@@ -123,30 +125,65 @@ This analysis adopts the prior study's focus on initial posture and stability me
 ### Hypothesis Verdict (strict)
 
 - **Rule**: testable baseline 변수 전부가 FDR 유의여야 PASS
-- **Observed**: testable significant ratio = `4/29`, untestable=`0`
+- **Observed**: testable significant ratio = `5/29`, untestable=`0`
 - **Verdict**: **FAIL**
 
 ### Significant Variables Only (BH-FDR < 0.05)
 
-| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
-|---|---|---:|---:|---:|---|
-| `MOS_minDist_signed_baseline` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | *** |
-| `xCOM_BOS_norm_baseline` | Balance | 0.64±0.07 | 0.70±0.07 | -0.05 | *** |
-| `MOS_AP_v3d_baseline` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | *** |
-| `vCOM_X_baseline` | Balance | -0.00±0.01 | 0.00±0.00 | -0.00 | ** |
+| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
+|---|---|---:|---:|---:|---:|---|
+| `MOS_minDist_signed_baseline` | Balance | 0.07±0.01 | 0.06±0.01 | 0.01 | `[0.01, 0.01]` | *** |
+| `xCOM_BOS_norm_baseline` | Balance | 0.64±0.07 | 0.70±0.07 | -0.05 | `[-0.06, -0.03]` | *** |
+| `MOS_AP_v3d_baseline` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | `[0.01, 0.01]` | *** |
+| `Knee_stance_X_baseline` | Joint_baseline | -0.26±0.18 | -0.21±0.16 | -0.09 | `[-0.14, -0.04]` | ** |
+| `vCOM_X_baseline` | Balance | 0.00±0.00 | 0.00±0.00 | -0.00 | `[-0.00, -0.00]` | ** |
+
+### Outlier Exclusion Summary
+
+| Variable | Step raw | Step outliers | Step kept | Nonstep raw | Nonstep outliers | Nonstep kept |
+|---|---:|---:|---:|---:|---:|---:|
+| `AnkleTorqueMid_Y_perkg_baseline` | 53 | 1 | 52 | 73 | 4 | 69 |
+| `Ankle_stance_X_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Ankle_stance_Y_baseline` | 53 | 13 | 40 | 72 | 8 | 64 |
+| `Ankle_stance_Z_baseline` | 53 | 6 | 47 | 72 | 6 | 66 |
+| `COM_X_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
+| `COM_Y_baseline` | 53 | 4 | 49 | 73 | 0 | 73 |
+| `COP_X_baseline` | 53 | 0 | 53 | 73 | 1 | 72 |
+| `COP_Y_baseline` | 53 | 4 | 49 | 73 | 0 | 73 |
+| `GRF_X_baseline` | 53 | 9 | 44 | 73 | 12 | 61 |
+| `GRF_Y_baseline` | 53 | 3 | 50 | 73 | 3 | 70 |
+| `GRF_Z_baseline` | 53 | 4 | 49 | 73 | 7 | 66 |
+| `Hip_stance_X_baseline` | 53 | 6 | 47 | 72 | 7 | 65 |
+| `Hip_stance_Y_baseline` | 53 | 7 | 46 | 72 | 6 | 66 |
+| `Hip_stance_Z_baseline` | 53 | 7 | 46 | 72 | 9 | 63 |
+| `Knee_stance_X_baseline` | 53 | 6 | 47 | 72 | 8 | 64 |
+| `Knee_stance_Y_baseline` | 53 | 6 | 47 | 72 | 3 | 69 |
+| `Knee_stance_Z_baseline` | 53 | 11 | 42 | 72 | 9 | 63 |
+| `MOS_AP_v3d_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
+| `MOS_ML_v3d_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
+| `MOS_minDist_signed_baseline` | 53 | 0 | 53 | 73 | 1 | 72 |
+| `Neck_X_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Neck_Y_baseline` | 53 | 2 | 51 | 72 | 4 | 68 |
+| `Neck_Z_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Trunk_X_baseline` | 53 | 7 | 46 | 72 | 2 | 70 |
+| `Trunk_Y_baseline` | 53 | 5 | 48 | 72 | 3 | 69 |
+| `Trunk_Z_baseline` | 53 | 2 | 51 | 72 | 4 | 68 |
+| `vCOM_X_baseline` | 53 | 3 | 50 | 73 | 6 | 67 |
+| `vCOM_Y_baseline` | 53 | 1 | 52 | 73 | 2 | 71 |
+| `xCOM_BOS_norm_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
 
 ## Comparison with Prior Studies
 
 | Comparison Item | Prior Study Result | Current Result | Verdict |
 |---|---|---|---|
 | Initial posture operationalization | onset/posture-related 초기 상태가 전략 variability를 설명 | onset 직전 300 ms baseline 평균으로 posture를 정의 | Partially consistent |
-| Broad posture separation by kinematic variables | initial posture effect가 존재하지만 subject/task interaction이 중요 | baseline joint-angle 유의 변수 `0/15` (`(none)`) | Partially consistent |
-| Stability metric relevance | `xCOM/BOS`와 onset stability interpretation 제시 | baseline 유의 변수 `vCOM_X_baseline, MOS_minDist_signed_baseline, MOS_AP_v3d_baseline, xCOM_BOS_norm_baseline` | Consistent |
+| Broad posture separation by kinematic variables | initial posture effect가 존재하지만 subject/task interaction이 중요 | baseline joint-angle 유의 변수 `1/15` (`Knee_stance_X_baseline`) | Consistent |
+| Stability metric relevance | `xCOM/BOS`와 onset stability interpretation 제시 | baseline 유의 변수 `vCOM_X_baseline, MOS_minDist_signed_baseline, MOS_AP_v3d_baseline, xCOM_BOS_norm_baseline, Knee_stance_X_baseline` | Consistent |
 
 ## Interpretation & Conclusion
 
 1. baseline 평균으로 초기 자세를 요약해도 strict 기준 가설은 **FAIL**였다.
-2. baseline joint-angle 변수는 총 `15`개 중 `0`개가 FDR 유의였다.
+2. baseline joint-angle 변수는 총 `15`개 중 `1`개가 FDR 유의였다.
 3. 따라서 본 데이터에서는 onset 직전 baseline posture 차이가 step/nonstep 전략 차이를 완전히 설명한다고 단정하기 어렵고, prior study가 제시한 posture-goal interaction의 일부만 현재 집단 비교에서 포착된 것으로 해석하는 것이 안전하다.
 
 ## Limitations

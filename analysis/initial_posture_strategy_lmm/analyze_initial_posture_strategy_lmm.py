@@ -300,6 +300,34 @@ def _joint_angle_step_cols() -> list[str]:
     return cols
 
 
+def _step_onset_variable_catalog() -> list[dict[str, str]]:
+    specs: list[dict[str, str]] = [
+        {"dv": "COM_X_step_onset", "family": "Balance_step_onset"},
+        {"dv": "COM_Y_step_onset", "family": "Balance_step_onset"},
+        {"dv": "vCOM_X_step_onset", "family": "Balance_step_onset"},
+        {"dv": "vCOM_Y_step_onset", "family": "Balance_step_onset"},
+        {"dv": "MOS_minDist_signed_step_onset", "family": "Balance_step_onset"},
+        {"dv": "MOS_AP_v3d_step_onset", "family": "Balance_step_onset"},
+        {"dv": "MOS_ML_v3d_step_onset", "family": "Balance_step_onset"},
+        {"dv": "xCOM_BOS_norm_step_onset", "family": "Balance_step_onset"},
+    ]
+    for seg in STANCE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_stance_{axis}_step_onset", "family": "Joint_step_onset"})
+    for seg in MIDLINE_SEGMENTS:
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_{axis}_step_onset", "family": "Joint_step_onset"})
+    specs.extend([
+        {"dv": "COP_X_step_onset", "family": "Force_step_onset"},
+        {"dv": "COP_Y_step_onset", "family": "Force_step_onset"},
+        {"dv": "GRF_X_step_onset", "family": "Force_step_onset"},
+        {"dv": "GRF_Y_step_onset", "family": "Force_step_onset"},
+        {"dv": "GRF_Z_step_onset", "family": "Force_step_onset"},
+        {"dv": "AnkleTorqueMid_Y_perkg_step_onset", "family": "Force_step_onset"},
+    ])
+    return specs
+
+
 def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
     exprs: list[pl.Expr] = []
     for seg in STANCE_SEGMENTS:
@@ -356,12 +384,13 @@ def build_onset_snapshot(
     return snap.to_pandas()
 
 
-def build_step_onset_joint_snapshot(
+def build_step_onset_snapshot(
     df: pl.DataFrame,
     trial_meta: pd.DataFrame,
     major_side: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    trial_meta_pl = pl.from_pandas(trial_meta[TRIAL_KEYS + ["step_TF", "state"]].copy())
+    df_base = df.drop([c for c in ["step_TF", "state", "mixed"] if c in df.columns])
+    trial_meta_pl = pl.from_pandas(trial_meta[TRIAL_KEYS + ["step_TF", "state", "mixed"]].copy())
     major_side_pl = pl.from_pandas(major_side[["subject", "major_step_side"]].copy())
 
     trial_step = (
@@ -395,7 +424,7 @@ def build_step_onset_joint_snapshot(
     )
 
     snap = (
-        df.join(
+        df_base.join(
             target.select(
                 TRIAL_KEYS
                 + [
@@ -418,8 +447,32 @@ def build_step_onset_joint_snapshot(
         raise ValueError(f"Step-onset snapshot has non-unique rows for {dup.height} trials.")
 
     snap = add_stance_cols_pl(snap)
+    snap = snap.with_columns(
+        pl.when((pl.col("BOS_maxX") - pl.col("BOS_minX")) > 0)
+        .then((pl.col("xCOM_X") - pl.col("BOS_minX")) / (pl.col("BOS_maxX") - pl.col("BOS_minX")))
+        .otherwise(None)
+        .alias("xCOM_BOS_norm_step_onset")
+    )
 
     src_to_out: dict[str, str] = {}
+    src_to_out.update(
+        {
+            "COM_X": "COM_X_step_onset",
+            "COM_Y": "COM_Y_step_onset",
+            "vCOM_X": "vCOM_X_step_onset",
+            "vCOM_Y": "vCOM_Y_step_onset",
+            "MOS_minDist_signed": "MOS_minDist_signed_step_onset",
+            "MOS_AP_v3d": "MOS_AP_v3d_step_onset",
+            "MOS_ML_v3d": "MOS_ML_v3d_step_onset",
+            "xCOM_BOS_norm_step_onset": "xCOM_BOS_norm_step_onset",
+            "COP_X_m": "COP_X_step_onset",
+            "COP_Y_m": "COP_Y_step_onset",
+            "GRF_X_N": "GRF_X_step_onset",
+            "GRF_Y_N": "GRF_Y_step_onset",
+            "GRF_Z_N": "GRF_Z_step_onset",
+            "AnkleTorqueMid_int_Y_Nm_per_kg": "AnkleTorqueMid_Y_perkg_step_onset",
+        }
+    )
     for seg in STANCE_SEGMENTS:
         for axis in ANGLE_AXES:
             src_to_out[f"{seg}_stance_{axis}_deg"] = f"{seg}_stance_{axis}_step_onset"
@@ -809,8 +862,8 @@ def build_analysis_dataframe(
 
     print("  Building onset snapshot variables from exported CSV...")
     onset_df = build_onset_snapshot(df=df, trial_meta=trial_meta, major_side=major_side)
-    print("  Building step-onset joint-angle snapshot (step mean imputation for nonstep)...")
-    step_joint_df, step_joint_stats = build_step_onset_joint_snapshot(
+    print("  Building step-onset snapshot (step mean imputation for nonstep)...")
+    step_onset_df, step_joint_stats = build_step_onset_snapshot(
         df=df,
         trial_meta=trial_meta,
         major_side=major_side,
@@ -873,7 +926,7 @@ def build_analysis_dataframe(
     if analysis_df.empty:
         raise ValueError("No valid analysis trials remained after absolute onset feature filtering.")
 
-    return analysis_df, trial_meta, abs_features, major_side, step_joint_df, step_joint_stats
+    return analysis_df, trial_meta, abs_features, major_side, step_onset_df, step_joint_stats
 
 
 def variable_catalog() -> list[dict[str, str]]:
@@ -938,6 +991,69 @@ def audit_variables(analysis_df: pd.DataFrame, specs: list[dict[str, str]]) -> p
     return pd.DataFrame(rows)
 
 
+def _group_outlier_mask(series: pd.Series) -> pd.Series:
+    """Mark non-outlier values using the 1.5*IQR rule within one group."""
+    values = pd.to_numeric(series, errors="coerce")
+    keep = pd.Series(False, index=values.index, dtype=bool)
+    finite = values.dropna()
+    if finite.empty:
+        return keep
+
+    q1 = float(finite.quantile(0.25))
+    q3 = float(finite.quantile(0.75))
+    iqr = q3 - q1
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    keep.loc[finite.index] = (finite >= lower) & (finite <= upper)
+    return keep
+
+
+def compute_outlier_summary(analysis_df: pd.DataFrame, specs: list[dict[str, str]]) -> pd.DataFrame:
+    """Summarize per-variable outlier counts within step/nonstep groups."""
+    rows: list[dict[str, Any]] = []
+    for spec in specs:
+        dv = spec["dv"]
+        sub = analysis_df[TRIAL_KEYS + ["step_TF", dv]].copy()
+        sub[dv] = pd.to_numeric(sub[dv], errors="coerce")
+        sub = sub[sub["step_TF"].isin(["step", "nonstep"]) & sub[dv].notna()].copy()
+
+        if sub.empty:
+            rows.append(
+                {
+                    "dv": dv,
+                    "n_step_raw": 0,
+                    "n_nonstep_raw": 0,
+                    "n_step_outliers": 0,
+                    "n_nonstep_outliers": 0,
+                    "n_step_kept": 0,
+                    "n_nonstep_kept": 0,
+                }
+            )
+            continue
+
+        keep = pd.Series(False, index=sub.index, dtype=bool)
+        for group in ("step", "nonstep"):
+            group_idx = sub.index[sub["step_TF"] == group]
+            keep.loc[group_idx] = _group_outlier_mask(sub.loc[group_idx, dv])
+
+        n_step_raw = int((sub["step_TF"] == "step").sum())
+        n_nonstep_raw = int((sub["step_TF"] == "nonstep").sum())
+        n_step_kept = int(((sub["step_TF"] == "step") & keep).sum())
+        n_nonstep_kept = int(((sub["step_TF"] == "nonstep") & keep).sum())
+        rows.append(
+            {
+                "dv": dv,
+                "n_step_raw": n_step_raw,
+                "n_nonstep_raw": n_nonstep_raw,
+                "n_step_outliers": n_step_raw - n_step_kept,
+                "n_nonstep_outliers": n_nonstep_raw - n_nonstep_kept,
+                "n_step_kept": n_step_kept,
+                "n_nonstep_kept": n_nonstep_kept,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _build_r_lmm_script(csv_path: str, output_path: str) -> str:
     return f"""
 library(lmerTest)
@@ -947,17 +1063,41 @@ data$step_TF <- tolower(trimws(as.character(data$step_TF)))
 data$step_TF <- factor(data$step_TF, levels = c("nonstep", "step"))
 dv_cols <- colnames(data)[!colnames(data) %in% c("subject", "velocity", "trial", "step_TF")]
 
+iqr_keep <- function(x) {{
+  keep <- rep(FALSE, length(x))
+  finite_idx <- which(is.finite(x))
+  if (length(finite_idx) == 0) {{
+    return(keep)
+  }}
+  vals <- x[finite_idx]
+  q1 <- unname(quantile(vals, 0.25, na.rm = TRUE, type = 7))
+  q3 <- unname(quantile(vals, 0.75, na.rm = TRUE, type = 7))
+  iqr <- q3 - q1
+  lower <- q1 - 1.5 * iqr
+  upper <- q3 + 1.5 * iqr
+  keep_vals <- vals >= lower & vals <= upper
+  keep[finite_idx] <- keep_vals
+  keep
+}}
+
 results <- data.frame(
   dv = character(),
+  analysis_status = character(),
   estimate = numeric(),
   SE = numeric(),
   df = numeric(),
   t_value = numeric(),
   p_value = numeric(),
+  ci_lower = numeric(),
+  ci_upper = numeric(),
   mean_step = numeric(),
   sd_step = numeric(),
   mean_nonstep = numeric(),
   sd_nonstep = numeric(),
+  n_step_raw = integer(),
+  n_nonstep_raw = integer(),
+  n_step_outliers = integer(),
+  n_nonstep_outliers = integer(),
   n_step = integer(),
   n_nonstep = integer(),
   converged = logical(),
@@ -966,6 +1106,19 @@ results <- data.frame(
 
 for (dv in dv_cols) {{
   sub <- data[!is.na(data[[dv]]) & !is.na(data$step_TF), ]
+  step_mask <- sub$step_TF == "step"
+  nonstep_mask <- sub$step_TF == "nonstep"
+  n_step_raw <- sum(step_mask)
+  n_nonstep_raw <- sum(nonstep_mask)
+
+  keep_mask <- rep(FALSE, nrow(sub))
+  keep_mask[step_mask] <- iqr_keep(sub[[dv]][step_mask])
+  keep_mask[nonstep_mask] <- iqr_keep(sub[[dv]][nonstep_mask])
+
+  n_step_outliers <- n_step_raw - sum(keep_mask[step_mask])
+  n_nonstep_outliers <- n_nonstep_raw - sum(keep_mask[nonstep_mask])
+  sub <- sub[keep_mask, ]
+
   n_s <- sum(sub$step_TF == "step")
   n_ns <- sum(sub$step_TF == "nonstep")
 
@@ -976,10 +1129,28 @@ for (dv in dv_cols) {{
 
   if (n_s == 0 || n_ns == 0) {{
     results <- rbind(results, data.frame(
-      dv = dv, estimate = NA, SE = NA, df = NA,
+      dv = dv, analysis_status = "group_empty_after_outlier", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
+      n_step = n_s, n_nonstep = n_ns, converged = FALSE,
+      stringsAsFactors = FALSE
+    ))
+    next
+  }}
+
+  if (length(unique(sub[[dv]])) <= 1) {{
+    results <- rbind(results, data.frame(
+      dv = dv, analysis_status = "constant_after_outlier", estimate = NA, SE = NA, df = NA,
+      t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
+      mean_step = m_s, sd_step = sd_s,
+      mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = FALSE,
       stringsAsFactors = FALSE
     ))
@@ -999,24 +1170,32 @@ for (dv in dv_cols) {{
       df_val <- co[row_name, "df"]
       t_val <- co[row_name, "t value"]
       p_val <- co[row_name, "Pr(>|t|)"]
+      ci_low <- est - 1.96 * se
+      ci_high <- est + 1.96 * se
     }} else {{
-      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA
+      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA; ci_low <- NA; ci_high <- NA
     }}
 
     results <- rbind(results, data.frame(
-      dv = dv, estimate = est, SE = se, df = df_val,
+      dv = dv, analysis_status = "ok", estimate = est, SE = se, df = df_val,
       t_value = t_val, p_value = p_val,
+      ci_lower = ci_low, ci_upper = ci_high,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = TRUE,
       stringsAsFactors = FALSE
     ))
   }}, error = function(e) {{
     results <<- rbind(results, data.frame(
-      dv = dv, estimate = NA, SE = NA, df = NA,
+      dv = dv, analysis_status = "model_error", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
+      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
+      n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
+      n_step_outliers = n_step_outliers, n_nonstep_outliers = n_nonstep_outliers,
       n_step = n_s, n_nonstep = n_ns, converged = FALSE,
       stringsAsFactors = FALSE
     ))
@@ -1098,8 +1277,8 @@ def print_significant_only(results: pd.DataFrame) -> None:
         print("No significant variables under BH-FDR < 0.05.")
         return
 
-    fmt = "{:<28s} {:<20s} {:>10s} {:>10s} {:>8s} {:>5s}"
-    print(fmt.format("DV", "Family", "Estimate", "SE", "t", "Sig"))
+    fmt = "{:<28s} {:<20s} {:>10s} {:>22s} {:>5s}"
+    print(fmt.format("DV", "Family", "Estimate", "95% CI", "Sig"))
     print("-" * 96)
     for _, row in sig_df.iterrows():
         print(
@@ -1107,8 +1286,7 @@ def print_significant_only(results: pd.DataFrame) -> None:
                 str(row["dv"])[:28],
                 str(row["family"])[:20],
                 f"{row['estimate']:.2f}" if pd.notna(row["estimate"]) else "NA",
-                f"{row['SE']:.2f}" if pd.notna(row["SE"]) else "NA",
-                f"{row['t_value']:.2f}" if pd.notna(row["t_value"]) else "NA",
+                _fmt_ci(row["ci_lower"], row["ci_upper"], 2),
                 str(row["sig"]),
             )
         )
@@ -1125,9 +1303,17 @@ def _fmt_mean_sd(mean_v: Any, sd_v: Any, digits: int = 2) -> str:
     return f"{_fmt_num(mean_v, digits)}±{_fmt_num(sd_v, digits)}"
 
 
+def _fmt_ci(lower: Any, upper: Any, digits: int = 2) -> str:
+    return f"[{_fmt_num(lower, digits)}, {_fmt_num(upper, digits)}]"
+
+
 def _result_status_map(results: pd.DataFrame) -> dict[str, str]:
     out: dict[str, str] = {}
     for row in results.itertuples(index=False):
+        status = str(getattr(row, "analysis_status", "ok"))
+        if status != "ok":
+            out[str(row.dv)] = status
+            continue
         sig = str(row.sig) if not pd.isna(row.sig) else ""
         out[str(row.dv)] = sig if sig else "n.s."
     return out
@@ -1155,8 +1341,8 @@ def _build_analyzed_variables_table(
 def _build_significant_table(results: pd.DataFrame) -> str:
     sig_df = results[results["sig"] != ""].copy().sort_values("p_fdr")
     lines = [
-        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
-        "|---|---|---:|---:|---:|---|",
+        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
+        "|---|---|---:|---:|---:|---:|---|",
     ]
     for row in sig_df.itertuples(index=False):
         lines.append(
@@ -1164,31 +1350,52 @@ def _build_significant_table(results: pd.DataFrame) -> str:
             f"`{row.dv}` | {row.family} | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | {row.sig} |"
+            f"{_fmt_num(row.estimate, 2)} | "
+            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {row.sig} |"
         )
     if sig_df.empty:
-        lines.append("| (none) | - | - | - | - | - |")
+        lines.append("| (none) | - | - | - | - | - | - |")
     return "\n".join(lines)
 
 
 def _build_joint_angle_table(results: pd.DataFrame, dvs: list[str]) -> str:
     lookup = {str(row.dv): row for row in results.itertuples(index=False)}
     lines = [
-        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
-        "|---|---:|---:|---:|---|",
+        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
+        "|---|---:|---:|---:|---:|---|",
     ]
     for dv in dvs:
         row = lookup.get(dv)
         if row is None:
-            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | untestable |")
+            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | `[NA, NA]` | untestable |")
             continue
         sig = row.sig if isinstance(row.sig, str) and row.sig else "n.s."
+        if str(getattr(row, "analysis_status", "ok")) != "ok":
+            sig = str(getattr(row, "analysis_status"))
         lines.append(
             "| "
             f"`{dv}` | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | {sig} |"
+            f"{_fmt_num(row.estimate, 2)} | "
+            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {sig} |"
+        )
+    return "\n".join(lines)
+
+
+def _build_outlier_table(results: pd.DataFrame) -> str:
+    outlier_df = results[
+        ["dv", "n_step_raw", "n_step_outliers", "n_step", "n_nonstep_raw", "n_nonstep_outliers", "n_nonstep"]
+    ].copy()
+    outlier_df = outlier_df.sort_values("dv")
+    lines = [
+        "| Variable | Step raw | Step outliers | Step kept | Nonstep raw | Nonstep outliers | Nonstep kept |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in outlier_df.itertuples(index=False):
+        lines.append(
+            f"| `{row.dv}` | {int(row.n_step_raw)} | {int(row.n_step_outliers)} | {int(row.n_step)} | "
+            f"{int(row.n_nonstep_raw)} | {int(row.n_nonstep_outliers)} | {int(row.n_nonstep)} |"
         )
     return "\n".join(lines)
 
@@ -1206,6 +1413,10 @@ def write_report_markdown(
     specs: list[dict[str, str]],
     audit_df: pd.DataFrame,
     results: pd.DataFrame,
+    step_specs: list[dict[str, str]],
+    step_audit_df: pd.DataFrame,
+    step_results: pd.DataFrame,
+    step_onset_stats: dict[str, Any],
     major_side: pd.DataFrame,
     n_trials: int,
     n_step: int,
@@ -1239,14 +1450,27 @@ def write_report_markdown(
     result_status = _result_status_map(results)
     analyzed_table = _build_analyzed_variables_table(specs, audit_df, result_status)
     significant_table = _build_significant_table(results)
+    outlier_table = _build_outlier_table(results)
+    step_result_status = _result_status_map(step_results)
+    step_analyzed_table = _build_analyzed_variables_table(step_specs, step_audit_df, step_result_status)
+    step_significant_table = _build_significant_table(step_results)
+    step_outlier_table = _build_outlier_table(step_results)
+    step_joint_total, step_joint_sig_count, step_joint_sig_names = _joint_angle_significance(
+        step_results,
+        _joint_angle_step_cols(),
+    )
+    step_sig_total = int((step_results["sig"] != "").sum())
+    step_sig_ratio = f"{step_sig_total}/{len(step_results)}"
+    step_missing_ref_subjects = step_onset_stats.get("missing_ref_subjects", [])
+    step_missing_ref_subjects_str = ", ".join(step_missing_ref_subjects) if step_missing_ref_subjects else "(none)"
 
-    report_text = f"""# Initial Posture Strategy LMM (Platform Onset)
+    report_text = f"""# Initial Posture Strategy LMM (Platform Onset + Step Onset)
 
 ## Research Question
 
-**"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset 시점 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
+**"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 단일 프레임 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
 
-이번 버전은 onset-zero 변수(기존 export 각도/힘) 대신 C3D에서 재계산한 **absolute onset 변수**를 각도와 force에 모두 적용해, "검정불가" 문제를 최소화한 모델이다.
+이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한다.
 
 ## Prior Studies
 
@@ -1278,6 +1502,8 @@ def write_report_markdown(
 
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
+- **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
+- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
 - **Multiple comparison correction**: BH-FDR ({len(specs)}개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -1313,17 +1539,45 @@ def write_report_markdown(
 
 {significant_table}
 
+### Outlier Exclusion Summary (Platform Onset)
+
+{outlier_table}
+
+## Step-Onset Single-Frame Analysis
+
+- **Analysis point**: `step_onset_target_local` 단일 프레임
+- **Target rule**:
+  - step trial: 해당 trial의 `step_onset_local` 사용
+  - nonstep trial: 동일 subject의 step trial `step_onset_local` 평균값을 대입한 후 frame으로 반올림
+- **Valid trials**: `{step_onset_stats["n_used"]}/{step_onset_stats["n_trials_total"]}` (step=`{step_onset_stats["n_step_used"]}`, nonstep=`{step_onset_stats["n_nonstep_used"]}`)
+- **Excluded trials**: `{step_onset_stats["n_excluded"]}` (step_onset 결측 step=`{step_onset_stats["n_step_missing_direct"]}`, step 참조 부재 nonstep=`{step_onset_stats["n_nonstep_missing_ref"]}`, frame 불일치=`{step_onset_stats["n_target_no_frame"]}`)
+- **nonstep step_onset 참조 부재 subject**: `{step_missing_ref_subjects_str}`
+- **Observed**: testable significant ratio = `{step_sig_ratio}`
+
+### Step-Onset Variables (Full Set, n={len(step_specs)})
+
+{step_analyzed_table}
+
+### Significant Step-Onset Variables Only (BH-FDR < 0.05)
+
+{step_significant_table}
+
+### Outlier Exclusion Summary (Step Onset)
+
+{step_outlier_table}
+
 ## Interpretation & Conclusion
 
-1. 각도와 force를 absolute onset으로 전환해도 모든 onset 변수가 유의하지는 않았고, strict 기준 가설은 **{verdict}**였다.
-2. {joint_line} 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
-3. 따라서 본 데이터에서는 onset 시점의 광범위한 초기 자세 차이가 step/nonstep 전략 차이를 직접 설명한다고 단정하기 어렵다.
+1. 각 변수별 이상치를 제외하고 `95% CI`를 함께 보아도 platform onset 29개 변수의 strict 기준 가설은 **{verdict}**였다.
+2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
+3. step onset 29개 변수에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`).
+4. 따라서 본 데이터에서는 초기 자세 차이가 시점에 따라 다르게 나타날 수 있지만, 단일 시점 변수만으로 step/nonstep 전략 차이를 광범위하게 설명한다고 단정하기는 어렵다.
 
 ## Limitations
 
 1. 원문의 task-level goal 파라미터를 직접 모델링하지 않았다.
 2. 본 분석은 Van Wouwe 2021의 simulation 기반 인과 프레임을 1:1 재현한 결과가 아니다.
-3. 관절 각속도와 BOS 기하학 파생 지표 분해 검정은 본 버전에 포함하지 않았다.
+3. step onset은 nonstep trial에서 subject 평균 `step_onset_local`을 참조하므로, 직접 관측 step 시점과 완전히 같지는 않다.
 
 ## Reproduction
 
@@ -1383,19 +1637,26 @@ def write_segment_angle_markdown(
     missing_ref_subjects = step_onset_stats.get("missing_ref_subjects", [])
     missing_ref_subjects_str = ", ".join(missing_ref_subjects) if missing_ref_subjects else "(none)"
 
-    preserved_interpretation = ""
-    if segment_md.exists():
-        existing = segment_md.read_text(encoding="utf-8-sig")
-        marker = "# 결과 해석"
-        start = existing.find(marker)
-        if start != -1:
-            end = existing.find("\n# 결론", start)
-            if end == -1:
-                preserved_interpretation = existing[start:].strip()
-            else:
-                preserved_interpretation = existing[start:end].strip()
-    if not preserved_interpretation:
-        preserved_interpretation = "# 결과 해석\n\n(여기에 해석을 작성하세요.)"
+    interpretation_body = f"""# 결과 해석
+
+## platform_onset 해석
+
+- platform onset joint-angle 15개 변수 중 `{joint_sig_count}`개가 FDR 유의였다: `{', '.join(joint_sig_names) if joint_sig_names else '(none)'}`.
+- 이번 버전은 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한 결과다.
+- 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 광범위한 초기 자세 분화로 해석하기에는 근거가 제한적이다.
+
+## step_onset 해석
+
+- step onset joint-angle 15개 변수 중 `{step_joint_sig_count}`개가 FDR 유의였다: `{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`.
+- step onset은 `step` trial의 실제 `step_onset_local`과, `nonstep` trial의 subject 평균 step onset 참조 frame을 사용한다.
+- 따라서 baseline이나 platform onset보다 전략 분화 신호가 더 많이 나타나더라도, 이는 실제 발 들기 시작 직전의 준비 자세와 더 가깝다는 점을 함께 고려해야 한다.
+
+## 종합 해석
+
+- 같은 이상치 제외 규칙과 `95% CI` 기준에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
+- 즉, 전략 차이는 섭동 직후 정적 초기자세보다 실제 발 들기 직전 단일 프레임에서 더 뚜렷하게 나타나는 경향이 있다.
+- 다만 두 시점 모두 전축이 일관되게 유의하지는 않으므로, 관절각만으로 step/nonstep 전략 차이를 완전히 설명한다고 단정하기는 어렵다.
+"""
 
     text = f"""---
 ---
@@ -1437,9 +1698,10 @@ def write_segment_angle_markdown(
 - 해석 노트:
   - platform_onset: {joint_note}
   - step_onset: {step_joint_note}
+  - 두 시점 모두에서 `Estimate`와 Wald `95% CI`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
-{preserved_interpretation}
+{interpretation_body}
 
 # 결론
 
@@ -1465,7 +1727,7 @@ def main() -> None:
     print("=" * 72)
 
     print("\n[M1] Load and prepare data...")
-    analysis_df, trial_meta, _abs_angles, major_side, step_joint_df, step_onset_stats = build_analysis_dataframe(
+    analysis_df, trial_meta, _abs_angles, major_side, step_onset_df, step_onset_stats = build_analysis_dataframe(
         csv_path=args.csv,
         platform_xlsm=args.platform_xlsm,
         c3d_dir=args.c3d_dir,
@@ -1478,6 +1740,8 @@ def main() -> None:
 
     specs = variable_catalog()
     dv_to_family = {s["dv"]: s["family"] for s in specs}
+    step_specs = _step_onset_variable_catalog()
+    step_dv_to_family = {s["dv"]: s["family"] for s in step_specs}
 
     print("\n[M2] Variable audit at platform onset...")
     audit_df = audit_variables(analysis_df=analysis_df, specs=specs)
@@ -1522,6 +1786,12 @@ def main() -> None:
             "  nonstep subjects without step_onset reference: "
             + ", ".join(step_onset_stats["missing_ref_subjects"])
         )
+    onset_outlier_summary = compute_outlier_summary(analysis_df=analysis_df, specs=specs)
+    step_outlier_summary = compute_outlier_summary(analysis_df=step_onset_df, specs=step_specs)
+    onset_total_outliers = int(onset_outlier_summary["n_step_outliers"].sum() + onset_outlier_summary["n_nonstep_outliers"].sum())
+    step_total_outliers = int(step_outlier_summary["n_step_outliers"].sum() + step_outlier_summary["n_nonstep_outliers"].sum())
+    print(f"  platform_onset outlier candidates across variables: {onset_total_outliers}")
+    print(f"  step_onset outlier candidates across variables: {step_total_outliers}")
 
     if args.dry_run:
         print("\nDry run complete.")
@@ -1533,13 +1803,11 @@ def main() -> None:
 
     print_significant_only(results)
 
-    print("\n[M3b] Fit step_onset joint-angle LMM...")
-    step_specs = [{"dv": dv, "family": "Joint_step_onset"} for dv in _joint_angle_step_cols()]
-    step_dv_to_family = {s["dv"]: s["family"] for s in step_specs}
-    step_audit_df = audit_variables(analysis_df=step_joint_df, specs=step_specs)
+    print("\n[M3b] Fit step_onset single-frame LMM...")
+    step_audit_df = audit_variables(analysis_df=step_onset_df, specs=step_specs)
     step_testable_vars = step_audit_df.loc[step_audit_df["status"] == "testable", "dv"].tolist()
     step_results = fit_lmm_all(
-        analysis_df=step_joint_df,
+        analysis_df=step_onset_df,
         testable_vars=step_testable_vars,
         dv_to_family=step_dv_to_family,
     )
@@ -1569,6 +1837,10 @@ def main() -> None:
         specs=specs,
         audit_df=audit_df,
         results=results,
+        step_specs=step_specs,
+        step_audit_df=step_audit_df,
+        step_results=step_results,
+        step_onset_stats=step_onset_stats,
         major_side=major_side,
         n_trials=n_trials,
         n_step=n_step,

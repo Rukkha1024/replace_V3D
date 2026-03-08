@@ -8,29 +8,30 @@
 
 ## baseline `[-300 ms, onset]` 평균 LMM
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
-|---|---:|---:|---:|---|
-| `Hip_stance_X_baseline` | -0.17±0.28 | -0.19±0.27 | 0.01 | n.s. |
-| `Hip_stance_Y_baseline` | 0.02±0.16 | 0.03±0.09 | -0.01 | n.s. |
-| `Hip_stance_Z_baseline` | 0.09±0.61 | 0.05±0.21 | 0.05 | n.s. |
-| `Knee_stance_X_baseline` | -0.29±0.31 | -0.30±0.30 | -0.03 | n.s. |
-| `Knee_stance_Y_baseline` | -0.02±0.08 | -0.04±0.08 | 0.00 | n.s. |
-| `Knee_stance_Z_baseline` | -0.01±0.21 | 0.00±0.12 | -0.02 | n.s. |
-| `Ankle_stance_X_baseline` | 0.34±0.33 | 0.40±0.36 | -0.01 | n.s. |
-| `Ankle_stance_Y_baseline` | -0.02±0.25 | 0.05±0.29 | -0.07 | n.s. |
-| `Ankle_stance_Z_baseline` | 0.06±0.48 | 0.09±0.23 | -0.03 | n.s. |
-| `Trunk_X_baseline` | -0.00±0.15 | 0.03±0.15 | -0.03 | n.s. |
-| `Trunk_Y_baseline` | 0.02±0.15 | -0.00±0.13 | 0.02 | n.s. |
-| `Trunk_Z_baseline` | -0.02±0.13 | -0.01±0.12 | -0.01 | n.s. |
-| `Neck_X_baseline` | -0.09±0.58 | 0.02±0.28 | -0.11 | n.s. |
-| `Neck_Y_baseline` | -0.02±0.19 | 0.02±0.18 | -0.04 | n.s. |
-| `Neck_Z_baseline` | -0.04±0.19 | -0.00±0.15 | -0.03 | n.s. |
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
+|---|---:|---:|---:|---:|---|
+| `Hip_stance_X_baseline` | -0.11±0.15 | -0.17±0.17 | 0.06 | `[-0.00, 0.12]` | n.s. |
+| `Hip_stance_Y_baseline` | 0.00±0.08 | 0.03±0.07 | -0.03 | `[-0.05, -0.00]` | n.s. |
+| `Hip_stance_Z_baseline` | 0.05±0.14 | 0.02±0.12 | 0.03 | `[-0.01, 0.08]` | n.s. |
+| `Knee_stance_X_baseline` | -0.26±0.18 | -0.21±0.16 | -0.09 | `[-0.14, -0.04]` | ** |
+| `Knee_stance_Y_baseline` | -0.02±0.04 | -0.04±0.07 | 0.01 | `[-0.00, 0.03]` | n.s. |
+| `Knee_stance_Z_baseline` | 0.01±0.06 | -0.01±0.07 | 0.01 | `[-0.01, 0.04]` | n.s. |
+| `Ankle_stance_X_baseline` | 0.30±0.20 | 0.34±0.28 | 0.00 | `[-0.06, 0.07]` | n.s. |
+| `Ankle_stance_Y_baseline` | 0.00±0.06 | 0.02±0.10 | -0.01 | `[-0.05, 0.02]` | n.s. |
+| `Ankle_stance_Z_baseline` | 0.07±0.12 | 0.06±0.15 | 0.02 | `[-0.03, 0.06]` | n.s. |
+| `Trunk_X_baseline` | -0.00±0.07 | 0.02±0.12 | -0.02 | `[-0.06, 0.02]` | n.s. |
+| `Trunk_Y_baseline` | -0.00±0.10 | 0.00±0.10 | -0.01 | `[-0.05, 0.02]` | n.s. |
+| `Trunk_Z_baseline` | -0.00±0.10 | -0.02±0.10 | 0.02 | `[-0.02, 0.05]` | n.s. |
+| `Neck_X_baseline` | -0.01±0.12 | -0.01±0.13 | 0.00 | `[-0.05, 0.05]` | n.s. |
+| `Neck_Y_baseline` | 0.00±0.12 | 0.02±0.13 | -0.02 | `[-0.07, 0.02]` | n.s. |
+| `Neck_Z_baseline` | -0.01±0.11 | 0.00±0.09 | -0.01 | `[-0.04, 0.03]` | n.s. |
 
 ## coordinate 해석 기준
 
 - 관절각 계산은 `output/all_trials_timeseries.csv`에 export된 `*_deg` 값을 사용한다.
 - baseline window는 `time_from_platform_onset_s ∈ [-0.30, 0.00]` 이다.
 - `X/Y/Z`는 export된 joint-angle 축 회전 성분이며, 이번 baseline 분석에서는 추가 C3D 재계산 없이 frame-wise 평균만 수행한다.
+- 변수별로 `step/nonstep` 그룹 내부 `1.5×IQR` 밖 trial은 LMM 적합 전에 제외한다.
 
 ## stance 기준
 
@@ -48,7 +49,7 @@
 
 ## 결과 해석
 
-- baseline 관절각 요약: 15개 baseline segment angle 변수(X/Y/Z) 모두 FDR 보정 후 `n.s.`였다.
+- baseline 관절각 요약: 15개 baseline segment angle 변수(X/Y/Z) 중 1개가 FDR 유의였다: `Knee_stance_X_baseline`.
 - 모든 축이 일관되게 유의하지 않다면, baseline posture만으로 전략 차이를 설명하는 근거는 제한적이다.
 - 본 결과는 onset 직전 single-frame 차이와는 다른 질문을 다루며, "초기 자세를 평균 posture로 보았을 때도 차이가 남는가"를 확인하는 데 의미가 있다.
 

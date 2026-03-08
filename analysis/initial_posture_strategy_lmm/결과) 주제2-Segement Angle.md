@@ -8,43 +8,43 @@
 
 ## platform_onset 단일시점 LMM
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
-|---|---:|---:|---:|---|
-| `Hip_stance_X_abs_onset` | 10.75±5.87 | 9.94±6.99 | 0.12 | n.s. |
-| `Hip_stance_Y_abs_onset` | 1.54±4.18 | -0.09±3.50 | 1.55 | * |
-| `Hip_stance_Z_abs_onset` | -0.08±9.49 | 0.74±8.90 | -1.17 | n.s. |
-| `Knee_stance_X_abs_onset` | -4.51±5.71 | -3.17±5.01 | -0.12 | n.s. |
-| `Knee_stance_Y_abs_onset` | -2.85±3.64 | -2.96±3.71 | 0.36 | n.s. |
-| `Knee_stance_Z_abs_onset` | -4.38±2.93 | -3.93±3.03 | -0.40 | n.s. |
-| `Ankle_stance_X_abs_onset` | 4.29±3.03 | 4.04±3.08 | 0.01 | n.s. |
-| `Ankle_stance_Y_abs_onset` | 10.72±4.42 | 11.21±5.25 | -0.25 | n.s. |
-| `Ankle_stance_Z_abs_onset` | -8.49±5.65 | -8.00±5.81 | 0.14 | n.s. |
-| `Trunk_X_abs_onset` | 2.79±6.49 | 2.49±6.40 | -0.18 | n.s. |
-| `Trunk_Y_abs_onset` | -1.00±4.07 | 0.33±3.51 | -0.36 | n.s. |
-| `Trunk_Z_abs_onset` | 1.15±3.58 | 0.79±3.59 | 0.24 | n.s. |
-| `Neck_X_abs_onset` | 17.59±27.66 | 23.02±7.51 | -5.25 | n.s. |
-| `Neck_Y_abs_onset` | 2.17±6.95 | 1.83±5.05 | -0.35 | n.s. |
-| `Neck_Z_abs_onset` | 0.92±13.45 | 0.31±4.99 | 1.30 | n.s. |
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
+|---|---:|---:|---:|---:|---|
+| `Hip_stance_X_abs_onset` | 11.52±4.45 | 11.91±3.54 | -0.32 | `[-0.97, 0.32]` | n.s. |
+| `Hip_stance_Y_abs_onset` | 1.54±4.18 | -0.09±3.50 | 1.55 | `[0.54, 2.57]` | * |
+| `Hip_stance_Z_abs_onset` | -0.08±9.49 | 1.61±8.00 | -1.30 | `[-3.02, 0.42]` | n.s. |
+| `Knee_stance_X_abs_onset` | -4.51±5.71 | -3.17±5.01 | -0.12 | `[-0.80, 0.57]` | n.s. |
+| `Knee_stance_Y_abs_onset` | -2.65±3.34 | -2.97±2.38 | 0.26 | `[-0.28, 0.79]` | n.s. |
+| `Knee_stance_Z_abs_onset` | -4.38±2.93 | -3.93±3.03 | -0.40 | `[-1.05, 0.26]` | n.s. |
+| `Ankle_stance_X_abs_onset` | 4.29±3.03 | 4.04±3.08 | 0.01 | `[-0.56, 0.57]` | n.s. |
+| `Ankle_stance_Y_abs_onset` | 10.45±4.02 | 10.80±2.85 | -0.43 | `[-1.11, 0.25]` | n.s. |
+| `Ankle_stance_Z_abs_onset` | -8.49±5.65 | -8.00±5.81 | 0.14 | `[-1.30, 1.59]` | n.s. |
+| `Trunk_X_abs_onset` | 3.17±5.91 | 3.25±5.34 | -0.19 | `[-1.25, 0.87]` | n.s. |
+| `Trunk_Y_abs_onset` | -1.01±3.52 | 0.74±2.96 | -0.69 | `[-1.23, -0.16]` | * |
+| `Trunk_Z_abs_onset` | 0.97±3.37 | 0.36±2.60 | 0.34 | `[-0.16, 0.85]` | n.s. |
+| `Neck_X_abs_onset` | 21.22±8.16 | 23.36±6.98 | -0.10 | `[-1.75, 1.54]` | n.s. |
+| `Neck_Y_abs_onset` | 2.76±5.48 | 1.83±5.05 | 0.18 | `[-0.54, 0.91]` | n.s. |
+| `Neck_Z_abs_onset` | -0.79±5.10 | 0.31±4.99 | -0.08 | `[-0.83, 0.67]` | n.s. |
 
 ## step_onset 단일시점 LMM
 
-| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
-|---|---:|---:|---:|---|
-| `Hip_stance_X_step_onset` | 7.73±3.94 | 4.02±3.81 | 3.76 | *** |
-| `Hip_stance_Y_step_onset` | -0.17±2.01 | -0.01±1.12 | 0.11 | n.s. |
-| `Hip_stance_Z_step_onset` | -1.53±4.00 | 0.50±2.47 | -2.15 | *** |
-| `Knee_stance_X_step_onset` | -9.86±7.45 | -8.72±4.87 | -3.22 | *** |
-| `Knee_stance_Y_step_onset` | -0.58±1.65 | -1.02±1.09 | 0.07 | n.s. |
-| `Knee_stance_Z_step_onset` | -1.24±1.98 | -0.75±1.15 | -0.52 | n.s. |
-| `Ankle_stance_X_step_onset` | 8.15±5.21 | 6.81±4.59 | 1.19 | n.s. |
-| `Ankle_stance_Y_step_onset` | 1.77±3.13 | 1.15±1.59 | 0.60 | n.s. |
-| `Ankle_stance_Z_step_onset` | -0.07±4.61 | 0.88±2.04 | -0.52 | n.s. |
-| `Trunk_X_step_onset` | 3.06±5.63 | 1.11±4.19 | 1.41 | n.s. |
-| `Trunk_Y_step_onset` | 0.69±2.15 | 0.21±1.62 | 0.66 | n.s. |
-| `Trunk_Z_step_onset` | -0.46±2.16 | -0.36±1.90 | -0.00 | n.s. |
-| `Neck_X_step_onset` | -8.32±11.82 | -9.28±9.08 | -1.94 | n.s. |
-| `Neck_Y_step_onset` | -0.21±3.08 | -0.19±2.10 | -0.10 | n.s. |
-| `Neck_Z_step_onset` | 0.80±2.25 | 0.85±2.20 | -0.04 | n.s. |
+| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
+|---|---:|---:|---:|---:|---|
+| `Hip_stance_X_step_onset` | 6.70±2.89 | 4.49±2.20 | 2.55 | `[1.85, 3.25]` | *** |
+| `Hip_stance_Y_step_onset` | -0.67±1.62 | 0.04±1.03 | -0.49 | `[-0.92, -0.07]` | * |
+| `Hip_stance_Z_step_onset` | -0.06±2.55 | 0.78±1.60 | -0.93 | `[-1.60, -0.25]` | * |
+| `Knee_stance_X_step_onset` | -7.16±6.12 | -8.20±4.34 | -0.16 | `[-0.91, 0.58]` | n.s. |
+| `Knee_stance_Y_step_onset` | -0.54±1.14 | -1.02±1.09 | 0.17 | `[-0.11, 0.46]` | n.s. |
+| `Knee_stance_Z_step_onset` | -1.25±1.57 | -0.75±1.15 | -0.58 | `[-0.89, -0.27]` | *** |
+| `Ankle_stance_X_step_onset` | 6.72±5.50 | 6.81±4.59 | -0.46 | `[-1.69, 0.76]` | n.s. |
+| `Ankle_stance_Y_step_onset` | 0.99±1.27 | 1.23±1.46 | -0.25 | `[-0.59, 0.08]` | n.s. |
+| `Ankle_stance_Z_step_onset` | -0.49±2.27 | 0.99±1.85 | -1.03 | `[-1.56, -0.50]` | *** |
+| `Trunk_X_step_onset` | 2.15±2.82 | 0.04±1.97 | 2.00 | `[1.17, 2.83]` | *** |
+| `Trunk_Y_step_onset` | 0.80±1.71 | 0.46±0.95 | 0.51 | `[0.06, 0.95]` | * |
+| `Trunk_Z_step_onset` | -0.46±2.16 | -0.25±1.52 | -0.06 | `[-0.62, 0.51]` | n.s. |
+| `Neck_X_step_onset` | -5.81±5.20 | -6.87±4.67 | 0.10 | `[-1.16, 1.36]` | n.s. |
+| `Neck_Y_step_onset` | -0.20±2.74 | -0.19±2.10 | -0.11 | `[-0.82, 0.60]` | n.s. |
+| `Neck_Z_step_onset` | 1.14±1.82 | 0.84±1.76 | 0.31 | `[-0.28, 0.90]` | n.s. |
 
 ## coordinate 해석 기준
 
@@ -68,109 +68,40 @@
   - nonstep step_onset 참조 부재 subject: `권유영, 김종철, 방주원`
 
 - 해석 노트:
-  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 1개가 FDR 유의였다: `Hip_stance_Y_abs_onset`.
-  - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 3개가 FDR 유의였다: `Hip_stance_X_step_onset, Knee_stance_X_step_onset, Hip_stance_Z_step_onset`.
+  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 2개가 FDR 유의였다: `Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`.
+  - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 7개가 FDR 유의였다: `Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`.
+  - 두 시점 모두에서 `Estimate`와 Wald `95% CI`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 # 결과 해석
 
-> **좌표 → 해부학 매핑 전제**
-> 본 해석은 intrinsic XYZ 순서(X=+Right, Y=+Anterior, Z=+Up)를 기준으로 한다.
-> 또한 Hip/Knee/Ankle의 **Y/Z는 좌우(L/R) 해석 일관성을 위해 LEFT side를 부호 반전하여 통일한 값**을 사용한다.
-> - **X축 회전** → sagittal plane _(앞뒤 방향으로 자르는 면)_:
->   - Hip: flexion(+) / extension(−)
->   - Ankle: dorsiflexion(+) / plantar flexion(−)
->   - Knee: flexion(−) / extension(+) *(본 구현에서 Knee X 부호는 독립 sagittal proxy와의 비교로 확인됨)*
-> - **Y축 회전** → frontal plane _(좌우 방향으로 자르는 면)_:
->   - Hip: abduction(+) / adduction(−)
->   - Knee: valgus(+) / varus(−)
->   - Ankle: eversion(+) / inversion(−)
-> - **Z축 회전** → transverse plane _(수평으로 자르는 면)_: internal rotation(+) / external rotation(−)
->
-> 단, intrinsic 순서 특성상 각도 크기가 클수록 축 간 crosstalk 영향이 커질 수 있으며, 임상 평면과 완전한 1:1 대응으로 단정할 수 없다.
+## platform_onset 해석
 
- **용어 해설**
+- platform onset joint-angle 15개 변수 중 `2`개가 FDR 유의였다: `Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`.
+- 이번 버전은 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한 결과다.
+- 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 광범위한 초기 자세 분화로 해석하기에는 근거가 제한적이다.
 
-| 용어 | 설명 |
-|---|---|
-| Flexion (굴곡) | 관절을 구부리는 방향 (예: 무릎을 접는 것) |
-| Extension (신전) | 관절을 펴는 방향 (예: 무릎을 쭉 펴는 것) |
-| Knee valgus (무릎 외반) | 무릎이 안쪽으로 무너지는 방향 (흔히 "X자 다리" 방향) |
-| Knee varus (무릎 내반) | 무릎이 바깥쪽으로 벌어지는 방향 (흔히 "O자 다리" 방향) |
-| Inversion (내번) | 발 안쪽이 들리고 발바닥이 안쪽을 향하는 방향 (발목 삐는 방향) |
-| Eversion (외번) | 발 바깥쪽이 들리고 발바닥이 바깥쪽을 향하는 방향 |
-| Dorsiflexion (배측굴곡) | 발끝을 정강이 쪽으로 들어올리는 방향 |
-| Plantar flexion (저측굴곡) | 발끝을 아래로 뻗는 방향 (까치발 서는 방향) |
-| Internal rotation (내회전) | 뼈 또는 분절이 몸의 중심선 쪽으로 회전하는 것 |
-| External rotation (외회전) | 뼈 또는 분절이 몸의 중심선 바깥쪽으로 회전하는 것 |
-| Stance leg (지지 다리) | 발이 바닥을 딛고 있어 몸무게를 지지하는 쪽 다리 |
+## step_onset 해석
 
-> **⚠ 어느 쪽 다리인가?**
-> 이 결과에서 분석된 모든 관절(Hip, Knee, Ankle)은 **stance leg**, 즉 **발을 내딛지 않는 쪽(지지하는 쪽) 다리**의 값이다.
-> - Step 그룹: 오른발로 step한 trial → **왼쪽** 다리가 stance / 왼발로 step한 trial → **오른쪽** 다리가 stance
-> - 피험자마다 주 step 방향이 달라(step_r 우세 9명, step_l 우세 10명, tie 5명), stance 측은 고정된 좌/우가 아니다.
-> - 각 피험자의 우세 step 방향을 기준으로 stance 측을 통일한 뒤 평균을 낸 값이므로, "step 반대편 다리"의 평균 자세로 이해하면 된다.
-
----
-
-## platform_onset 해석 (섭동 시작 시점)
-
-> 이 시점에서 분석되는 엉덩이·무릎·발목은 모두 **아직 발을 내딛지 않은 쪽(지지 다리)**의 관절이다. 즉, 곧 step을 하게 될 반대편 발이 들리기 전, 바닥을 딛고 있던 다리의 자세를 보는 것이다.
-
-현재 rerun에서는 platform onset 15개 변수 중 **1개만 FDR 유의**였다. 즉, onset 시점의 관절각 차이는 존재하더라도 광범위하지 않았고, 특정 축에 제한된 차이로 요약된다.
-
-### Hip: frontal plane(Y) 차이
-
-- **`Hip_stance_Y_abs_onset`** (Estimate = +1.55, `*`): Step(1.54°) > Nonstep(−0.09°)
-  - Step 그룹은 섭동 시작 시점에서 지지 측 hip이 nonstep보다 **더 abducted(바깥쪽으로 벌어진)** 정렬을 보였다.
-  - 다만 platform onset의 다른 14개 관절각 변수는 모두 `n.s.`였으므로, onset 시점 전략 차이를 **“hip frontal 정렬의 제한적 차이”** 수준으로 해석하는 것이 안전하다.
-
----
-
-## step_onset 해석 (발 들기 시작 시점)
-
-> 이 시점에서 분석되는 엉덩이·무릎은 모두 **반대편 발이 막 들리는 순간, 여전히 바닥을 짚고 있는 쪽(지지 다리)**의 관절이다. 즉, step 동작이 실제로 시작될 때 몸을 떠받치고 있는 다리의 자세를 보는 것이다.
-
-현재 rerun에서는 step onset 15개 변수 중 **3개가 FDR 유의**였다. 신호는 hip/knee의 일부 축에만 나타났고, 발목·몸통·목은 유의하지 않았다.
-
-### Hip: sagittal & transverse plane 차이
-
-- **`Hip_stance_X_step_onset`** (Estimate = +3.76, `***`): Step(7.73°) > Nonstep(4.02°)
-  - 발을 들기 시작하는 시점에서 지지 측 엉덩이는 nonstep보다 유의하게 더 큰 **hip flexion** 상태였다.
-- **`Hip_stance_Z_step_onset`** (Estimate = −2.15, `***`): Step(−1.53°) < Nonstep(0.50°)
-  - Step 그룹은 지지 측 엉덩이가 상대적으로 더 **external rotation** 방향이었다.
-  - 즉, 실제 step이 시작될 때는 hip의 sagittal(X)과 transverse(Z) 성분에서 전략 차이가 관찰되었다.
-
-### Knee: sagittal plane 차이
-
-- **`Knee_stance_X_step_onset`** (Estimate = −3.22, `***`): Step(−9.86°) < Nonstep(−8.72°)
-  - 본 구현에서 Knee X는 **음수 방향이 flexion(굴곡)** 이므로, Step 그룹에서 무릎이 **더 굴곡된(더 bent)** 상태였다.
-  - 즉, 반대편 발을 들어올리는 순간 지지 다리가 약간 더 굴곡된 자세를 취하는 패턴으로 해석할 수 있다.
-
----
+- step onset joint-angle 15개 변수 중 `7`개가 FDR 유의였다: `Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`.
+- step onset은 `step` trial의 실제 `step_onset_local`과, `nonstep` trial의 subject 평균 step onset 참조 frame을 사용한다.
+- 따라서 baseline이나 platform onset보다 전략 분화 신호가 더 많이 나타나더라도, 이는 실제 발 들기 시작 직전의 준비 자세와 더 가깝다는 점을 함께 고려해야 한다.
 
 ## 종합 해석
 
-| 시점 | 유의 관절 | 평면 | 주요 차이 |
-|---|---|---|---|
-| platform_onset | Hip | Frontal | Step: 지지 측 hip abduction 증가 |
-| step_onset | Hip, Knee | Sagittal + Transverse | Step: hip flexion 증가 + hip external rotation + knee flexion 증가 |
+- 같은 이상치 제외 규칙과 `95% CI` 기준에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
+- 즉, 전략 차이는 섭동 직후 정적 초기자세보다 실제 발 들기 직전 단일 프레임에서 더 뚜렷하게 나타나는 경향이 있다.
+- 다만 두 시점 모두 전축이 일관되게 유의하지는 않으므로, 관절각만으로 step/nonstep 전략 차이를 완전히 설명한다고 단정하기는 어렵다.
 
-- **평면별 패턴:** platform onset에서는 **frontal(Y)** 성분에서만 제한적으로 차이가 관찰되었고, step onset에서는 **sagittal(X) 및 transverse(Z)** 성분 차이가 두드러졌다. 몸통과 목은 두 시점 모두 집단 간 차이가 없었다.
-- **전략 구분 근거로서의 한계:** 유의한 변수가 15개 중 1개(platform onset), 3개(step onset)에 불과했다. 또한 전체 strict 기준은 `6/29`로 **FAIL**이었다. 따라서 관절각만으로 step/nonstep 전략을 단정하기에는 근거가 제한적이다.
-- **해석 주의점:** 유의한 frontal/transverse 차이가 전략 선택의 **원인**인지, 아니면 step이 실제로 준비/발현되는 과정에서 나타난 **결과**인지는 현재 단면 비교만으로 확정할 수 없다.
-
----
 
 # 결론
 
 - 가설 1 결과: **FAIL**
 - platform_onset 및 step_onset 관절각 비교를 함께 보아도, 전략 차이를 관절각만으로 단정하기에는 근거가 제한적이다.
-- 현재 rerun 기준으로는 onset 시점의 광범위한 initial posture 차이보다, **platform onset의 제한적 hip frontal 차이**와 **step onset에서의 hip/knee 자세 분화**가 더 핵심적인 관찰 포인트였다.
 
 # keypapers
 
-1. Van Wouwe et al. (2021): 초기 자세와 전략 variability의 상호작용을 제시했다. 본 current rerun에서는 platform onset segment angle 15개 중 `Hip_stance_Y_abs_onset` 1개만 유의했고, step onset에서 3개 축 차이가 추가로 관찰되었다. 따라서 **초기 자세 효과는 부분적으로만 지지**되며, 광범위한 segment-angle 분화가 재현되었다고 보기는 어렵다.
+1. Van Wouwe et al. (2021): 초기 자세와 전략 variability의 상호작용을 제시했지만, 본 onset 단일시점 집단 비교에서는 segment angle에서 유의 차이가 재현되지 않았다.
 
 ---
 Auto-generated by analyze_initial_posture_strategy_lmm.py.
