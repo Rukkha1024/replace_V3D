@@ -4,7 +4,7 @@
 
 **"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 단일 프레임 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
 
-이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한다.
+이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 LMM 결과를 보고한다.
 
 ## Prior Studies
 
@@ -37,7 +37,6 @@
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
-- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
 - **Multiple comparison correction**: BH-FDR (29개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -101,18 +100,18 @@
 
 ### Significant Variables Only (BH-FDR < 0.05)
 
-| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
-|---|---|---:|---:|---:|---:|---|
-| `MOS_minDist_signed` | Balance | 0.07±0.01 | 0.06±0.01 | 0.01 | `[0.01, 0.02]` | *** |
-| `MOS_AP_v3d` | Balance | 0.08±0.01 | 0.06±0.02 | 0.01 | `[0.01, 0.01]` | *** |
-| `xCOM_BOS_norm_onset` | Balance | 0.63±0.07 | 0.70±0.07 | -0.05 | `[-0.07, -0.04]` | *** |
-| `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.42±0.11 | -2.55±0.13 | 0.10 | `[0.07, 0.13]` | *** |
-| `GRF_Y_abs_onset` | Force_absolute | 4.22±2.64 | 2.53±0.66 | 1.27 | `[0.62, 1.92]` | ** |
-| `vCOM_X` | Balance | 0.01±0.01 | 0.02±0.01 | -0.00 | `[-0.01, -0.00]` | ** |
-| `GRF_X_abs_onset` | Force_absolute | -1.27±3.33 | -2.79±0.90 | 1.20 | `[0.41, 2.00]` | * |
-| `Hip_stance_Y_abs_onset` | Joint_absolute | 1.54±4.18 | -0.09±3.50 | 1.55 | `[0.54, 2.57]` | * |
-| `Trunk_Y_abs_onset` | Joint_absolute | -1.01±3.52 | 0.74±2.96 | -0.69 | `[-1.23, -0.16]` | * |
-| `vCOM_Y` | Balance | -0.00±0.00 | 0.00±0.00 | -0.00 | `[-0.00, -0.00]` | * |
+| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
+|---|---|---:|---:|---:|---|
+| `MOS_minDist_signed` | Balance | 0.07±0.01 | 0.06±0.01 | 0.01 | *** |
+| `MOS_AP_v3d` | Balance | 0.08±0.01 | 0.06±0.02 | 0.01 | *** |
+| `xCOM_BOS_norm_onset` | Balance | 0.63±0.07 | 0.70±0.07 | -0.05 | *** |
+| `AnkleTorqueMid_Y_perkg_abs_onset` | Force_absolute | -2.42±0.11 | -2.55±0.13 | 0.10 | *** |
+| `GRF_Y_abs_onset` | Force_absolute | 4.22±2.64 | 2.53±0.66 | 1.27 | ** |
+| `vCOM_X` | Balance | 0.01±0.01 | 0.02±0.01 | -0.00 | ** |
+| `GRF_X_abs_onset` | Force_absolute | -1.27±3.33 | -2.79±0.90 | 1.20 | * |
+| `Hip_stance_Y_abs_onset` | Joint_absolute | 1.54±4.18 | -0.09±3.50 | 1.55 | * |
+| `Trunk_Y_abs_onset` | Joint_absolute | -1.01±3.52 | 0.74±2.96 | -0.69 | * |
+| `vCOM_Y` | Balance | -0.00±0.00 | 0.00±0.00 | -0.00 | * |
 
 ### Outlier Exclusion Summary (Platform Onset)
 
@@ -195,26 +194,26 @@
 
 ### Significant Step-Onset Variables Only (BH-FDR < 0.05)
 
-| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
-|---|---|---:|---:|---:|---:|---|
-| `COP_Y_step_onset` | Force_step_onset | 0.56±0.03 | 0.48±0.02 | 0.08 | `[0.07, 0.09]` | *** |
-| `GRF_Y_step_onset` | Force_step_onset | 44.47±21.60 | -2.51±11.29 | 46.35 | `[40.25, 52.46]` | *** |
-| `vCOM_X_step_onset` | Balance_step_onset | -0.02±0.05 | 0.03±0.03 | -0.05 | `[-0.06, -0.04]` | *** |
-| `AnkleTorqueMid_Y_perkg_step_onset` | Force_step_onset | 1.43±0.23 | 1.74±0.09 | -0.23 | `[-0.27, -0.18]` | *** |
-| `vCOM_Y_step_onset` | Balance_step_onset | -0.03±0.04 | 0.01±0.03 | -0.04 | `[-0.05, -0.03]` | *** |
-| `MOS_minDist_signed_step_onset` | Balance_step_onset | 0.04±0.03 | 0.07±0.01 | -0.02 | `[-0.03, -0.02]` | *** |
-| `xCOM_BOS_norm_step_onset` | Balance_step_onset | 0.28±0.21 | 0.41±0.12 | -0.13 | `[-0.16, -0.09]` | *** |
-| `Hip_stance_X_step_onset` | Joint_step_onset | 6.70±2.89 | 4.49±2.20 | 2.55 | `[1.85, 3.25]` | *** |
-| `COM_X_step_onset` | Balance_step_onset | -1.51±0.03 | -1.50±0.03 | -0.02 | `[-0.02, -0.01]` | *** |
-| `MOS_AP_v3d_step_onset` | Balance_step_onset | 0.06±0.03 | 0.08±0.02 | -0.02 | `[-0.03, -0.01]` | *** |
-| `Trunk_X_step_onset` | Joint_step_onset | 2.15±2.82 | 0.04±1.97 | 2.00 | `[1.17, 2.83]` | *** |
-| `Ankle_stance_Z_step_onset` | Joint_step_onset | -0.49±2.27 | 0.99±1.85 | -1.03 | `[-1.56, -0.50]` | *** |
-| `Knee_stance_Z_step_onset` | Joint_step_onset | -1.25±1.57 | -0.75±1.15 | -0.58 | `[-0.89, -0.27]` | *** |
-| `GRF_X_step_onset` | Force_step_onset | 6.69±22.36 | -2.28±16.73 | 9.76 | `[3.25, 16.28]` | ** |
-| `Hip_stance_Z_step_onset` | Joint_step_onset | -0.06±2.55 | 0.78±1.60 | -0.93 | `[-1.60, -0.25]` | * |
-| `Hip_stance_Y_step_onset` | Joint_step_onset | -0.67±1.62 | 0.04±1.03 | -0.49 | `[-0.92, -0.07]` | * |
-| `GRF_Z_step_onset` | Force_step_onset | 6.23±34.30 | -8.49±31.54 | 11.29 | `[1.66, 20.92]` | * |
-| `Trunk_Y_step_onset` | Joint_step_onset | 0.80±1.71 | 0.46±0.95 | 0.51 | `[0.06, 0.95]` | * |
+| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
+|---|---|---:|---:|---:|---|
+| `COP_Y_step_onset` | Force_step_onset | 0.56±0.03 | 0.48±0.02 | 0.08 | *** |
+| `GRF_Y_step_onset` | Force_step_onset | 44.47±21.60 | -2.51±11.29 | 46.35 | *** |
+| `vCOM_X_step_onset` | Balance_step_onset | -0.02±0.05 | 0.03±0.03 | -0.05 | *** |
+| `AnkleTorqueMid_Y_perkg_step_onset` | Force_step_onset | 1.43±0.23 | 1.74±0.09 | -0.23 | *** |
+| `vCOM_Y_step_onset` | Balance_step_onset | -0.03±0.04 | 0.01±0.03 | -0.04 | *** |
+| `MOS_minDist_signed_step_onset` | Balance_step_onset | 0.04±0.03 | 0.07±0.01 | -0.02 | *** |
+| `xCOM_BOS_norm_step_onset` | Balance_step_onset | 0.28±0.21 | 0.41±0.12 | -0.13 | *** |
+| `Hip_stance_X_step_onset` | Joint_step_onset | 6.70±2.89 | 4.49±2.20 | 2.55 | *** |
+| `COM_X_step_onset` | Balance_step_onset | -1.51±0.03 | -1.50±0.03 | -0.02 | *** |
+| `MOS_AP_v3d_step_onset` | Balance_step_onset | 0.06±0.03 | 0.08±0.02 | -0.02 | *** |
+| `Trunk_X_step_onset` | Joint_step_onset | 2.15±2.82 | 0.04±1.97 | 2.00 | *** |
+| `Ankle_stance_Z_step_onset` | Joint_step_onset | -0.49±2.27 | 0.99±1.85 | -1.03 | *** |
+| `Knee_stance_Z_step_onset` | Joint_step_onset | -1.25±1.57 | -0.75±1.15 | -0.58 | *** |
+| `GRF_X_step_onset` | Force_step_onset | 6.69±22.36 | -2.28±16.73 | 9.76 | ** |
+| `Hip_stance_Z_step_onset` | Joint_step_onset | -0.06±2.55 | 0.78±1.60 | -0.93 | * |
+| `Hip_stance_Y_step_onset` | Joint_step_onset | -0.67±1.62 | 0.04±1.03 | -0.49 | * |
+| `GRF_Z_step_onset` | Force_step_onset | 6.23±34.30 | -8.49±31.54 | 11.29 | * |
+| `Trunk_Y_step_onset` | Joint_step_onset | 0.80±1.71 | 0.46±0.95 | 0.51 | * |
 
 ### Outlier Exclusion Summary (Step Onset)
 
@@ -252,7 +251,7 @@
 
 ## Interpretation & Conclusion
 
-1. 각 변수별 이상치를 제외하고 `95% CI`를 함께 보아도 platform onset 29개 변수의 strict 기준 가설은 **FAIL**였다.
+1. 각 변수별 이상치를 제외하고 보아도 platform onset 29개 변수의 strict 기준 가설은 **FAIL**였다.
 2. platform onset에서는 관절 각도 변수는 총 15개 중 2개가 유의했고 (`Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
 3. step onset 29개 변수에서는 총 `18`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`).
 4. 따라서 본 데이터에서는 초기 자세 차이가 시점에 따라 다르게 나타날 수 있지만, 단일 시점 변수만으로 step/nonstep 전략 차이를 광범위하게 설명한다고 단정하기는 어렵다.

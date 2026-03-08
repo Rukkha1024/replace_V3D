@@ -1088,8 +1088,6 @@ results <- data.frame(
   df = numeric(),
   t_value = numeric(),
   p_value = numeric(),
-  ci_lower = numeric(),
-  ci_upper = numeric(),
   mean_step = numeric(),
   sd_step = numeric(),
   mean_nonstep = numeric(),
@@ -1131,7 +1129,6 @@ for (dv in dv_cols) {{
     results <- rbind(results, data.frame(
       dv = dv, analysis_status = "group_empty_after_outlier", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
-      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
       n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
@@ -1146,7 +1143,6 @@ for (dv in dv_cols) {{
     results <- rbind(results, data.frame(
       dv = dv, analysis_status = "constant_after_outlier", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
-      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
       n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
@@ -1170,16 +1166,13 @@ for (dv in dv_cols) {{
       df_val <- co[row_name, "df"]
       t_val <- co[row_name, "t value"]
       p_val <- co[row_name, "Pr(>|t|)"]
-      ci_low <- est - 1.96 * se
-      ci_high <- est + 1.96 * se
     }} else {{
-      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA; ci_low <- NA; ci_high <- NA
+      est <- NA; se <- NA; df_val <- NA; t_val <- NA; p_val <- NA
     }}
 
     results <- rbind(results, data.frame(
       dv = dv, analysis_status = "ok", estimate = est, SE = se, df = df_val,
       t_value = t_val, p_value = p_val,
-      ci_lower = ci_low, ci_upper = ci_high,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
       n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
@@ -1191,7 +1184,6 @@ for (dv in dv_cols) {{
     results <<- rbind(results, data.frame(
       dv = dv, analysis_status = "model_error", estimate = NA, SE = NA, df = NA,
       t_value = NA, p_value = NA,
-      ci_lower = NA, ci_upper = NA,
       mean_step = m_s, sd_step = sd_s,
       mean_nonstep = m_ns, sd_nonstep = sd_ns,
       n_step_raw = n_step_raw, n_nonstep_raw = n_nonstep_raw,
@@ -1277,8 +1269,8 @@ def print_significant_only(results: pd.DataFrame) -> None:
         print("No significant variables under BH-FDR < 0.05.")
         return
 
-    fmt = "{:<28s} {:<20s} {:>10s} {:>22s} {:>5s}"
-    print(fmt.format("DV", "Family", "Estimate", "95% CI", "Sig"))
+    fmt = "{:<28s} {:<20s} {:>10s} {:>5s}"
+    print(fmt.format("DV", "Family", "Estimate", "Sig"))
     print("-" * 96)
     for _, row in sig_df.iterrows():
         print(
@@ -1286,7 +1278,6 @@ def print_significant_only(results: pd.DataFrame) -> None:
                 str(row["dv"])[:28],
                 str(row["family"])[:20],
                 f"{row['estimate']:.2f}" if pd.notna(row["estimate"]) else "NA",
-                _fmt_ci(row["ci_lower"], row["ci_upper"], 2),
                 str(row["sig"]),
             )
         )
@@ -1301,10 +1292,6 @@ def _fmt_num(v: Any, digits: int = 2) -> str:
 
 def _fmt_mean_sd(mean_v: Any, sd_v: Any, digits: int = 2) -> str:
     return f"{_fmt_num(mean_v, digits)}±{_fmt_num(sd_v, digits)}"
-
-
-def _fmt_ci(lower: Any, upper: Any, digits: int = 2) -> str:
-    return f"[{_fmt_num(lower, digits)}, {_fmt_num(upper, digits)}]"
 
 
 def _result_status_map(results: pd.DataFrame) -> dict[str, str]:
@@ -1341,8 +1328,8 @@ def _build_analyzed_variables_table(
 def _build_significant_table(results: pd.DataFrame) -> str:
     sig_df = results[results["sig"] != ""].copy().sort_values("p_fdr")
     lines = [
-        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
-        "|---|---|---:|---:|---:|---:|---|",
+        "| Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
+        "|---|---|---:|---:|---:|---|",
     ]
     for row in sig_df.itertuples(index=False):
         lines.append(
@@ -1350,24 +1337,23 @@ def _build_significant_table(results: pd.DataFrame) -> str:
             f"`{row.dv}` | {row.family} | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | "
-            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {row.sig} |"
+            f"{_fmt_num(row.estimate, 2)} | {row.sig} |"
         )
     if sig_df.empty:
-        lines.append("| (none) | - | - | - | - | - | - |")
+        lines.append("| (none) | - | - | - | - | - |")
     return "\n".join(lines)
 
 
 def _build_joint_angle_table(results: pd.DataFrame, dvs: list[str]) -> str:
     lookup = {str(row.dv): row for row in results.itertuples(index=False)}
     lines = [
-        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |",
-        "|---|---:|---:|---:|---:|---|",
+        "| Variable | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |",
+        "|---|---:|---:|---:|---|",
     ]
     for dv in dvs:
         row = lookup.get(dv)
         if row is None:
-            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | `[NA, NA]` | untestable |")
+            lines.append(f"| `{dv}` | NA±NA | NA±NA | NA | untestable |")
             continue
         sig = row.sig if isinstance(row.sig, str) and row.sig else "n.s."
         if str(getattr(row, "analysis_status", "ok")) != "ok":
@@ -1377,8 +1363,7 @@ def _build_joint_angle_table(results: pd.DataFrame, dvs: list[str]) -> str:
             f"`{dv}` | "
             f"{_fmt_mean_sd(row.mean_step, row.sd_step, 2)} | "
             f"{_fmt_mean_sd(row.mean_nonstep, row.sd_nonstep, 2)} | "
-            f"{_fmt_num(row.estimate, 2)} | "
-            f"`{_fmt_ci(row.ci_lower, row.ci_upper, 2)}` | {sig} |"
+            f"{_fmt_num(row.estimate, 2)} | {sig} |"
         )
     return "\n".join(lines)
 
@@ -1470,7 +1455,7 @@ def write_report_markdown(
 
 **"Van Wouwe et al. (2021) 관점에서, 초기 자세(initial posture)가 step/nonstep 전략 차이를 설명한다면 platform onset과 step onset 단일 프레임 변수에서 step/nonstep 차이가 광범위하게 유의한가?"**
 
-이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한다.
+이번 버전은 platform onset 29개 변수와 step onset 29개 변수를 각각 비교하되, 각 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 LMM 결과를 보고한다.
 
 ## Prior Studies
 
@@ -1503,7 +1488,6 @@ def write_report_markdown(
 - **Analysis point**: `platform_onset_local` 단일 프레임
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
-- **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`
 - **Multiple comparison correction**: BH-FDR ({len(specs)}개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
@@ -1568,7 +1552,7 @@ def write_report_markdown(
 
 ## Interpretation & Conclusion
 
-1. 각 변수별 이상치를 제외하고 `95% CI`를 함께 보아도 platform onset 29개 변수의 strict 기준 가설은 **{verdict}**였다.
+1. 각 변수별 이상치를 제외하고 보아도 platform onset 29개 변수의 strict 기준 가설은 **{verdict}**였다.
 2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS 및 ankle torque 일부에도 관찰되었다.
 3. step onset 29개 변수에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`).
 4. 따라서 본 데이터에서는 초기 자세 차이가 시점에 따라 다르게 나타날 수 있지만, 단일 시점 변수만으로 step/nonstep 전략 차이를 광범위하게 설명한다고 단정하기는 어렵다.
@@ -1642,7 +1626,7 @@ def write_segment_angle_markdown(
 ## platform_onset 해석
 
 - platform onset joint-angle 15개 변수 중 `{joint_sig_count}`개가 FDR 유의였다: `{', '.join(joint_sig_names) if joint_sig_names else '(none)'}`.
-- 이번 버전은 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외하고 Wald `95% CI`를 함께 보고한 결과다.
+- 이번 버전은 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치를 제외한 단일 프레임 비교 결과다.
 - 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 광범위한 초기 자세 분화로 해석하기에는 근거가 제한적이다.
 
 ## step_onset 해석
@@ -1653,7 +1637,7 @@ def write_segment_angle_markdown(
 
 ## 종합 해석
 
-- 같은 이상치 제외 규칙과 `95% CI` 기준에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
+- 같은 이상치 제외 규칙에서 보면, platform onset보다 step onset에서 유의한 joint-angle 차이가 더 많이 관찰된다.
 - 즉, 전략 차이는 섭동 직후 정적 초기자세보다 실제 발 들기 직전 단일 프레임에서 더 뚜렷하게 나타나는 경향이 있다.
 - 다만 두 시점 모두 전축이 일관되게 유의하지는 않으므로, 관절각만으로 step/nonstep 전략 차이를 완전히 설명한다고 단정하기는 어렵다.
 """
@@ -1698,7 +1682,7 @@ def write_segment_angle_markdown(
 - 해석 노트:
   - platform_onset: {joint_note}
   - step_onset: {step_joint_note}
-  - 두 시점 모두에서 `Estimate`와 Wald `95% CI`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
+  - 두 시점 모두에서 `Estimate`와 `Sig`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
   - 두 시점 모두에서 전축이 일관되게 유의하지 않다면, 관절각만으로 전략 차이를 설명하는 근거는 제한적이다.
 
 {interpretation_body}
