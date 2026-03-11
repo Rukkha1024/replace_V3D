@@ -899,6 +899,8 @@ def main() -> None:
             joint_moment_payload: dict[str, np.ndarray]
             if frames is None or joint_centers is None or body_mass_kg is None:
                 joint_moment_payload = {c: np.full(end_frame, np.nan, dtype=float) for c in _expected_joint_moment_cols()}
+                if body_mass_kg is None:
+                    print(f"[WARN] Joint moment computation skipped for {c3d_file.name}: body mass missing in meta sheet")
             else:
                 joint_moment_payload = compute_joint_moment_columns(
                     points=c3d.points,
@@ -913,6 +915,8 @@ def main() -> None:
                     cop_x_m=raw_wrench_payload["cop_x_m"],
                     cop_y_m=raw_wrench_payload["cop_y_m"],
                 )
+                if all(bool(np.all(np.isnan(v))) for v in joint_moment_payload.values()):
+                    print(f"[WARN] Joint moment computation returned all-NaN for {c3d_file.name} (check COP/markers/labels)")
 
             lower_limb_angles = None
             try:

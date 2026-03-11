@@ -391,11 +391,17 @@ def _compute_joint_moment_columns_impl(
     assign = _assign_force_to_side_by_cop(cop_lab=cop_lab, ankle_L=ankle_L, ankle_R=ankle_R)
     mask_L = assign == 0
     mask_R = assign == 1
+    mask_unassigned = assign == -1
 
     def masked_wrench(mask: np.ndarray) -> TimeVaryingWrench:
         force = np.zeros_like(grf_wrench.force)
         moment = np.zeros_like(grf_wrench.moment)
-        point = grf_wrench.point
+        point = np.asarray(grf_wrench.point, dtype=float).copy()
+
+        if np.any(mask_unassigned):
+            force[mask_unassigned] = np.nan
+            moment[mask_unassigned] = np.nan
+            point[mask_unassigned] = np.nan
         if np.any(mask):
             force[mask] = grf_wrench.force[mask]
             moment[mask] = grf_wrench.moment[mask]
