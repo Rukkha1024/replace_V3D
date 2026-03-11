@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -218,6 +218,8 @@ def build_segment_frames(
     points: np.ndarray,
     labels: list[str],
     end_frame: Optional[int] = None,
+    *,
+    joint_centers: Dict[str, np.ndarray] | None = None,
 ) -> SegmentFrames:
     """Build segment frames for pelvis/thigh/shank/foot + thorax/head.
 
@@ -231,7 +233,7 @@ def build_segment_frames(
     end = T if end_frame is None else max(1, min(int(end_frame), T))
     pts = points[:end]
 
-    jc = compute_joint_centers(pts, labels)
+    jc = compute_joint_centers(pts, labels) if joint_centers is None else joint_centers
 
     # Pelvis (Visual3D-like): X=Right, Y=Anterior, Z=Up
     LASI = _m(pts, labels, "LASI")
@@ -388,3 +390,61 @@ def compute_v3d_joint_angles_3d(
         neck_Y=neck[1],
         neck_Z=neck[2],
     )
+
+
+def compute_v3d_joint_angles_with_frames(
+    points: np.ndarray,
+    labels: list[str],
+    end_frame: Optional[int] = None,
+) -> tuple[V3DJointAngles3D, SegmentFrames, Dict[str, np.ndarray]]:
+    """Compute joint angles with the exact segment frames + joint centers used.
+
+    Returns (angles_deg, segment_frames, joint_centers) where each array is trimmed
+    to `end_frame` (or full length if `end_frame` is None).
+    """
+
+    T = points.shape[0]
+    end = T if end_frame is None else max(1, min(int(end_frame), T))
+    pts = points[:end]
+
+    jc_full = compute_joint_centers(pts, labels)
+    frames = build_segment_frames(pts, labels, end_frame=end, joint_centers=jc_full)
+
+    hip_L = _angles_deg_from_frames(frames.pelvis, frames.thigh_L)
+    hip_R = _angles_deg_from_frames(frames.pelvis, frames.thigh_R)
+    knee_L = _angles_deg_from_frames(frames.thigh_L, frames.shank_L)
+    knee_R = _angles_deg_from_frames(frames.thigh_R, frames.shank_R)
+    ankle_L = _angles_deg_from_frames(frames.shank_L, frames.foot_L)
+    ankle_R = _angles_deg_from_frames(frames.shank_R, frames.foot_R)
+    trunk = _angles_deg_from_frames(frames.pelvis, frames.thorax)
+    neck = _angles_deg_from_frames(frames.thorax, frames.head)
+
+    angles = V3DJointAngles3D(
+        hip_L_X=hip_L[0],
+        hip_L_Y=hip_L[1],
+        hip_L_Z=hip_L[2],
+        hip_R_X=hip_R[0],
+        hip_R_Y=hip_R[1],
+        hip_R_Z=hip_R[2],
+        knee_L_X=knee_L[0],
+        knee_L_Y=knee_L[1],
+        knee_L_Z=knee_L[2],
+        knee_R_X=knee_R[0],
+        knee_R_Y=knee_R[1],
+        knee_R_Z=knee_R[2],
+        ankle_L_X=ankle_L[0],
+        ankle_L_Y=ankle_L[1],
+        ankle_L_Z=ankle_L[2],
+        ankle_R_X=ankle_R[0],
+        ankle_R_Y=ankle_R[1],
+        ankle_R_Z=ankle_R[2],
+        trunk_X=trunk[0],
+        trunk_Y=trunk[1],
+        trunk_Z=trunk[2],
+        neck_X=neck[0],
+        neck_Y=neck[1],
+        neck_Z=neck[2],
+    )
+
+    jc = {k: np.asarray(v, dtype=float)[:end] for k, v in jc_full.items()}
+    return angles, frames, jc

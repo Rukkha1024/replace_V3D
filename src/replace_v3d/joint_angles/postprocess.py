@@ -26,6 +26,13 @@ Current exports in this repo typically:
 - apply LEFT Hip/Knee/Ankle Y/Z sign-unification
 - apply Resolve_Discontinuity-style unwrapping for Ankle_*_Z_deg (range=360°; if needed)
 - perform onset-zeroing at platform onset in the calling pipeline (so baseline subtraction here is disabled)
+
+Important:
+- This module only targets angle columns ending with `_deg`.
+- Joint angular velocity (`*_deg_s`) and joint moment (`*_Nm`) columns must be computed
+  from the strict geometry/wrench sources and should not be passed through these
+  angle-only sign conventions unless you intentionally create a separate "presentation"
+  layer for them.
 """
 
 from __future__ import annotations

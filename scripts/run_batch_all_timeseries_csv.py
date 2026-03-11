@@ -39,8 +39,9 @@ from replace_v3d.io.events_excel import (
     parse_subject_velocity_trial_from_filename,
     resolve_subject_from_token,
 )
-from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_3d
+from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_with_frames
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
+from replace_v3d.joint_dynamics import compute_joint_angular_velocity_columns, compute_joint_moment_columns
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
@@ -253,6 +254,8 @@ def _make_timeseries_dataframe(
     angles: Any | None,
     lower_limb_angles: Any | None,
     torque_payload: dict[str, np.ndarray],
+    joint_velocity_payload: dict[str, np.ndarray],
+    joint_moment_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     mocap_frames = np.arange(1, end_frame + 1, dtype=int)
     onset_idx0 = int(platform_onset_local) - 1
@@ -381,10 +384,35 @@ def _make_timeseries_dataframe(
         for c in angle_cols:
             payload[c] = subtract_baseline_at_index(df_pp[c].to_numpy(), onset_idx0)
 
+    for key, values in joint_velocity_payload.items():
+        payload[key] = values
+
+    for key, values in joint_moment_payload.items():
+        payload[key] = values
+
     for key, values in torque_payload.items():
         payload[key] = values
 
     return pl.DataFrame(payload).to_pandas()
+
+
+def _expected_joint_velocity_cols() -> list[str]:
+    joints = ["Hip_L", "Hip_R", "Knee_L", "Knee_R", "Ankle_L", "Ankle_R", "Trunk", "Neck"]
+    cols: list[str] = []
+    for joint in joints:
+        for res in ("ref", "mov"):
+            for axis in ("X", "Y", "Z"):
+                cols.append(f"{joint}_{res}_{axis}_deg_s")
+    return cols
+
+
+def _expected_joint_moment_cols() -> list[str]:
+    joints = ["Hip_L", "Hip_R", "Knee_L", "Knee_R", "Ankle_L", "Ankle_R", "Trunk", "Neck"]
+    cols: list[str] = []
+    for joint in joints:
+        for axis in ("X", "Y", "Z"):
+            cols.append(f"{joint}_ref_{axis}_Nm")
+    return cols
 
 
 def _compute_ankle_torque_payload(
@@ -405,7 +433,7 @@ def _compute_ankle_torque_payload(
     fp_inertial_qc_margin_m: float,
     fp_inertial_qc_strict: bool,
     fp_corner_overrides: dict[int, np.ndarray] | None,
-) -> tuple[int, dict[str, np.ndarray]]:
+) -> tuple[int, dict[str, np.ndarray], dict[str, np.ndarray]]:
     fp_coll = read_force_platforms(c3d_file)
     fp_coll = apply_force_platform_corner_overrides(fp_coll, fp_corner_overrides)
     analog_avg = fp_coll.analog.values
@@ -554,7 +582,15 @@ def _compute_ankle_torque_payload(
         if key.startswith(("GRF_", "GRM_", "AnkleTorque")):
             payload[key] = subtract_baseline_at_index(payload[key], onset0)
 
-    return int(fp.index_1based), payload
+    raw_wrench_payload = {
+        "fp_origin_lab": np.asarray(fp.origin_lab, dtype=float),
+        "grf_lab": np.asarray(F_stage01[:end], dtype=float),
+        "grm_lab_at_fp_origin": np.asarray(M_stage01[:end], dtype=float),
+        "cop_x_m": np.asarray(payload["COP_X_m"], dtype=float),
+        "cop_y_m": np.asarray(payload["COP_Y_m"], dtype=float),
+    }
+
+    return int(fp.index_1based), payload, raw_wrench_payload
 
 
 def main() -> None:
@@ -806,7 +842,7 @@ def main() -> None:
 
         # Torque requires FORCE_PLATFORM/ANALOG; always abort on failure.
         try:
-            force_plate_used, torque_payload = _compute_ankle_torque_payload(
+            force_plate_used, torque_payload, raw_wrench_payload = _compute_ankle_torque_payload(
                 c3d_file=c3d_file,
                 velocity=float(velocity),
                 points=c3d.points,
@@ -843,12 +879,40 @@ def main() -> None:
             )
 
             angles = None
+            frames = None
+            joint_centers = None
             try:
-                angles = compute_v3d_joint_angles_3d(c3d.points, c3d.labels, end_frame=end_frame)
+                angles, frames, joint_centers = compute_v3d_joint_angles_with_frames(
+                    c3d.points, c3d.labels, end_frame=end_frame
+                )
             except Exception as exc:
                 # Keep exporting COM/COP/GRF/MoS for trials that lack required
                 # joint-angle markers (e.g., T10). Export NaNs for joint angles.
                 print(f"[WARN] Joint angle computation skipped for {c3d_file.name}: {exc}")
+
+            joint_velocity_payload: dict[str, np.ndarray]
+            if frames is None:
+                joint_velocity_payload = {c: np.full(end_frame, np.nan, dtype=float) for c in _expected_joint_velocity_cols()}
+            else:
+                joint_velocity_payload = compute_joint_angular_velocity_columns(frames, rate_hz=rate_hz)
+
+            joint_moment_payload: dict[str, np.ndarray]
+            if frames is None or joint_centers is None or body_mass_kg is None:
+                joint_moment_payload = {c: np.full(end_frame, np.nan, dtype=float) for c in _expected_joint_moment_cols()}
+            else:
+                joint_moment_payload = compute_joint_moment_columns(
+                    points=c3d.points,
+                    labels=c3d.labels,
+                    frames=frames,
+                    joint_centers=joint_centers,
+                    rate_hz=rate_hz,
+                    body_mass_kg=float(body_mass_kg),
+                    fp_origin_lab=raw_wrench_payload["fp_origin_lab"],
+                    grf_lab=raw_wrench_payload["grf_lab"],
+                    grm_lab_at_fp_origin=raw_wrench_payload["grm_lab_at_fp_origin"],
+                    cop_x_m=raw_wrench_payload["cop_x_m"],
+                    cop_y_m=raw_wrench_payload["cop_y_m"],
+                )
 
             lower_limb_angles = None
             try:
@@ -877,6 +941,8 @@ def main() -> None:
                 angles=angles,
                 lower_limb_angles=lower_limb_angles,
                 torque_payload=torque_payload,
+                joint_velocity_payload=joint_velocity_payload,
+                joint_moment_payload=joint_moment_payload,
             )
             if trial_meta is not None:
                 for meta_col, meta_val in trial_meta.items():
