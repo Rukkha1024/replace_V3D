@@ -482,6 +482,8 @@ def _nan_moment_cols(joint_prefix: str, T: int) -> dict[str, np.ndarray]:
 
 
 def _nan_all_joint_moment_cols(T: int) -> dict[str, np.ndarray]:
+    """NaN placeholders for all joint moment columns (includes Trunk/Neck)."""
+
     return {
         **_nan_moment_cols("Hip_L_ref", T),
         **_nan_moment_cols("Hip_R_ref", T),
@@ -492,6 +494,39 @@ def _nan_all_joint_moment_cols(T: int) -> dict[str, np.ndarray]:
         **_nan_moment_cols("Trunk_ref", T),
         **_nan_moment_cols("Neck_ref", T),
     }
+
+
+def _nan_lower_limb_joint_moment_cols(T: int) -> dict[str, np.ndarray]:
+    """NaN placeholders for lower-limb joint moment columns (Hip/Knee/Ankle)."""
+
+    return {
+        **_nan_moment_cols("Hip_L_ref", T),
+        **_nan_moment_cols("Hip_R_ref", T),
+        **_nan_moment_cols("Knee_L_ref", T),
+        **_nan_moment_cols("Knee_R_ref", T),
+        **_nan_moment_cols("Ankle_L_ref", T),
+        **_nan_moment_cols("Ankle_R_ref", T),
+    }
+
+
+def _mask_lower_limb_joint_moment_payload(payload: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Mask lower-limb joint moments to NaN while preserving Trunk/Neck columns."""
+
+    if not payload:
+        return payload
+
+    T = None
+    for values in payload.values():
+        arr = np.asarray(values)
+        if arr.ndim >= 1:
+            T = int(arr.shape[0])
+            break
+    if T is None:
+        return payload
+
+    out = dict(payload)
+    out.update(_nan_lower_limb_joint_moment_cols(T))
+    return out
 
 
 def compute_joint_moment_columns(
@@ -561,7 +596,11 @@ def compute_joint_moment_columns_multi(
     segment_params: BodySegmentParams | None = None,
     assignment_config: ForceAssignmentConfig | None = None,
 ) -> dict[str, np.ndarray]:
-    """Compute lower-limb joint moments from a selected multi-plate forceplate set."""
+    """Compute internal joint moments from a selected multi-plate forceplate set.
+
+    Returns lower-limb (Hip/Knee/Ankle) and axial chain (Trunk/Neck) moments.
+    Lower-limb validity follows the V3D-style contact-block assignment mask.
+    """
 
     T = int(frames.pelvis.shape[0])
     nan_all = _nan_all_joint_moment_cols(T)
@@ -811,12 +850,12 @@ def _compute_joint_moment_columns_multi_impl(
     )
 
     if bool(assignment_config.log_assignment_summary):
-        print("[INFO] force assignment summary:")
+        logger.info("force assignment summary:")
         if assignment_result.assigned_blocks:
             for block in assignment_result.assigned_blocks:
-                print(f"    {_format_assigned_block_summary(block)}")
+                logger.info("  %s", _format_assigned_block_summary(block))
         else:
-            print("    no contact blocks detected")
+            logger.info("  no contact blocks detected")
 
     left_has_contact = np.zeros(T, dtype=bool)
     right_has_contact = np.zeros(T, dtype=bool)

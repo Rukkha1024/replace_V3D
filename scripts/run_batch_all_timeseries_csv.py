@@ -1,8 +1,9 @@
 """Batch pipeline for biomechanical time-series export.
 
 Computes COM/xCOM, MOS/BOS, joint angles/velocities, and per-plate forceplate
-raw signals (FP{n}_*). Internal joint moments (*_ref_*_Nm) are computed only in
-multi-plate inverse dynamics mode.
+raw signals (FP{n}_*). Lower-limb internal joint moments (*_ref_*_Nm) are
+computed only in multi-plate inverse dynamics mode. Single-plate strict mode
+preserves Trunk/Neck moments but masks lower-limb moments to NaN.
 Exports a single CSV (all_trials_timeseries.csv).
 """
 
@@ -50,9 +51,14 @@ from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_w
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.joint_dynamics import (
     compute_joint_angular_velocity_columns,
+    compute_joint_moment_columns,
     compute_joint_moment_columns_multi,
 )
-from replace_v3d.joint_dynamics.inverse_dynamics import ForceAssignmentConfig, ForceplateWrenchSeries
+from replace_v3d.joint_dynamics.inverse_dynamics import (
+    ForceAssignmentConfig,
+    ForceplateWrenchSeries,
+    _mask_lower_limb_joint_moment_payload,
+)
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.cop import compute_cop_stage01_xy
@@ -719,7 +725,8 @@ def _compute_inverse_dynamics_payload(
     mode = "single_plate_strict" if len(selected_platforms) == 1 else "multi_plate_v3d"
     logger.info("mode=%s", mode)
     if mode == "single_plate_strict":
-        logger.info("lower-limb torque/joint moment skipped because only one forceplate was selected")
+        logger.info("lower-limb torque/joint moments skipped because only one forceplate was selected")
+        logger.info("trunk/neck joint moments are preserved from the legacy single-wrench path (when available)")
 
     payload: dict[str, Any] = {
         "time_from_platform_onset_s": time_from_onset[:end],
@@ -1055,7 +1062,37 @@ def main() -> None:
 
             joint_moment_payload: dict[str, np.ndarray]
             if raw_wrench_payload["mode"] == "single_plate_strict":
-                joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
+                if frames is None or joint_centers is None or body_mass_kg is None:
+                    joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
+                    if body_mass_kg is None:
+                        logger.warning(
+                            "Joint moment computation skipped for %s: body mass missing in meta sheet",
+                            c3d_file.name,
+                        )
+                else:
+                    try:
+                        fp_series: ForceplateWrenchSeries = raw_wrench_payload["forceplates"][0]
+                        legacy_payload = compute_joint_moment_columns(
+                            points=c3d.points,
+                            labels=c3d.labels,
+                            frames=frames,
+                            joint_centers=joint_centers,
+                            rate_hz=rate_hz,
+                            body_mass_kg=float(body_mass_kg),
+                            fp_origin_lab=fp_series.fp_origin_lab,
+                            grf_lab=fp_series.grf_lab,
+                            grm_lab_at_fp_origin=fp_series.grm_lab_at_fp_origin,
+                            cop_x_m=fp_series.cop_x_m,
+                            cop_y_m=fp_series.cop_y_m,
+                        )
+                        joint_moment_payload = _mask_lower_limb_joint_moment_payload(legacy_payload)
+                    except Exception as exc:
+                        logger.warning(
+                            "Joint moment computation skipped for %s: legacy single-wrench inverse dynamics failed (%s)",
+                            c3d_file.name,
+                            exc,
+                        )
+                        joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
             elif frames is None or joint_centers is None or body_mass_kg is None:
                 joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
                 if body_mass_kg is None:
