@@ -1063,35 +1063,35 @@ def main() -> None:
                         "Joint moment computation skipped for %s: body mass missing in meta sheet",
                         c3d_file.name,
                     )
-                else:
-                    try:
-                        joint_moment_payload = compute_joint_moment_columns_multi(
-                            points=c3d.points,
-                            labels=c3d.labels,
+            else:
+                try:
+                    joint_moment_payload = compute_joint_moment_columns_multi(
+                        points=c3d.points,
+                        labels=c3d.labels,
                         frames=frames,
                         joint_centers=joint_centers,
                         rate_hz=rate_hz,
                         body_mass_kg=float(body_mass_kg),
                         forceplates=raw_wrench_payload["forceplates"],
-                            assignment_config=force_assignment_config,
-                        )
-                    except Exception as exc:
-                        logger.exception(
-                            "[ID][multi][FAIL] file=%s subject=%s velocity=%s trial=%s forceplates=%s",
-                            c3d_file.name,
-                            subject,
-                            velocity,
-                            trial,
-                            inverse_dynamics_forceplate_ids,
-                        )
-                        raise InverseDynamicsError(
-                            f"Inverse dynamics (multi-plate) failed for '{c3d_file.name}'"
-                        ) from exc
+                        assignment_config=force_assignment_config,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "[ID][multi][FAIL] file=%s subject=%s velocity=%s trial=%s forceplates=%s",
+                        c3d_file.name,
+                        subject,
+                        velocity,
+                        trial,
+                        inverse_dynamics_forceplate_ids,
+                    )
+                    raise InverseDynamicsError(
+                        f"Inverse dynamics (multi-plate) failed for '{c3d_file.name}'"
+                    ) from exc
                 if all(bool(np.all(np.isnan(v))) for v in joint_moment_payload.values()):
                     logger.warning(
                         "Joint moment computation returned all-NaN for %s (check COP/markers/labels)",
                         c3d_file.name,
-                        )
+                    )
 
             lower_limb_angles = None
             try:
