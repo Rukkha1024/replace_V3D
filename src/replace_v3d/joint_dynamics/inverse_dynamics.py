@@ -40,6 +40,35 @@ class ForceplateWrenchSeries:
 
 
 @dataclass(frozen=True)
+class ForceAssignmentConfig:
+    """Config for V3D-style contact-block assignment in multi-plate mode."""
+
+    cop_distance_threshold_m: float = 0.2
+    remove_incomplete_assignments: bool = True
+    require_segment_projection_on_plate: bool = True
+    log_assignment_summary: bool = True
+
+
+@dataclass(frozen=True)
+class AssignedBlock:
+    plate_index_1based: int
+    start: int
+    end: int
+    assigned_side: int | None  # 0=L, 1=R, None=invalid/unassigned
+    mean_distance_L_m: float
+    mean_distance_R_m: float
+    invalid_reason: str | None
+
+
+@dataclass(frozen=True)
+class AssignmentResult:
+    left_mask_per_plate: list[np.ndarray]
+    right_mask_per_plate: list[np.ndarray]
+    invalid_mask: np.ndarray
+    assigned_blocks: list[AssignedBlock]
+
+
+@dataclass(frozen=True)
 class SegmentState:
     prox_pos: np.ndarray  # (T,3)
     com_pos: np.ndarray  # (T,3)
@@ -98,6 +127,253 @@ def _assign_force_to_side_by_cop(
     return out
 
 
+def _find_contiguous_true_runs(mask: np.ndarray) -> list[tuple[int, int]]:
+    arr = np.asarray(mask, dtype=bool).ravel()
+    if arr.size == 0:
+        return []
+    idx = np.flatnonzero(arr)
+    if idx.size == 0:
+        return []
+    runs: list[tuple[int, int]] = []
+    start = int(idx[0])
+    prev = int(idx[0])
+    for raw in idx[1:]:
+        cur = int(raw)
+        if cur != prev + 1:
+            runs.append((start, prev + 1))
+            start = cur
+        prev = cur
+    runs.append((start, prev + 1))
+    return runs
+
+
+def _segment_distance_to_cop_block(
+    *,
+    segment_com: np.ndarray,
+    cop_lab: np.ndarray,
+    start: int,
+    end: int,
+) -> float:
+    seg = np.asarray(segment_com[start:end], dtype=float)
+    cop = np.asarray(cop_lab[start:end], dtype=float)
+    if seg.size == 0 or cop.size == 0:
+        return float("inf")
+    finite = np.all(np.isfinite(seg), axis=1) & np.all(np.isfinite(cop), axis=1)
+    if not np.any(finite):
+        return float("inf")
+    dist = np.linalg.norm(seg[finite] - cop[finite], axis=1)
+    return float(np.nanmean(dist))
+
+
+def _project_points_to_plate_xy_mask(
+    *,
+    points_lab: np.ndarray,
+    corners_lab: np.ndarray | None,
+) -> np.ndarray:
+    pts = np.asarray(points_lab, dtype=float)
+    T = int(pts.shape[0])
+    if corners_lab is None:
+        return np.zeros(T, dtype=bool)
+    corners = np.asarray(corners_lab, dtype=float)
+    if corners.shape != (4, 3):
+        return np.zeros(T, dtype=bool)
+
+    x = pts[:, 0]
+    y = pts[:, 1]
+    valid = np.isfinite(x) & np.isfinite(y)
+    inside = np.zeros(T, dtype=bool)
+    if not np.any(valid):
+        return inside
+
+    px = corners[:, 0]
+    py = corners[:, 1]
+    n = int(corners.shape[0])
+    xv = x[valid]
+    yv = y[valid]
+    in_poly = np.zeros(xv.shape[0], dtype=bool)
+    j = n - 1
+    for i in range(n):
+        xi = float(px[i])
+        yi = float(py[i])
+        xj = float(px[j])
+        yj = float(py[j])
+        denom = (yj - yi) if abs(yj - yi) > 1e-12 else 1e-12
+        intersects = ((yi > yv) != (yj > yv)) & (xv < ((xj - xi) * (yv - yi) / denom + xi))
+        in_poly ^= intersects
+        j = i
+
+    # Treat points on polygon edges as inside to avoid boundary asymmetry.
+    on_edge = np.zeros(xv.shape[0], dtype=bool)
+    edge_tol = 1e-6
+    j = n - 1
+    for i in range(n):
+        xi = float(px[i])
+        yi = float(py[i])
+        xj = float(px[j])
+        yj = float(py[j])
+        dx = xj - xi
+        dy = yj - yi
+        cross = (xv - xi) * dy - (yv - yi) * dx
+        within_seg = ((xv - xi) * (xv - xj) + (yv - yi) * (yv - yj)) <= edge_tol
+        on_edge |= (np.abs(cross) <= edge_tol) & within_seg
+        j = i
+
+    inside[valid] = in_poly | on_edge
+    return inside
+
+
+def _format_assigned_block_summary(block: AssignedBlock) -> str:
+    side_text = {0: "L", 1: "R"}.get(block.assigned_side, "invalid")
+    details = (
+        f"FP{block.plate_index_1based} block {block.start}-{block.end} "
+        f"-> {side_text}, mean_dist_L={block.mean_distance_L_m:.3f}m, "
+        f"mean_dist_R={block.mean_distance_R_m:.3f}m"
+    )
+    if block.invalid_reason is not None:
+        details = f"{details} ({block.invalid_reason})"
+    return details
+
+
+def _assign_contact_blocks_v3d_style(
+    *,
+    forceplates: list[ForceplateWrenchSeries],
+    foot_L_com: np.ndarray,
+    foot_R_com: np.ndarray,
+    foot_L_prox: np.ndarray,
+    foot_L_dist: np.ndarray,
+    foot_R_prox: np.ndarray,
+    foot_R_dist: np.ndarray,
+    threshold_m: float,
+    remove_incomplete_assignments: bool,
+    require_segment_projection_on_plate: bool,
+) -> AssignmentResult:
+    T = int(foot_L_com.shape[0])
+    hard_invalid_mask = np.zeros(T, dtype=bool)
+    contact_any_mask = np.zeros(T, dtype=bool)
+    left_mask_per_plate: list[np.ndarray] = []
+    right_mask_per_plate: list[np.ndarray] = []
+    assigned_blocks: list[AssignedBlock] = []
+
+    for fp_series in forceplates:
+        raw_contact_mask = np.asarray(fp_series.valid_contact_mask[:T], dtype=bool).copy()
+        raw_contact_runs = _find_contiguous_true_runs(raw_contact_mask)
+
+        grf_lab = np.asarray(fp_series.grf_lab[:T], dtype=float)
+        grm_lab = np.asarray(fp_series.grm_lab_at_fp_origin[:T], dtype=float)
+        contact_mask = raw_contact_mask.copy()
+        contact_mask &= np.all(np.isfinite(grf_lab), axis=1)
+        contact_mask &= np.all(np.isfinite(grm_lab), axis=1)
+
+        cop_lab = _estimate_cop_lab(
+            cop_x_m=np.asarray(fp_series.cop_x_m[:T], dtype=float),
+            cop_y_m=np.asarray(fp_series.cop_y_m[:T], dtype=float),
+            fp_origin_lab=np.asarray(fp_series.fp_origin_lab, dtype=float),
+        )
+        contact_mask &= np.all(np.isfinite(cop_lab[:, 0:2]), axis=1)
+        contact_any_mask |= contact_mask
+
+        left_mask = np.zeros(T, dtype=bool)
+        right_mask = np.zeros(T, dtype=bool)
+
+        has_corners = fp_series.corners_lab is not None and np.asarray(fp_series.corners_lab).shape == (4, 3)
+        proj_L_prox = _project_points_to_plate_xy_mask(points_lab=foot_L_prox, corners_lab=fp_series.corners_lab)
+        proj_L_dist = _project_points_to_plate_xy_mask(points_lab=foot_L_dist, corners_lab=fp_series.corners_lab)
+        proj_R_prox = _project_points_to_plate_xy_mask(points_lab=foot_R_prox, corners_lab=fp_series.corners_lab)
+        proj_R_dist = _project_points_to_plate_xy_mask(points_lab=foot_R_dist, corners_lab=fp_series.corners_lab)
+        proj_L_overlap = proj_L_prox & proj_L_dist
+        proj_R_overlap = proj_R_prox & proj_R_dist
+
+        for start, end in _find_contiguous_true_runs(contact_mask):
+            block_slice = slice(start, end)
+            dL = _segment_distance_to_cop_block(segment_com=foot_L_com, cop_lab=cop_lab, start=start, end=end)
+            dR = _segment_distance_to_cop_block(segment_com=foot_R_com, cop_lab=cop_lab, start=start, end=end)
+
+            assigned_side: int | None = None
+            invalid_reason: str | None = None
+
+            if remove_incomplete_assignments:
+                touches_edge_raw_run = False
+                for raw_start, raw_end in raw_contact_runs:
+                    if not (end <= raw_start or start >= raw_end):
+                        if raw_start == 0 or raw_end == T:
+                            touches_edge_raw_run = True
+                            break
+                if touches_edge_raw_run:
+                    invalid_reason = "incomplete_contact_block"
+
+            if invalid_reason is None and has_corners:
+                left_proj_ratio = float(np.nanmean(proj_L_overlap[block_slice].astype(float)))
+                right_proj_ratio = float(np.nanmean(proj_R_overlap[block_slice].astype(float)))
+                both_threshold = dL <= float(threshold_m) and dR <= float(threshold_m)
+                very_close = abs(dL - dR) <= 0.02
+                two_feet_projection = left_proj_ratio >= 0.35 and right_proj_ratio >= 0.35
+                if both_threshold and (two_feet_projection or very_close):
+                    invalid_reason = "two_feet_same_plate"
+
+            if invalid_reason is None:
+                left_ok = dL <= float(threshold_m)
+                right_ok = dR <= float(threshold_m)
+                if not left_ok and not right_ok:
+                    invalid_reason = "distance_threshold_exceeded"
+                elif left_ok and not right_ok:
+                    assigned_side = 0
+                elif right_ok and not left_ok:
+                    assigned_side = 1
+                else:
+                    assigned_side = 0 if dL <= dR else 1
+
+            if (
+                invalid_reason is None
+                and assigned_side is not None
+                and require_segment_projection_on_plate
+                and has_corners
+            ):
+                if assigned_side == 0:
+                    proj_pass = bool(np.any(proj_L_prox[block_slice] & proj_L_dist[block_slice]))
+                else:
+                    proj_pass = bool(np.any(proj_R_prox[block_slice] & proj_R_dist[block_slice]))
+                if not proj_pass:
+                    assigned_side = None
+                    invalid_reason = "segment_projection_failed"
+
+            if assigned_side == 0:
+                left_mask[block_slice] = True
+            elif assigned_side == 1:
+                right_mask[block_slice] = True
+            else:
+                if invalid_reason in {"incomplete_contact_block", "two_feet_same_plate", "segment_projection_failed"}:
+                    hard_invalid_mask[block_slice] = True
+
+            assigned_blocks.append(
+                AssignedBlock(
+                    plate_index_1based=int(fp_series.plate_index_1based),
+                    start=int(start),
+                    end=int(end),
+                    assigned_side=assigned_side,
+                    mean_distance_L_m=float(dL),
+                    mean_distance_R_m=float(dR),
+                    invalid_reason=invalid_reason,
+                )
+            )
+
+        left_mask_per_plate.append(left_mask)
+        right_mask_per_plate.append(right_mask)
+
+    assigned_any_mask = np.zeros(T, dtype=bool)
+    for left_mask in left_mask_per_plate:
+        assigned_any_mask |= left_mask
+    for right_mask in right_mask_per_plate:
+        assigned_any_mask |= right_mask
+    invalid_mask = hard_invalid_mask | (contact_any_mask & ~assigned_any_mask)
+
+    return AssignmentResult(
+        left_mask_per_plate=left_mask_per_plate,
+        right_mask_per_plate=right_mask_per_plate,
+        invalid_mask=invalid_mask,
+        assigned_blocks=assigned_blocks,
+    )
+
+
 def _make_gravity_wrench(com_pos: np.ndarray, mass_kg: float, g: float = 9.81) -> TimeVaryingWrench:
     T = com_pos.shape[0]
     force = np.zeros((T, 3), dtype=float)
@@ -106,12 +382,18 @@ def _make_gravity_wrench(com_pos: np.ndarray, mass_kg: float, g: float = 9.81) -
     return TimeVaryingWrench(point=com_pos, force=force, moment=moment)
 
 
-def _segment_inertia_lab(*, frame: np.ndarray, mass_kg: float, length_m: np.ndarray) -> np.ndarray:
-    """Diagonal inertia with fixed radius-of-gyration fractions (minimal model)."""
+def _segment_inertia_lab(
+    *,
+    frame: np.ndarray,
+    mass_kg: float,
+    length_m: np.ndarray,
+    rog_fraction_xyz: tuple[float, float, float],
+) -> np.ndarray:
+    """Diagonal inertia using per-segment radius-of-gyration fractions."""
 
-    # Conservative, stable defaults (dimensionless): k/L
-    kx, ky, kz = 0.33, 0.33, 0.33
+    kx, ky, kz = (float(rog_fraction_xyz[0]), float(rog_fraction_xyz[1]), float(rog_fraction_xyz[2]))
     L2 = np.clip(np.asarray(length_m, dtype=float) ** 2, 0.0, None)
+    # TODO: future geometry-based inertia from proximal/distal radii and segment geometry.
     Ixx = float(mass_kg) * (kx * kx) * L2
     Iyy = float(mass_kg) * (ky * ky) * L2
     Izz = float(mass_kg) * (kz * kz) * L2
@@ -130,6 +412,7 @@ def _make_segment_state(
     com_pos: np.ndarray,
     frame: np.ndarray,
     mass_kg: float,
+    rog_fraction_xyz: tuple[float, float, float],
     rate_hz: float,
 ) -> SegmentState:
     dt = 1.0 / float(rate_hz)
@@ -139,7 +422,12 @@ def _make_segment_state(
     omega_lab = segment_angular_velocity_lab(frame, rate_hz=rate_hz)
     alpha_lab = _gradient(omega_lab, dt)
     seg_len = np.linalg.norm(np.asarray(dist_pos, dtype=float) - np.asarray(prox_pos, dtype=float), axis=1)
-    inertia_lab = _segment_inertia_lab(frame=frame, mass_kg=float(mass_kg), length_m=seg_len)
+    inertia_lab = _segment_inertia_lab(
+        frame=frame,
+        mass_kg=float(mass_kg),
+        length_m=seg_len,
+        rog_fraction_xyz=rog_fraction_xyz,
+    )
 
     return SegmentState(
         prox_pos=np.asarray(prox_pos, dtype=float),
@@ -259,6 +547,7 @@ def compute_joint_moment_columns_multi(
     body_mass_kg: float | None,
     forceplates: list[ForceplateWrenchSeries],
     segment_params: BodySegmentParams | None = None,
+    assignment_config: ForceAssignmentConfig | None = None,
 ) -> dict[str, np.ndarray]:
     """Compute lower-limb joint moments from a selected multi-plate forceplate set."""
 
@@ -279,6 +568,7 @@ def compute_joint_moment_columns_multi(
             body_mass_kg=float(body_mass_kg),
             forceplates=forceplates,
             segment_params=get_body_segment_params() if segment_params is None else segment_params,
+            assignment_config=ForceAssignmentConfig() if assignment_config is None else assignment_config,
         )
     except Exception:
         return nan_all
@@ -336,6 +626,7 @@ def _compute_joint_moment_columns_multi_impl(
     body_mass_kg: float,
     forceplates: list[ForceplateWrenchSeries],
     segment_params: BodySegmentParams,
+    assignment_config: ForceAssignmentConfig,
 ) -> dict[str, np.ndarray]:
     T = int(frames.pelvis.shape[0])
 
@@ -410,6 +701,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=foot_L_com,
         frame=frames.foot_L,
         mass_kg=m_foot,
+        rog_fraction_xyz=seg.lower.foot.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_shank_L = _make_segment_state(
@@ -418,6 +710,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=shank_L_com,
         frame=frames.shank_L,
         mass_kg=m_shank,
+        rog_fraction_xyz=seg.lower.shank.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_thigh_L = _make_segment_state(
@@ -426,6 +719,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=thigh_L_com,
         frame=frames.thigh_L,
         mass_kg=m_thigh,
+        rog_fraction_xyz=seg.lower.thigh.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 
@@ -435,6 +729,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=foot_R_com,
         frame=frames.foot_R,
         mass_kg=m_foot,
+        rog_fraction_xyz=seg.lower.foot.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_shank_R = _make_segment_state(
@@ -443,6 +738,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=shank_R_com,
         frame=frames.shank_R,
         mass_kg=m_shank,
+        rog_fraction_xyz=seg.lower.shank.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_thigh_R = _make_segment_state(
@@ -451,6 +747,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=thigh_R_com,
         frame=frames.thigh_R,
         mass_kg=m_thigh,
+        rog_fraction_xyz=seg.lower.thigh.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 
@@ -460,6 +757,7 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=trunk_com,
         frame=frames.thorax,
         mass_kg=m_trunk,
+        rog_fraction_xyz=seg.upper.trunk.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_head = _make_segment_state(
@@ -468,37 +766,46 @@ def _compute_joint_moment_columns_multi_impl(
         com_pos=head_com,
         frame=frames.head,
         mass_kg=m_head,
+        rog_fraction_xyz=seg.upper.head.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 
-    ambiguous_mask = np.zeros(T, dtype=bool)
+    assignment_result = _assign_contact_blocks_v3d_style(
+        forceplates=forceplates,
+        foot_L_com=foot_L_com,
+        foot_R_com=foot_R_com,
+        foot_L_prox=foot_L_prox,
+        foot_L_dist=foot_L_dist,
+        foot_R_prox=foot_R_prox,
+        foot_R_dist=foot_R_dist,
+        threshold_m=float(assignment_config.cop_distance_threshold_m),
+        remove_incomplete_assignments=bool(assignment_config.remove_incomplete_assignments),
+        require_segment_projection_on_plate=bool(assignment_config.require_segment_projection_on_plate),
+    )
+
+    if bool(assignment_config.log_assignment_summary):
+        print("[INFO] force assignment summary:")
+        if assignment_result.assigned_blocks:
+            for block in assignment_result.assigned_blocks:
+                print(f"    {_format_assigned_block_summary(block)}")
+        else:
+            print("    no contact blocks detected")
+
     left_has_contact = np.zeros(T, dtype=bool)
     right_has_contact = np.zeros(T, dtype=bool)
     plate_rows: list[dict[str, np.ndarray]] = []
-
-    for fp_series in forceplates:
+    for fp_series, left_mask, right_mask in zip(
+        forceplates,
+        assignment_result.left_mask_per_plate,
+        assignment_result.right_mask_per_plate,
+    ):
         grf_lab = np.asarray(fp_series.grf_lab[:T], dtype=float)
         grm_lab = np.asarray(fp_series.grm_lab_at_fp_origin[:T], dtype=float)
-        contact_mask = np.asarray(fp_series.valid_contact_mask[:T], dtype=bool).copy()
-        contact_mask &= np.all(np.isfinite(grf_lab), axis=1)
-        contact_mask &= np.all(np.isfinite(grm_lab), axis=1)
-
         cop_lab = _estimate_cop_lab(
             cop_x_m=np.asarray(fp_series.cop_x_m[:T], dtype=float),
             cop_y_m=np.asarray(fp_series.cop_y_m[:T], dtype=float),
             fp_origin_lab=np.asarray(fp_series.fp_origin_lab, dtype=float),
         )
-        contact_mask &= np.all(np.isfinite(cop_lab[:, 0:2]), axis=1)
-
-        assign = _assign_force_to_side_by_cop(cop_lab=cop_lab, ankle_L=ankle_L, ankle_R=ankle_R)
-        bounds_xy = _plate_xy_bounds(fp_series.corners_lab)
-        ambiguous_mask |= contact_mask & (assign == -1)
-        ambiguous_mask |= contact_mask & _ankles_share_plate_xy(
-            bounds_xy=bounds_xy,
-            ankle_L=ankle_L,
-            ankle_R=ankle_R,
-        )
-
         M_at_cop = _moment_at_point(
             grm_lab,
             np.asarray(fp_series.fp_origin_lab, dtype=float)[None, :],
@@ -506,22 +813,20 @@ def _compute_joint_moment_columns_multi_impl(
             grf_lab,
         )
 
-        left_mask = contact_mask & (assign == 0)
-        right_mask = contact_mask & (assign == 1)
-        left_has_contact |= left_mask
-        right_has_contact |= right_mask
+        left_has_contact |= np.asarray(left_mask, dtype=bool)
+        right_has_contact |= np.asarray(right_mask, dtype=bool)
         plate_rows.append(
             {
                 "grf_lab": grf_lab,
                 "moment_at_cop": M_at_cop,
                 "cop_lab": cop_lab,
-                "left_mask": left_mask,
-                "right_mask": right_mask,
+                "left_mask": np.asarray(left_mask, dtype=bool),
+                "right_mask": np.asarray(right_mask, dtype=bool),
             }
         )
 
-    left_valid = left_has_contact & ~ambiguous_mask
-    right_valid = right_has_contact & ~ambiguous_mask
+    left_valid = left_has_contact & ~assignment_result.invalid_mask
+    right_valid = right_has_contact & ~assignment_result.invalid_mask
 
     def masked_wrench(
         *,
@@ -535,9 +840,9 @@ def _compute_joint_moment_columns_multi_impl(
         point = np.asarray(cop_lab, dtype=float).copy()
         force[mask] = grf_lab[mask]
         moment[mask] = moment_at_cop[mask]
-        force[ambiguous_mask] = np.nan
-        moment[ambiguous_mask] = np.nan
-        point[ambiguous_mask] = np.nan
+        force[assignment_result.invalid_mask] = np.nan
+        moment[assignment_result.invalid_mask] = np.nan
+        point[assignment_result.invalid_mask] = np.nan
         return TimeVaryingWrench(point=point, force=force, moment=moment)
 
     left_wrenches = [
@@ -725,6 +1030,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=foot_L_com,
         frame=frames.foot_L,
         mass_kg=m_foot,
+        rog_fraction_xyz=seg.lower.foot.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_shank_L = _make_segment_state(
@@ -733,6 +1039,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=shank_L_com,
         frame=frames.shank_L,
         mass_kg=m_shank,
+        rog_fraction_xyz=seg.lower.shank.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_thigh_L = _make_segment_state(
@@ -741,6 +1048,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=thigh_L_com,
         frame=frames.thigh_L,
         mass_kg=m_thigh,
+        rog_fraction_xyz=seg.lower.thigh.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 
@@ -750,6 +1058,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=foot_R_com,
         frame=frames.foot_R,
         mass_kg=m_foot,
+        rog_fraction_xyz=seg.lower.foot.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_shank_R = _make_segment_state(
@@ -758,6 +1067,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=shank_R_com,
         frame=frames.shank_R,
         mass_kg=m_shank,
+        rog_fraction_xyz=seg.lower.shank.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_thigh_R = _make_segment_state(
@@ -766,6 +1076,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=thigh_R_com,
         frame=frames.thigh_R,
         mass_kg=m_thigh,
+        rog_fraction_xyz=seg.lower.thigh.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 
@@ -775,6 +1086,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=trunk_com,
         frame=frames.thorax,
         mass_kg=m_trunk,
+        rog_fraction_xyz=seg.upper.trunk.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
     state_head = _make_segment_state(
@@ -783,6 +1095,7 @@ def _compute_joint_moment_columns_impl(
         com_pos=head_com,
         frame=frames.head,
         mass_kg=m_head,
+        rog_fraction_xyz=seg.upper.head.rog_fraction_xyz,
         rate_hz=rate_hz,
     )
 

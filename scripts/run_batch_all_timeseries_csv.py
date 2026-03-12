@@ -46,7 +46,7 @@ from replace_v3d.joint_dynamics import (
     compute_joint_moment_columns,
     compute_joint_moment_columns_multi,
 )
-from replace_v3d.joint_dynamics.inverse_dynamics import ForceplateWrenchSeries
+from replace_v3d.joint_dynamics.inverse_dynamics import ForceAssignmentConfig, ForceplateWrenchSeries
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
@@ -284,6 +284,79 @@ def _load_inverse_dynamics_forceplate_selection(config_path: Path) -> list[int]:
         seen.add(idx)
         selected_ids.append(idx)
     return selected_ids
+
+
+def _parse_bool(raw: Any, *, field_name: str) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        text = raw.strip().lower()
+        if text in {"true", "1", "yes", "y"}:
+            return True
+        if text in {"false", "0", "no", "n"}:
+            return False
+    raise ValueError(f"{field_name} must be a boolean.")
+
+
+def _load_force_assignment_config(config_path: Path) -> ForceAssignmentConfig:
+    """Load force assignment and inertia-model config for multi-plate moments."""
+
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
+
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(raw, dict):
+        raise ValueError("Config root must be a mapping.")
+
+    forceplate_cfg = raw.get("forceplate")
+    if not isinstance(forceplate_cfg, dict):
+        raise ValueError("config.forceplate must be a mapping.")
+
+    analysis_cfg = forceplate_cfg.get("analysis")
+    if not isinstance(analysis_cfg, dict):
+        raise ValueError("config.forceplate.analysis must be a mapping.")
+
+    assignment_cfg = analysis_cfg.get("force_assignment", {})
+    if not isinstance(assignment_cfg, dict):
+        raise ValueError("config.forceplate.analysis.force_assignment must be a mapping.")
+
+    threshold_raw = assignment_cfg.get("cop_distance_threshold_m", 0.2)
+    try:
+        threshold_m = float(threshold_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("force_assignment.cop_distance_threshold_m must be numeric.") from exc
+    if threshold_m <= 0:
+        raise ValueError("force_assignment.cop_distance_threshold_m must be > 0.")
+
+    remove_incomplete = _parse_bool(
+        assignment_cfg.get("remove_incomplete_assignments", True),
+        field_name="force_assignment.remove_incomplete_assignments",
+    )
+    require_projection = _parse_bool(
+        assignment_cfg.get("require_segment_projection_on_plate", True),
+        field_name="force_assignment.require_segment_projection_on_plate",
+    )
+    log_summary = _parse_bool(
+        assignment_cfg.get("log_assignment_summary", True),
+        field_name="force_assignment.log_assignment_summary",
+    )
+
+    inertia_cfg = analysis_cfg.get("inertia", {})
+    if not isinstance(inertia_cfg, dict):
+        raise ValueError("config.forceplate.analysis.inertia must be a mapping.")
+    inertia_model = str(inertia_cfg.get("model", "per_segment_rog_v1")).strip()
+    if inertia_model != "per_segment_rog_v1":
+        raise ValueError(
+            "config.forceplate.analysis.inertia.model must be 'per_segment_rog_v1' for this pipeline."
+        )
+
+    return ForceAssignmentConfig(
+        cop_distance_threshold_m=threshold_m,
+        remove_incomplete_assignments=remove_incomplete,
+        require_segment_projection_on_plate=require_projection,
+        log_assignment_summary=log_summary,
+    )
 
 
 def _make_timeseries_dataframe(
@@ -690,96 +763,7 @@ def _compute_ankle_torque_payload(
         }
     )
     payload.update(_nan_ankle_torque_payload(end_frame=end, ankle_L=ankle_L, ankle_R=ankle_R))
-
-    ankle_mid = 0.5 * (np.asarray(ankle_L[:end], dtype=float) + np.asarray(ankle_R[:end], dtype=float))
-    torque_mid_ext = np.full((end, 3), np.nan, dtype=float)
-    torque_L_ext = np.full((end, 3), np.nan, dtype=float)
-    torque_R_ext = np.full((end, 3), np.nan, dtype=float)
-    torque_mid_int_y_per_kg = np.full(end, np.nan, dtype=float)
-
-    for frame_idx in range(end):
-        side_force = {"L": np.zeros(3, dtype=float), "R": np.zeros(3, dtype=float)}
-        side_moment = {"L": np.zeros(3, dtype=float), "R": np.zeros(3, dtype=float)}
-        mid_moment = np.zeros(3, dtype=float)
-        any_contact = False
-        ambiguous = False
-
-        for fp_series in per_plate_payloads:
-            if not bool(fp_series.valid_contact_mask[frame_idx]):
-                continue
-            if not (
-                np.all(np.isfinite(fp_series.grf_lab[frame_idx]))
-                and np.all(np.isfinite(fp_series.grm_lab_at_fp_origin[frame_idx]))
-                and np.isfinite(fp_series.cop_x_m[frame_idx])
-                and np.isfinite(fp_series.cop_y_m[frame_idx])
-            ):
-                continue
-
-            any_contact = True
-            cop_xy = np.asarray([fp_series.cop_x_m[frame_idx], fp_series.cop_y_m[frame_idx]], dtype=float)
-            ankle_l_xy = np.asarray(ankle_L[frame_idx, 0:2], dtype=float)
-            ankle_r_xy = np.asarray(ankle_R[frame_idx, 0:2], dtype=float)
-            d_l = float(np.sum((cop_xy - ankle_l_xy) ** 2))
-            d_r = float(np.sum((cop_xy - ankle_r_xy) ** 2))
-            side = "L" if d_l <= d_r else "R"
-
-            bounds_x = fp_series.corners_lab[:, 0]
-            bounds_y = fp_series.corners_lab[:, 1]
-            both_inside = (
-                np.isfinite(ankle_L[frame_idx, 0])
-                and np.isfinite(ankle_L[frame_idx, 1])
-                and np.isfinite(ankle_R[frame_idx, 0])
-                and np.isfinite(ankle_R[frame_idx, 1])
-                and float(np.nanmin(bounds_x)) <= float(ankle_L[frame_idx, 0]) <= float(np.nanmax(bounds_x))
-                and float(np.nanmin(bounds_y)) <= float(ankle_L[frame_idx, 1]) <= float(np.nanmax(bounds_y))
-                and float(np.nanmin(bounds_x)) <= float(ankle_R[frame_idx, 0]) <= float(np.nanmax(bounds_x))
-                and float(np.nanmin(bounds_y)) <= float(ankle_R[frame_idx, 1]) <= float(np.nanmax(bounds_y))
-            )
-            if both_inside:
-                ambiguous = True
-                break
-
-            force = np.asarray(fp_series.grf_lab[frame_idx], dtype=float)
-            moment_origin = np.asarray(fp_series.grm_lab_at_fp_origin[frame_idx], dtype=float)
-            fp_origin = np.asarray(fp_series.fp_origin_lab, dtype=float)
-            side_ankle = ankle_L[frame_idx] if side == "L" else ankle_R[frame_idx]
-            side_force[side] = side_force[side] + force
-            side_moment[side] = side_moment[side] + moment_origin + np.cross(fp_origin - side_ankle, force)
-            mid_moment = mid_moment + moment_origin + np.cross(fp_origin - ankle_mid[frame_idx], force)
-
-        if (not any_contact) or ambiguous:
-            continue
-
-        if np.linalg.norm(side_force["L"]) > 0 or np.linalg.norm(side_moment["L"]) > 0:
-            torque_L_ext[frame_idx] = side_moment["L"]
-        if np.linalg.norm(side_force["R"]) > 0 or np.linalg.norm(side_moment["R"]) > 0:
-            torque_R_ext[frame_idx] = side_moment["R"]
-        torque_mid_ext[frame_idx] = mid_moment
-        if body_mass_kg is not None and float(body_mass_kg) > 0:
-            torque_mid_int_y_per_kg[frame_idx] = (-mid_moment[1]) / float(body_mass_kg)
-
-    payload["AnkleTorqueMid_ext_X_Nm"] = torque_mid_ext[:, 0]
-    payload["AnkleTorqueMid_ext_Y_Nm"] = torque_mid_ext[:, 1]
-    payload["AnkleTorqueMid_ext_Z_Nm"] = torque_mid_ext[:, 2]
-    payload["AnkleTorqueMid_int_X_Nm"] = -torque_mid_ext[:, 0]
-    payload["AnkleTorqueMid_int_Y_Nm"] = -torque_mid_ext[:, 1]
-    payload["AnkleTorqueMid_int_Z_Nm"] = -torque_mid_ext[:, 2]
-    payload["AnkleTorqueMid_int_Y_Nm_per_kg"] = torque_mid_int_y_per_kg
-    payload["AnkleTorqueL_ext_X_Nm"] = torque_L_ext[:, 0]
-    payload["AnkleTorqueL_ext_Y_Nm"] = torque_L_ext[:, 1]
-    payload["AnkleTorqueL_ext_Z_Nm"] = torque_L_ext[:, 2]
-    payload["AnkleTorqueL_int_X_Nm"] = -torque_L_ext[:, 0]
-    payload["AnkleTorqueL_int_Y_Nm"] = -torque_L_ext[:, 1]
-    payload["AnkleTorqueL_int_Z_Nm"] = -torque_L_ext[:, 2]
-    payload["AnkleTorqueR_ext_X_Nm"] = torque_R_ext[:, 0]
-    payload["AnkleTorqueR_ext_Y_Nm"] = torque_R_ext[:, 1]
-    payload["AnkleTorqueR_ext_Z_Nm"] = torque_R_ext[:, 2]
-    payload["AnkleTorqueR_int_X_Nm"] = -torque_R_ext[:, 0]
-    payload["AnkleTorqueR_int_Y_Nm"] = -torque_R_ext[:, 1]
-    payload["AnkleTorqueR_int_Z_Nm"] = -torque_R_ext[:, 2]
-    for key in list(payload.keys()):
-        if key.startswith("AnkleTorque"):
-            payload[key] = subtract_baseline_at_index(payload[key], onset0)
+    print("[INFO] multi-plate ankle torque columns are set to NaN by design")
 
     raw_wrench_payload = {
         "mode": "multi_plate_v3d",
@@ -937,6 +921,7 @@ def main() -> None:
     fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
     fp_corner_overrides = _load_forceplate_corner_overrides(config_path)
     inverse_dynamics_forceplate_ids = _load_inverse_dynamics_forceplate_selection(config_path)
+    force_assignment_config = _load_force_assignment_config(config_path)
     if fp_corner_overrides:
         enabled = ", ".join([f"FP{idx}" for idx in sorted(fp_corner_overrides.keys())])
         print(f"[INFO] forceplate corner override enabled: {enabled}")
@@ -1119,6 +1104,7 @@ def main() -> None:
                         rate_hz=rate_hz,
                         body_mass_kg=float(body_mass_kg),
                         forceplates=raw_wrench_payload["forceplates"],
+                        assignment_config=force_assignment_config,
                     )
                 if all(bool(np.all(np.isnan(v))) for v in joint_moment_payload.values()):
                     print(f"[WARN] Joint moment computation returned all-NaN for {c3d_file.name} (check COP/markers/labels)")

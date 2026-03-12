@@ -8,6 +8,13 @@ forceplate:
     # Use any explicit forceplate subset for inverse dynamics.
     # Examples: [fp1], [fp3], [fp1, fp3], [fp1, fp2, fp3]
     use_for_inverse_dynamics: [fp3]
+    force_assignment:
+      cop_distance_threshold_m: 0.2
+      remove_incomplete_assignments: true
+      require_segment_projection_on_plate: true
+      log_assignment_summary: true
+    inertia:
+      model: "per_segment_rog_v1"
   coordination:
     fp1:
       enabled: false
