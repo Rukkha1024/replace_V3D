@@ -41,15 +41,20 @@ from replace_v3d.io.events_excel import (
 )
 from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_with_frames
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
-from replace_v3d.joint_dynamics import compute_joint_angular_velocity_columns, compute_joint_moment_columns
+from replace_v3d.joint_dynamics import (
+    compute_joint_angular_velocity_columns,
+    compute_joint_moment_columns,
+    compute_joint_moment_columns_multi,
+)
+from replace_v3d.joint_dynamics.inverse_dynamics import ForceplateWrenchSeries
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
 from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_stage01_xy
 from replace_v3d.torque.forceplate import (
     apply_force_platform_corner_overrides,
-    choose_active_force_platform,
     read_force_platforms,
+    select_force_platforms,
 )
 from replace_v3d.torque.forceplate_inertial import (
     apply_forceplate_inertial_subtract,
@@ -238,6 +243,49 @@ def _load_forceplate_corner_overrides(config_path: Path) -> dict[int, np.ndarray
     return overrides
 
 
+def _parse_forceplate_key(raw: Any, *, field_name: str) -> int:
+    text = str(raw).strip().lower()
+    if not text.startswith("fp") or (not text[2:].isdigit()):
+        raise ValueError(f"{field_name} entries must look like fp1/fp2/fp3. Got: {raw!r}")
+    return int(text[2:])
+
+
+def _load_inverse_dynamics_forceplate_selection(config_path: Path) -> list[int]:
+    """Load the config-defined inverse dynamics forceplate subset."""
+
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
+
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(raw, dict):
+        raise ValueError("Config root must be a mapping.")
+
+    forceplate_cfg = raw.get("forceplate")
+    if not isinstance(forceplate_cfg, dict):
+        raise ValueError("config.forceplate must be a mapping.")
+
+    analysis_cfg = forceplate_cfg.get("analysis")
+    if not isinstance(analysis_cfg, dict):
+        raise ValueError("config.forceplate.analysis must be a mapping.")
+
+    selected_raw = analysis_cfg.get("use_for_inverse_dynamics")
+    if not isinstance(selected_raw, list):
+        raise ValueError("forceplate.analysis.use_for_inverse_dynamics must be a non-empty list.")
+    if not selected_raw:
+        raise ValueError("forceplate.analysis.use_for_inverse_dynamics must not be empty.")
+
+    selected_ids: list[int] = []
+    seen: set[int] = set()
+    for item in selected_raw:
+        idx = _parse_forceplate_key(item, field_name="forceplate.analysis.use_for_inverse_dynamics")
+        if idx in seen:
+            raise ValueError(f"Duplicate inverse-dynamics forceplate selection is not allowed: fp{idx}")
+        seen.add(idx)
+        selected_ids.append(idx)
+    return selected_ids
+
+
 def _make_timeseries_dataframe(
     *,
     subject: str,
@@ -415,9 +463,54 @@ def _expected_joint_moment_cols() -> list[str]:
     return cols
 
 
+def _expected_ankle_torque_cols() -> list[str]:
+    cols: list[str] = []
+    prefixes = [
+        "AnkleTorqueMid_ext",
+        "AnkleTorqueMid_int",
+        "AnkleTorqueL_ext",
+        "AnkleTorqueL_int",
+        "AnkleTorqueR_ext",
+        "AnkleTorqueR_int",
+    ]
+    for prefix in prefixes:
+        for axis in ("X", "Y", "Z"):
+            cols.append(f"{prefix}_{axis}_Nm")
+    cols.append("AnkleTorqueMid_int_Y_Nm_per_kg")
+    return cols
+
+
+def _nan_ankle_torque_payload(
+    *,
+    end_frame: int,
+    ankle_L: np.ndarray,
+    ankle_R: np.ndarray,
+) -> dict[str, np.ndarray]:
+    ankle_mid = 0.5 * (np.asarray(ankle_L, dtype=float)[:end_frame] + np.asarray(ankle_R, dtype=float)[:end_frame])
+    payload: dict[str, np.ndarray] = {
+        "L_ankleJC_X_m": np.asarray(ankle_L[:end_frame, 0], dtype=float),
+        "L_ankleJC_Y_m": np.asarray(ankle_L[:end_frame, 1], dtype=float),
+        "L_ankleJC_Z_m": np.asarray(ankle_L[:end_frame, 2], dtype=float),
+        "R_ankleJC_X_m": np.asarray(ankle_R[:end_frame, 0], dtype=float),
+        "R_ankleJC_Y_m": np.asarray(ankle_R[:end_frame, 1], dtype=float),
+        "R_ankleJC_Z_m": np.asarray(ankle_R[:end_frame, 2], dtype=float),
+        "AnkleMid_X_m": ankle_mid[:, 0],
+        "AnkleMid_Y_m": ankle_mid[:, 1],
+        "AnkleMid_Z_m": ankle_mid[:, 2],
+    }
+    for key in _expected_ankle_torque_cols():
+        payload[key] = np.full(end_frame, np.nan, dtype=float)
+    return payload
+
+
+def _forceplate_selection_text(indices_1based: list[int]) -> str:
+    return ",".join([f"fp{idx}" for idx in indices_1based])
+
+
 def _compute_ankle_torque_payload(
     *,
     c3d_file: Path,
+    selected_forceplate_ids: list[int],
     velocity: float,
     points: np.ndarray,
     labels: list[str],
@@ -425,7 +518,6 @@ def _compute_ankle_torque_payload(
     end_frame: int,
     platform_onset_local: int,
     platform_offset_local: int,
-    force_plate_index_1based: int | None,
     body_mass_kg: float | None,
     fp_inertial_templates: dict[int, Any],
     fp_inertial_policy: str,
@@ -433,7 +525,7 @@ def _compute_ankle_torque_payload(
     fp_inertial_qc_margin_m: float,
     fp_inertial_qc_strict: bool,
     fp_corner_overrides: dict[int, np.ndarray] | None,
-) -> tuple[int, dict[str, np.ndarray], dict[str, np.ndarray]]:
+) -> tuple[list[int], dict[str, Any], dict[str, Any]]:
     fp_coll = read_force_platforms(c3d_file)
     fp_coll = apply_force_platform_corner_overrides(fp_coll, fp_corner_overrides)
     analog_avg = fp_coll.analog.values
@@ -444,83 +536,13 @@ def _compute_ankle_torque_payload(
             "Check that C3D is trimmed consistently."
         )
 
-    if force_plate_index_1based is not None:
-        fp = next((p for p in fp_coll.platforms if p.index_1based == int(force_plate_index_1based)), None)
-        if fp is None:
-            raise ValueError(f"Requested force plate index not found: {force_plate_index_1based}")
-    else:
-        fp = choose_active_force_platform(analog_avg, fp_coll.platforms)
-
-    idx = fp.channel_indices_0based.astype(int)
-    F_raw = analog_avg[:, idx[0:3]]
-    M_raw = analog_avg[:, idx[3:6]]
-    F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
-        F_in=F_raw,
-        M_in=M_raw,
-    )
-
-    analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
-    analog_stage01[:, idx[0:3]] = F_stage01_raw
-    analog_stage01[:, idx[3:6]] = M_stage01_raw
-
-    # Align channel sign to the repository Stage01 template convention before subtract.
-    # Stage01 templates use the opposite sign of the direct C3D-mapped Stage01 raw.
-    analog_shared_sign = analog_stage01.copy()
-    analog_shared_sign[:, idx[0:3]] *= -1.0
-    analog_shared_sign[:, idx[3:6]] *= -1.0
-
-    analog_used = analog_shared_sign
-    onset0 = int(platform_onset_local) - 1
-    offset0 = int(platform_offset_local) - 1
-    analog_used, inertial_info = apply_forceplate_inertial_subtract(
-        analog_shared_sign,
-        fp,
-        velocity=float(velocity),
-        onset0=int(onset0),
-        offset0=int(offset0),
-        templates=fp_inertial_templates,
-        missing_policy=str(fp_inertial_policy),
-        qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold_n),
-        qc_margin_m=float(fp_inertial_qc_margin_m),
-    )
-    if not inertial_info.get("applied"):
-        raise ValueError(
-            "Forceplate inertial subtract did not apply "
-            f"for {c3d_file.name} (reason={inertial_info.get('reason')}, policy={inertial_info.get('missing_policy')})."
-        )
-    if inertial_info.get("qc_failed"):
-        msg = (
-            "[WARN] Forceplate inertial subtract QC failed "
-            f"for {c3d_file.name} (COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
-            "Check axis transform / templates."
-        )
-        if fp_inertial_qc_strict:
-            raise ValueError(msg)
-        print(msg)
-
-    # `analog_used` is already aligned to the Stage01 template sign convention.
-    F_stage01 = analog_used[:, idx[0:3]]
-    M_stage01 = analog_used[:, idx[3:6]]
-    COP_stage01_xy = compute_cop_stage01_xy(
-        F_stage01=F_stage01,
-        M_stage01=M_stage01,
-    )
-
     jc = compute_joint_centers(points, labels)
     ankle_L = jc["ankle_L"]
     ankle_R = jc["ankle_R"]
 
-    res = compute_ankle_torque_from_net_wrench(
-        F_lab=F_stage01,
-        M_lab_at_fp_origin=M_stage01,
-        fp_origin_lab=fp.origin_lab,
-        ankle_L=ankle_L,
-        ankle_R=ankle_R,
-        body_mass_kg=body_mass_kg,
-    )
-
     frames0 = np.arange(n_frames, dtype=int)
     onset0 = int(platform_onset_local) - 1
+    offset0 = int(platform_offset_local) - 1
     time_from_onset = (frames0 - onset0) / float(rate_hz)
 
     end = int(end_frame)
@@ -529,68 +551,241 @@ def _compute_ankle_torque_payload(
             "platform_onset_local out of range for torque payload window: "
             f"platform_onset_local={platform_onset_local}, onset0={onset0}, end_frame={end_frame}."
         )
-    payload = {
+
+    selected_platforms = select_force_platforms(fp_coll.platforms, selected_forceplate_ids)
+    selected_text = _forceplate_selection_text(selected_forceplate_ids)
+    print(f"[INFO] inverse-dynamics forceplates from config: [{selected_text}]")
+
+    per_plate_payloads: list[ForceplateWrenchSeries] = []
+    for fp in selected_platforms:
+        idx = fp.channel_indices_0based.astype(int)
+        F_raw = analog_avg[:, idx[0:3]]
+        M_raw = analog_avg[:, idx[3:6]]
+        F_stage01_raw, M_stage01_raw = transform_force_moment_to_stage01(
+            F_in=F_raw,
+            M_in=M_raw,
+        )
+
+        analog_stage01 = np.asarray(analog_avg, dtype=float).copy()
+        analog_stage01[:, idx[0:3]] = F_stage01_raw
+        analog_stage01[:, idx[3:6]] = M_stage01_raw
+
+        analog_shared_sign = analog_stage01.copy()
+        analog_shared_sign[:, idx[0:3]] *= -1.0
+        analog_shared_sign[:, idx[3:6]] *= -1.0
+
+        analog_used, inertial_info = apply_forceplate_inertial_subtract(
+            analog_shared_sign,
+            fp,
+            velocity=float(velocity),
+            onset0=int(onset0),
+            offset0=int(offset0),
+            templates=fp_inertial_templates,
+            missing_policy=str(fp_inertial_policy),
+            qc_fz_threshold_n=float(fp_inertial_qc_fz_threshold_n),
+            qc_margin_m=float(fp_inertial_qc_margin_m),
+        )
+        if not inertial_info.get("applied"):
+            raise ValueError(
+                "Forceplate inertial subtract did not apply "
+                f"for {c3d_file.name} / fp{fp.index_1based} "
+                f"(reason={inertial_info.get('reason')}, policy={inertial_info.get('missing_policy')})."
+            )
+        if inertial_info.get("qc_failed"):
+            msg = (
+                "[WARN] Forceplate inertial subtract QC failed "
+                f"for {c3d_file.name} / fp{fp.index_1based} "
+                f"(COP in-bounds after={inertial_info.get('after_qc_cop_in_bounds_frac')}). "
+                "Check axis transform / templates."
+            )
+            if fp_inertial_qc_strict:
+                raise ValueError(msg)
+            print(msg)
+
+        F_stage01 = analog_used[:, idx[0:3]]
+        M_stage01 = analog_used[:, idx[3:6]]
+        cop_stage01_xy = compute_cop_stage01_xy(
+            F_stage01=F_stage01,
+            M_stage01=M_stage01,
+        )
+        cop_x_abs = cop_stage01_xy[:, 0] + float(fp.origin_lab[0])
+        cop_y_abs = cop_stage01_xy[:, 1] + float(fp.origin_lab[1])
+        valid_contact_mask = np.isfinite(cop_stage01_xy[:, 0]) & np.isfinite(cop_stage01_xy[:, 1])
+
+        per_plate_payloads.append(
+            ForceplateWrenchSeries(
+                plate_index_1based=int(fp.index_1based),
+                fp_origin_lab=np.asarray(fp.origin_lab, dtype=float),
+                grf_lab=np.asarray(F_stage01[:end], dtype=float),
+                grm_lab_at_fp_origin=np.asarray(M_stage01[:end], dtype=float),
+                cop_x_m=np.asarray(cop_x_abs[:end], dtype=float),
+                cop_y_m=np.asarray(cop_y_abs[:end], dtype=float),
+                valid_contact_mask=np.asarray(valid_contact_mask[:end], dtype=bool),
+                corners_lab=np.asarray(fp.corners_lab, dtype=float),
+            )
+        )
+
+    payload: dict[str, Any] = {
         "time_from_platform_onset_s": time_from_onset[:end],
-        "GRF_X_N": res.F_lab[:end, 0],
-        "GRF_Y_N": res.F_lab[:end, 1],
-        "GRF_Z_N": res.F_lab[:end, 2],
-        "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
-        "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
-        "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-        # NOTE:
-        # COP is exported in absolute (lab) coordinates so it is directly
-        # comparable to COM_X/COM_Y. Stage01 COP is origin-relative (Cx/Cy),
-        # so we add the selected forceplate origin (lab) translation.
-        "COP_X_m": COP_stage01_xy[:end, 0] + float(res.fp_origin_lab[0]),
-        "COP_Y_m": COP_stage01_xy[:end, 1] + float(res.fp_origin_lab[1]),
-        "L_ankleJC_X_m": res.ankle_L[:end, 0],
-        "L_ankleJC_Y_m": res.ankle_L[:end, 1],
-        "L_ankleJC_Z_m": res.ankle_L[:end, 2],
-        "R_ankleJC_X_m": res.ankle_R[:end, 0],
-        "R_ankleJC_Y_m": res.ankle_R[:end, 1],
-        "R_ankleJC_Z_m": res.ankle_R[:end, 2],
-        "AnkleMid_X_m": res.ankle_mid[:end, 0],
-        "AnkleMid_Y_m": res.ankle_mid[:end, 1],
-        "AnkleMid_Z_m": res.ankle_mid[:end, 2],
-        "AnkleTorqueMid_ext_X_Nm": res.torque_mid_ext[:end, 0],
-        "AnkleTorqueMid_ext_Y_Nm": res.torque_mid_ext[:end, 1],
-        "AnkleTorqueMid_ext_Z_Nm": res.torque_mid_ext[:end, 2],
-        "AnkleTorqueMid_int_X_Nm": res.torque_mid_int[:end, 0],
-        "AnkleTorqueMid_int_Y_Nm": res.torque_mid_int[:end, 1],
-        "AnkleTorqueMid_int_Z_Nm": res.torque_mid_int[:end, 2],
-        "AnkleTorqueMid_int_Y_Nm_per_kg": (
-            np.full(end, np.nan)
-            if res.torque_mid_int_Y_Nm_per_kg is None
-            else res.torque_mid_int_Y_Nm_per_kg[:end]
-        ),
-        "AnkleTorqueL_ext_X_Nm": res.torque_L_ext[:end, 0],
-        "AnkleTorqueL_ext_Y_Nm": res.torque_L_ext[:end, 1],
-        "AnkleTorqueL_ext_Z_Nm": res.torque_L_ext[:end, 2],
-        "AnkleTorqueL_int_X_Nm": res.torque_L_int[:end, 0],
-        "AnkleTorqueL_int_Y_Nm": res.torque_L_int[:end, 1],
-        "AnkleTorqueL_int_Z_Nm": res.torque_L_int[:end, 2],
-        "AnkleTorqueR_ext_X_Nm": res.torque_R_ext[:end, 0],
-        "AnkleTorqueR_ext_Y_Nm": res.torque_R_ext[:end, 1],
-        "AnkleTorqueR_ext_Z_Nm": res.torque_R_ext[:end, 2],
-        "AnkleTorqueR_int_X_Nm": res.torque_R_int[:end, 0],
-        "AnkleTorqueR_int_Y_Nm": res.torque_R_int[:end, 1],
-        "AnkleTorqueR_int_Z_Nm": res.torque_R_int[:end, 2],
+        "inverse_dynamics_forceplates": [selected_text] * end,
     }
 
-    # Onset-zero force / moment / torque outputs (replace existing values).
+    if len(selected_platforms) == 1:
+        fp_series = per_plate_payloads[0]
+        fp = selected_platforms[0]
+        print("[INFO] mode=single_plate_strict")
+        print("[INFO] lower-limb torque/joint moment skipped because only one forceplate was selected")
+
+        res = compute_ankle_torque_from_net_wrench(
+            F_lab=fp_series.grf_lab,
+            M_lab_at_fp_origin=fp_series.grm_lab_at_fp_origin,
+            fp_origin_lab=fp_series.fp_origin_lab,
+            ankle_L=ankle_L[:end],
+            ankle_R=ankle_R[:end],
+            body_mass_kg=body_mass_kg,
+        )
+        payload.update(
+            {
+                "inverse_dynamics_mode": ["single_plate_strict"] * end,
+                "GRF_X_N": res.F_lab[:end, 0],
+                "GRF_Y_N": res.F_lab[:end, 1],
+                "GRF_Z_N": res.F_lab[:end, 2],
+                "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
+                "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
+                "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
+                "COP_X_m": fp_series.cop_x_m[:end],
+                "COP_Y_m": fp_series.cop_y_m[:end],
+            }
+        )
+        payload.update(_nan_ankle_torque_payload(end_frame=end, ankle_L=ankle_L, ankle_R=ankle_R))
+        for key in list(payload.keys()):
+            if key.startswith(("GRF_", "GRM_")):
+                payload[key] = subtract_baseline_at_index(payload[key], onset0)
+
+        raw_wrench_payload = {
+            "mode": "single_plate_strict",
+            "forceplates": per_plate_payloads,
+            "legacy_single_forceplate": {
+                "fp_origin_lab": np.asarray(fp.origin_lab, dtype=float),
+                "grf_lab": np.asarray(fp_series.grf_lab, dtype=float),
+                "grm_lab_at_fp_origin": np.asarray(fp_series.grm_lab_at_fp_origin, dtype=float),
+                "cop_x_m": np.asarray(fp_series.cop_x_m, dtype=float),
+                "cop_y_m": np.asarray(fp_series.cop_y_m, dtype=float),
+            },
+        }
+        return list(selected_forceplate_ids), payload, raw_wrench_payload
+
+    print("[INFO] mode=multi_plate_v3d")
+    payload.update(
+        {
+            "inverse_dynamics_mode": ["multi_plate_v3d"] * end,
+            "GRF_X_N": np.full(end, np.nan, dtype=float),
+            "GRF_Y_N": np.full(end, np.nan, dtype=float),
+            "GRF_Z_N": np.full(end, np.nan, dtype=float),
+            "GRM_X_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
+            "GRM_Y_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
+            "GRM_Z_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
+            "COP_X_m": np.full(end, np.nan, dtype=float),
+            "COP_Y_m": np.full(end, np.nan, dtype=float),
+        }
+    )
+    payload.update(_nan_ankle_torque_payload(end_frame=end, ankle_L=ankle_L, ankle_R=ankle_R))
+
+    ankle_mid = 0.5 * (np.asarray(ankle_L[:end], dtype=float) + np.asarray(ankle_R[:end], dtype=float))
+    torque_mid_ext = np.full((end, 3), np.nan, dtype=float)
+    torque_L_ext = np.full((end, 3), np.nan, dtype=float)
+    torque_R_ext = np.full((end, 3), np.nan, dtype=float)
+    torque_mid_int_y_per_kg = np.full(end, np.nan, dtype=float)
+
+    for frame_idx in range(end):
+        side_force = {"L": np.zeros(3, dtype=float), "R": np.zeros(3, dtype=float)}
+        side_moment = {"L": np.zeros(3, dtype=float), "R": np.zeros(3, dtype=float)}
+        mid_moment = np.zeros(3, dtype=float)
+        any_contact = False
+        ambiguous = False
+
+        for fp_series in per_plate_payloads:
+            if not bool(fp_series.valid_contact_mask[frame_idx]):
+                continue
+            if not (
+                np.all(np.isfinite(fp_series.grf_lab[frame_idx]))
+                and np.all(np.isfinite(fp_series.grm_lab_at_fp_origin[frame_idx]))
+                and np.isfinite(fp_series.cop_x_m[frame_idx])
+                and np.isfinite(fp_series.cop_y_m[frame_idx])
+            ):
+                continue
+
+            any_contact = True
+            cop_xy = np.asarray([fp_series.cop_x_m[frame_idx], fp_series.cop_y_m[frame_idx]], dtype=float)
+            ankle_l_xy = np.asarray(ankle_L[frame_idx, 0:2], dtype=float)
+            ankle_r_xy = np.asarray(ankle_R[frame_idx, 0:2], dtype=float)
+            d_l = float(np.sum((cop_xy - ankle_l_xy) ** 2))
+            d_r = float(np.sum((cop_xy - ankle_r_xy) ** 2))
+            side = "L" if d_l <= d_r else "R"
+
+            bounds_x = fp_series.corners_lab[:, 0]
+            bounds_y = fp_series.corners_lab[:, 1]
+            both_inside = (
+                np.isfinite(ankle_L[frame_idx, 0])
+                and np.isfinite(ankle_L[frame_idx, 1])
+                and np.isfinite(ankle_R[frame_idx, 0])
+                and np.isfinite(ankle_R[frame_idx, 1])
+                and float(np.nanmin(bounds_x)) <= float(ankle_L[frame_idx, 0]) <= float(np.nanmax(bounds_x))
+                and float(np.nanmin(bounds_y)) <= float(ankle_L[frame_idx, 1]) <= float(np.nanmax(bounds_y))
+                and float(np.nanmin(bounds_x)) <= float(ankle_R[frame_idx, 0]) <= float(np.nanmax(bounds_x))
+                and float(np.nanmin(bounds_y)) <= float(ankle_R[frame_idx, 1]) <= float(np.nanmax(bounds_y))
+            )
+            if both_inside:
+                ambiguous = True
+                break
+
+            force = np.asarray(fp_series.grf_lab[frame_idx], dtype=float)
+            moment_origin = np.asarray(fp_series.grm_lab_at_fp_origin[frame_idx], dtype=float)
+            fp_origin = np.asarray(fp_series.fp_origin_lab, dtype=float)
+            side_ankle = ankle_L[frame_idx] if side == "L" else ankle_R[frame_idx]
+            side_force[side] = side_force[side] + force
+            side_moment[side] = side_moment[side] + moment_origin + np.cross(fp_origin - side_ankle, force)
+            mid_moment = mid_moment + moment_origin + np.cross(fp_origin - ankle_mid[frame_idx], force)
+
+        if (not any_contact) or ambiguous:
+            continue
+
+        if np.linalg.norm(side_force["L"]) > 0 or np.linalg.norm(side_moment["L"]) > 0:
+            torque_L_ext[frame_idx] = side_moment["L"]
+        if np.linalg.norm(side_force["R"]) > 0 or np.linalg.norm(side_moment["R"]) > 0:
+            torque_R_ext[frame_idx] = side_moment["R"]
+        torque_mid_ext[frame_idx] = mid_moment
+        if body_mass_kg is not None and float(body_mass_kg) > 0:
+            torque_mid_int_y_per_kg[frame_idx] = (-mid_moment[1]) / float(body_mass_kg)
+
+    payload["AnkleTorqueMid_ext_X_Nm"] = torque_mid_ext[:, 0]
+    payload["AnkleTorqueMid_ext_Y_Nm"] = torque_mid_ext[:, 1]
+    payload["AnkleTorqueMid_ext_Z_Nm"] = torque_mid_ext[:, 2]
+    payload["AnkleTorqueMid_int_X_Nm"] = -torque_mid_ext[:, 0]
+    payload["AnkleTorqueMid_int_Y_Nm"] = -torque_mid_ext[:, 1]
+    payload["AnkleTorqueMid_int_Z_Nm"] = -torque_mid_ext[:, 2]
+    payload["AnkleTorqueMid_int_Y_Nm_per_kg"] = torque_mid_int_y_per_kg
+    payload["AnkleTorqueL_ext_X_Nm"] = torque_L_ext[:, 0]
+    payload["AnkleTorqueL_ext_Y_Nm"] = torque_L_ext[:, 1]
+    payload["AnkleTorqueL_ext_Z_Nm"] = torque_L_ext[:, 2]
+    payload["AnkleTorqueL_int_X_Nm"] = -torque_L_ext[:, 0]
+    payload["AnkleTorqueL_int_Y_Nm"] = -torque_L_ext[:, 1]
+    payload["AnkleTorqueL_int_Z_Nm"] = -torque_L_ext[:, 2]
+    payload["AnkleTorqueR_ext_X_Nm"] = torque_R_ext[:, 0]
+    payload["AnkleTorqueR_ext_Y_Nm"] = torque_R_ext[:, 1]
+    payload["AnkleTorqueR_ext_Z_Nm"] = torque_R_ext[:, 2]
+    payload["AnkleTorqueR_int_X_Nm"] = -torque_R_ext[:, 0]
+    payload["AnkleTorqueR_int_Y_Nm"] = -torque_R_ext[:, 1]
+    payload["AnkleTorqueR_int_Z_Nm"] = -torque_R_ext[:, 2]
     for key in list(payload.keys()):
-        if key.startswith(("GRF_", "GRM_", "AnkleTorque")):
+        if key.startswith("AnkleTorque"):
             payload[key] = subtract_baseline_at_index(payload[key], onset0)
 
     raw_wrench_payload = {
-        "fp_origin_lab": np.asarray(fp.origin_lab, dtype=float),
-        "grf_lab": np.asarray(F_stage01[:end], dtype=float),
-        "grm_lab_at_fp_origin": np.asarray(M_stage01[:end], dtype=float),
-        "cop_x_m": np.asarray(payload["COP_X_m"], dtype=float),
-        "cop_y_m": np.asarray(payload["COP_Y_m"], dtype=float),
+        "mode": "multi_plate_v3d",
+        "forceplates": per_plate_payloads,
     }
-
-    return int(fp.index_1based), payload, raw_wrench_payload
+    return list(selected_forceplate_ids), payload, raw_wrench_payload
 
 
 def main() -> None:
@@ -610,7 +805,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         default=str(_REPO_ROOT / "config.yaml"),
-        help="Config YAML path (forceplate.coordination overrides).",
+        help="Config YAML path (forceplate.coordination overrides + inverse-dynamics plate selection).",
     )
     parser.add_argument(
         "--out_csv",
@@ -622,12 +817,6 @@ def main() -> None:
         type=int,
         default=100,
         help="Assumed pre-frames used when trimming mocap around platform onset (default: 100).",
-    )
-    parser.add_argument(
-        "--force_plate",
-        type=int,
-        default=None,
-        help="Optional force plate index (1-based). If omitted, auto-select by |Fz|.",
     )
     parser.add_argument(
         "--fp_inertial_templates",
@@ -747,6 +936,7 @@ def main() -> None:
         raise FileNotFoundError(f"Inertial templates not found: {tmpl_path}")
     fp_inertial_templates = load_forceplate_inertial_templates(tmpl_path)
     fp_corner_overrides = _load_forceplate_corner_overrides(config_path)
+    inverse_dynamics_forceplate_ids = _load_inverse_dynamics_forceplate_selection(config_path)
     if fp_corner_overrides:
         enabled = ", ".join([f"FP{idx}" for idx in sorted(fp_corner_overrides.keys())])
         print(f"[INFO] forceplate corner override enabled: {enabled}")
@@ -844,6 +1034,7 @@ def main() -> None:
         try:
             force_plate_used, torque_payload, raw_wrench_payload = _compute_ankle_torque_payload(
                 c3d_file=c3d_file,
+                selected_forceplate_ids=inverse_dynamics_forceplate_ids,
                 velocity=float(velocity),
                 points=c3d.points,
                 labels=c3d.labels,
@@ -851,7 +1042,6 @@ def main() -> None:
                 end_frame=end_frame,
                 platform_onset_local=int(events.platform_onset_local),
                 platform_offset_local=int(events.platform_offset_local),
-                force_plate_index_1based=None if args.force_plate is None else int(args.force_plate),
                 body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
                 fp_inertial_templates=fp_inertial_templates,
                 fp_inertial_policy=str(args.fp_inertial_policy),
@@ -902,19 +1092,34 @@ def main() -> None:
                 if body_mass_kg is None:
                     print(f"[WARN] Joint moment computation skipped for {c3d_file.name}: body mass missing in meta sheet")
             else:
-                joint_moment_payload = compute_joint_moment_columns(
-                    points=c3d.points,
-                    labels=c3d.labels,
-                    frames=frames,
-                    joint_centers=joint_centers,
-                    rate_hz=rate_hz,
-                    body_mass_kg=float(body_mass_kg),
-                    fp_origin_lab=raw_wrench_payload["fp_origin_lab"],
-                    grf_lab=raw_wrench_payload["grf_lab"],
-                    grm_lab_at_fp_origin=raw_wrench_payload["grm_lab_at_fp_origin"],
-                    cop_x_m=raw_wrench_payload["cop_x_m"],
-                    cop_y_m=raw_wrench_payload["cop_y_m"],
-                )
+                if raw_wrench_payload["mode"] == "single_plate_strict":
+                    legacy = raw_wrench_payload["legacy_single_forceplate"]
+                    joint_moment_payload = compute_joint_moment_columns(
+                        points=c3d.points,
+                        labels=c3d.labels,
+                        frames=frames,
+                        joint_centers=joint_centers,
+                        rate_hz=rate_hz,
+                        body_mass_kg=float(body_mass_kg),
+                        fp_origin_lab=legacy["fp_origin_lab"],
+                        grf_lab=legacy["grf_lab"],
+                        grm_lab_at_fp_origin=legacy["grm_lab_at_fp_origin"],
+                        cop_x_m=legacy["cop_x_m"],
+                        cop_y_m=legacy["cop_y_m"],
+                    )
+                    for joint in ("Hip_L", "Hip_R", "Knee_L", "Knee_R", "Ankle_L", "Ankle_R"):
+                        for axis in ("X", "Y", "Z"):
+                            joint_moment_payload[f"{joint}_ref_{axis}_Nm"] = np.full(end_frame, np.nan, dtype=float)
+                else:
+                    joint_moment_payload = compute_joint_moment_columns_multi(
+                        points=c3d.points,
+                        labels=c3d.labels,
+                        frames=frames,
+                        joint_centers=joint_centers,
+                        rate_hz=rate_hz,
+                        body_mass_kg=float(body_mass_kg),
+                        forceplates=raw_wrench_payload["forceplates"],
+                    )
                 if all(bool(np.all(np.isnan(v))) for v in joint_moment_payload.values()):
                     print(f"[WARN] Joint moment computation returned all-NaN for {c3d_file.name} (check COP/markers/labels)")
 

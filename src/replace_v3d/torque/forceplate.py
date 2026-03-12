@@ -307,6 +307,31 @@ def choose_active_force_platform(
     return best
 
 
+def select_force_platforms(
+    platforms: List[ForcePlatform],
+    indices_1based: List[int],
+) -> List[ForcePlatform]:
+    """Return forceplates in the exact config order.
+
+    Raises if any requested 1-based plate index does not exist in the C3D.
+    """
+
+    by_index = {int(fp.index_1based): fp for fp in platforms}
+    selected: List[ForcePlatform] = []
+    missing: List[int] = []
+    for idx in indices_1based:
+        fp = by_index.get(int(idx))
+        if fp is None:
+            missing.append(int(idx))
+            continue
+        selected.append(fp)
+
+    if missing:
+        missing_text = ", ".join([f"fp{idx}" for idx in missing])
+        raise ValueError(f"Requested forceplate(s) not found in C3D: {missing_text}")
+    return selected
+
+
 def apply_force_platform_corner_overrides(
     fp_coll: ForcePlatformCollection,
     corner_overrides: dict[int, np.ndarray] | None,

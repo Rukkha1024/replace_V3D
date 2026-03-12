@@ -4,6 +4,10 @@ signal_processing:
     order: 4
 
 forceplate:
+  analysis:
+    # Use any explicit forceplate subset for inverse dynamics.
+    # Examples: [fp1], [fp3], [fp1, fp3], [fp1, fp2, fp3]
+    use_for_inverse_dynamics: [fp3]
   coordination:
     fp1:
       enabled: false

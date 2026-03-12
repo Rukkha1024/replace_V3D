@@ -6,10 +6,10 @@ and forceplate wrenches. Outputs are intended for batch CSV export.
 """
 
 from .angular_velocity import compute_joint_angular_velocity_columns
-from .inverse_dynamics import compute_joint_moment_columns
+from .inverse_dynamics import compute_joint_moment_columns, compute_joint_moment_columns_multi
 
 __all__ = [
     "compute_joint_angular_velocity_columns",
     "compute_joint_moment_columns",
+    "compute_joint_moment_columns_multi",
 ]
-
