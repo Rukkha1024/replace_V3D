@@ -1,13 +1,15 @@
-"""Batch pipeline for all biomechanical variables.
+"""Batch pipeline for biomechanical time-series export.
 
-Processes multiple C3D files to compute COM, xCOM, joint angles
-(hip/knee/ankle/trunk/neck), ankle torque, and MOS, then exports
-a single CSV (all_trials_timeseries.csv).
+Computes COM/xCOM, MOS/BOS, joint angles/velocities, and per-plate forceplate
+raw signals (FP{n}_*). Internal joint moments (*_ref_*_Nm) are computed only in
+multi-plate inverse dynamics mode.
+Exports a single CSV (all_trials_timeseries.csv).
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,8 @@ import _bootstrap
 
 _bootstrap.ensure_src_on_path()
 _REPO_ROOT = _bootstrap.REPO_ROOT
+
+logger = logging.getLogger(__name__)
 
 from replace_v3d.joint_angles.sagittal import compute_lower_limb_angles
 from replace_v3d.io.c3d_reader import read_c3d_points
@@ -43,13 +47,11 @@ from replace_v3d.joint_angles.v3d_joint_angles import compute_v3d_joint_angles_w
 from replace_v3d.joint_angles.postprocess import postprocess_joint_angles
 from replace_v3d.joint_dynamics import (
     compute_joint_angular_velocity_columns,
-    compute_joint_moment_columns,
     compute_joint_moment_columns_multi,
 )
 from replace_v3d.joint_dynamics.inverse_dynamics import ForceAssignmentConfig, ForceplateWrenchSeries
 from replace_v3d.mos import compute_mos_timeseries
 from replace_v3d.signal.zeroing import subtract_baseline_at_index
-from replace_v3d.torque.ankle_torque import compute_ankle_torque_from_net_wrench
 from replace_v3d.torque.cop import compute_cop_stage01_xy
 from replace_v3d.torque.forceplate import (
     apply_force_platform_corner_overrides,
@@ -374,7 +376,7 @@ def _make_timeseries_dataframe(
     mos: Any,
     angles: Any | None,
     lower_limb_angles: Any | None,
-    torque_payload: dict[str, np.ndarray],
+    forceplate_payload: dict[str, np.ndarray],
     joint_velocity_payload: dict[str, np.ndarray],
     joint_moment_payload: dict[str, np.ndarray],
 ) -> pd.DataFrame:
@@ -511,7 +513,7 @@ def _make_timeseries_dataframe(
     for key, values in joint_moment_payload.items():
         payload[key] = values
 
-    for key, values in torque_payload.items():
+    for key, values in forceplate_payload.items():
         payload[key] = values
 
     return pl.DataFrame(payload).to_pandas()
@@ -536,51 +538,64 @@ def _expected_joint_moment_cols() -> list[str]:
     return cols
 
 
-def _expected_ankle_torque_cols() -> list[str]:
+def _expected_forceplate_raw_cols(selected_forceplate_ids: list[int]) -> list[str]:
     cols: list[str] = []
-    prefixes = [
-        "AnkleTorqueMid_ext",
-        "AnkleTorqueMid_int",
-        "AnkleTorqueL_ext",
-        "AnkleTorqueL_int",
-        "AnkleTorqueR_ext",
-        "AnkleTorqueR_int",
-    ]
-    for prefix in prefixes:
+    for plate_index_1based in selected_forceplate_ids:
+        prefix = f"FP{int(plate_index_1based)}"
         for axis in ("X", "Y", "Z"):
-            cols.append(f"{prefix}_{axis}_Nm")
-    cols.append("AnkleTorqueMid_int_Y_Nm_per_kg")
+            cols.append(f"{prefix}_GRF_{axis}_N")
+        for axis in ("X", "Y", "Z"):
+            cols.append(f"{prefix}_GRM_{axis}_Nm_at_FPorigin")
+        cols.append(f"{prefix}_COP_X_m")
+        cols.append(f"{prefix}_COP_Y_m")
+        cols.append(f"{prefix}_ContactValid")
     return cols
 
 
-def _nan_ankle_torque_payload(
+def _build_forceplate_raw_payload(
     *,
+    per_plate_payloads: list[ForceplateWrenchSeries],
+    selected_forceplate_ids: list[int],
     end_frame: int,
-    ankle_L: np.ndarray,
-    ankle_R: np.ndarray,
+    onset0: int,
 ) -> dict[str, np.ndarray]:
-    ankle_mid = 0.5 * (np.asarray(ankle_L, dtype=float)[:end_frame] + np.asarray(ankle_R, dtype=float)[:end_frame])
-    payload: dict[str, np.ndarray] = {
-        "L_ankleJC_X_m": np.asarray(ankle_L[:end_frame, 0], dtype=float),
-        "L_ankleJC_Y_m": np.asarray(ankle_L[:end_frame, 1], dtype=float),
-        "L_ankleJC_Z_m": np.asarray(ankle_L[:end_frame, 2], dtype=float),
-        "R_ankleJC_X_m": np.asarray(ankle_R[:end_frame, 0], dtype=float),
-        "R_ankleJC_Y_m": np.asarray(ankle_R[:end_frame, 1], dtype=float),
-        "R_ankleJC_Z_m": np.asarray(ankle_R[:end_frame, 2], dtype=float),
-        "AnkleMid_X_m": ankle_mid[:, 0],
-        "AnkleMid_Y_m": ankle_mid[:, 1],
-        "AnkleMid_Z_m": ankle_mid[:, 2],
-    }
-    for key in _expected_ankle_torque_cols():
-        payload[key] = np.full(end_frame, np.nan, dtype=float)
+    series_by_plate_id = {int(series.plate_index_1based): series for series in per_plate_payloads}
+    payload: dict[str, np.ndarray] = {}
+
+    for plate_index_1based in selected_forceplate_ids:
+        plate_index_1based = int(plate_index_1based)
+        if plate_index_1based not in series_by_plate_id:
+            raise ValueError(f"Missing forceplate series for selected plate: fp{plate_index_1based}")
+        series = series_by_plate_id[plate_index_1based]
+
+        prefix = f"FP{plate_index_1based}"
+        grf = np.asarray(series.grf_lab[:end_frame], dtype=float)
+        grm = np.asarray(series.grm_lab_at_fp_origin[:end_frame], dtype=float)
+        payload[f"{prefix}_GRF_X_N"] = subtract_baseline_at_index(grf[:, 0], onset0)
+        payload[f"{prefix}_GRF_Y_N"] = subtract_baseline_at_index(grf[:, 1], onset0)
+        payload[f"{prefix}_GRF_Z_N"] = subtract_baseline_at_index(grf[:, 2], onset0)
+        payload[f"{prefix}_GRM_X_Nm_at_FPorigin"] = subtract_baseline_at_index(grm[:, 0], onset0)
+        payload[f"{prefix}_GRM_Y_Nm_at_FPorigin"] = subtract_baseline_at_index(grm[:, 1], onset0)
+        payload[f"{prefix}_GRM_Z_Nm_at_FPorigin"] = subtract_baseline_at_index(grm[:, 2], onset0)
+        payload[f"{prefix}_COP_X_m"] = np.asarray(series.cop_x_m[:end_frame], dtype=float)
+        payload[f"{prefix}_COP_Y_m"] = np.asarray(series.cop_y_m[:end_frame], dtype=float)
+        payload[f"{prefix}_ContactValid"] = np.asarray(series.valid_contact_mask[:end_frame], dtype=bool)
+
+    missing = [c for c in _expected_forceplate_raw_cols(selected_forceplate_ids) if c not in payload]
+    if missing:
+        raise RuntimeError(f"Forceplate raw payload missing expected columns: {missing}")
     return payload
+
+
+def _nan_joint_moment_payload_all(end_frame: int) -> dict[str, np.ndarray]:
+    return {c: np.full(int(end_frame), np.nan, dtype=float) for c in _expected_joint_moment_cols()}
 
 
 def _forceplate_selection_text(indices_1based: list[int]) -> str:
     return ",".join([f"fp{idx}" for idx in indices_1based])
 
 
-def _compute_ankle_torque_payload(
+def _compute_inverse_dynamics_payload(
     *,
     c3d_file: Path,
     selected_forceplate_ids: list[int],
@@ -591,7 +606,6 @@ def _compute_ankle_torque_payload(
     end_frame: int,
     platform_onset_local: int,
     platform_offset_local: int,
-    body_mass_kg: float | None,
     fp_inertial_templates: dict[int, Any],
     fp_inertial_policy: str,
     fp_inertial_qc_fz_threshold_n: float,
@@ -609,10 +623,6 @@ def _compute_ankle_torque_payload(
             "Check that C3D is trimmed consistently."
         )
 
-    jc = compute_joint_centers(points, labels)
-    ankle_L = jc["ankle_L"]
-    ankle_R = jc["ankle_R"]
-
     frames0 = np.arange(n_frames, dtype=int)
     onset0 = int(platform_onset_local) - 1
     offset0 = int(platform_offset_local) - 1
@@ -621,13 +631,13 @@ def _compute_ankle_torque_payload(
     end = int(end_frame)
     if onset0 < 0 or onset0 >= end:
         raise ValueError(
-            "platform_onset_local out of range for torque payload window: "
+            "platform_onset_local out of range for forceplate payload window: "
             f"platform_onset_local={platform_onset_local}, onset0={onset0}, end_frame={end_frame}."
         )
 
     selected_platforms = select_force_platforms(fp_coll.platforms, selected_forceplate_ids)
     selected_text = _forceplate_selection_text(selected_forceplate_ids)
-    print(f"[INFO] inverse-dynamics forceplates from config: [{selected_text}]")
+    logger.info("inverse-dynamics forceplates from config: [%s]", selected_text)
 
     per_plate_payloads: list[ForceplateWrenchSeries] = []
     for fp in selected_platforms:
@@ -673,7 +683,7 @@ def _compute_ankle_torque_payload(
             )
             if fp_inertial_qc_strict:
                 raise ValueError(msg)
-            print(msg)
+            logger.warning("%s", msg)
 
         F_stage01 = analog_used[:, idx[0:3]]
         M_stage01 = analog_used[:, idx[3:6]]
@@ -683,7 +693,12 @@ def _compute_ankle_torque_payload(
         )
         cop_x_abs = cop_stage01_xy[:, 0] + float(fp.origin_lab[0])
         cop_y_abs = cop_stage01_xy[:, 1] + float(fp.origin_lab[1])
-        valid_contact_mask = np.isfinite(cop_stage01_xy[:, 0]) & np.isfinite(cop_stage01_xy[:, 1])
+        fz = np.asarray(F_stage01[:, 2], dtype=float)
+        valid_contact_mask = (
+            np.isfinite(cop_stage01_xy[:, 0])
+            & np.isfinite(cop_stage01_xy[:, 1])
+            & (np.abs(fz) >= float(fp_inertial_qc_fz_threshold_n))
+        )
 
         per_plate_payloads.append(
             ForceplateWrenchSeries(
@@ -698,90 +713,39 @@ def _compute_ankle_torque_payload(
             )
         )
 
+    mode = "single_plate_strict" if len(selected_platforms) == 1 else "multi_plate_v3d"
+    logger.info("mode=%s", mode)
+    if mode == "single_plate_strict":
+        logger.info("lower-limb torque/joint moment skipped because only one forceplate was selected")
+
     payload: dict[str, Any] = {
         "time_from_platform_onset_s": time_from_onset[:end],
         "inverse_dynamics_forceplates": [selected_text] * end,
+        "inverse_dynamics_mode": [mode] * end,
     }
-
-    if len(selected_platforms) == 1:
-        fp_series = per_plate_payloads[0]
-        fp = selected_platforms[0]
-        print("[INFO] mode=single_plate_strict")
-        print("[INFO] lower-limb torque/joint moment skipped because only one forceplate was selected")
-
-        res = compute_ankle_torque_from_net_wrench(
-            F_lab=fp_series.grf_lab,
-            M_lab_at_fp_origin=fp_series.grm_lab_at_fp_origin,
-            fp_origin_lab=fp_series.fp_origin_lab,
-            ankle_L=ankle_L[:end],
-            ankle_R=ankle_R[:end],
-            body_mass_kg=body_mass_kg,
-        )
-        payload.update(
-            {
-                "inverse_dynamics_mode": ["single_plate_strict"] * end,
-                "GRF_X_N": res.F_lab[:end, 0],
-                "GRF_Y_N": res.F_lab[:end, 1],
-                "GRF_Z_N": res.F_lab[:end, 2],
-                "GRM_X_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 0],
-                "GRM_Y_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 1],
-                "GRM_Z_Nm_at_FPorigin": res.M_lab_at_fp_origin[:end, 2],
-                "COP_X_m": fp_series.cop_x_m[:end],
-                "COP_Y_m": fp_series.cop_y_m[:end],
-            }
-        )
-        payload.update(_nan_ankle_torque_payload(end_frame=end, ankle_L=ankle_L, ankle_R=ankle_R))
-        for key in list(payload.keys()):
-            if key.startswith(("GRF_", "GRM_")):
-                payload[key] = subtract_baseline_at_index(payload[key], onset0)
-
-        raw_wrench_payload = {
-            "mode": "single_plate_strict",
-            "forceplates": per_plate_payloads,
-            "legacy_single_forceplate": {
-                "fp_origin_lab": np.asarray(fp.origin_lab, dtype=float),
-                "grf_lab": np.asarray(fp_series.grf_lab, dtype=float),
-                "grm_lab_at_fp_origin": np.asarray(fp_series.grm_lab_at_fp_origin, dtype=float),
-                "cop_x_m": np.asarray(fp_series.cop_x_m, dtype=float),
-                "cop_y_m": np.asarray(fp_series.cop_y_m, dtype=float),
-            },
-        }
-        return list(selected_forceplate_ids), payload, raw_wrench_payload
-
-    print("[INFO] mode=multi_plate_v3d")
     payload.update(
-        {
-            "inverse_dynamics_mode": ["multi_plate_v3d"] * end,
-            "GRF_X_N": np.full(end, np.nan, dtype=float),
-            "GRF_Y_N": np.full(end, np.nan, dtype=float),
-            "GRF_Z_N": np.full(end, np.nan, dtype=float),
-            "GRM_X_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
-            "GRM_Y_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
-            "GRM_Z_Nm_at_FPorigin": np.full(end, np.nan, dtype=float),
-            "COP_X_m": np.full(end, np.nan, dtype=float),
-            "COP_Y_m": np.full(end, np.nan, dtype=float),
-        }
+        _build_forceplate_raw_payload(
+            per_plate_payloads=per_plate_payloads,
+            selected_forceplate_ids=selected_forceplate_ids,
+            end_frame=end,
+            onset0=onset0,
+        )
     )
-    payload.update(_nan_ankle_torque_payload(end_frame=end, ankle_L=ankle_L, ankle_R=ankle_R))
-    print("[INFO] multi-plate ankle torque columns are set to NaN by design")
 
-    raw_wrench_payload = {
-        "mode": "multi_plate_v3d",
-        "forceplates": per_plate_payloads,
-    }
+    raw_wrench_payload = {"mode": mode, "forceplates": per_plate_payloads}
     return list(selected_forceplate_ids), payload, raw_wrench_payload
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Batch export unified time series (MOS/COM/xCOM/BOS + joint angles + ankle torque) from C3D files.\n"
+            "Batch export unified time series (MOS/COM/xCOM/BOS + joint angles + inverse dynamics meta) from C3D files.\n"
             "\n"
             "Output is a long-format CSV: one row per subject-velocity-trial x MocapFrame.\n"
             "\n"
             "Notes:\n"
             "- Default exports the full trimmed C3D range (use --analysis_mode prestep for legacy preStep export).\n"
-            "- FORCE_PLATFORM/ANALOG is required (torque); missing forceplate aborts the run.\n"
+            "- FORCE_PLATFORM/ANALOG is required (forceplates); missing forceplate aborts the run.\n"
         )
     )
     parser.add_argument("--c3d_dir", required=True, help="Directory containing C3D files (recursive).")
@@ -877,6 +841,10 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
     c3d_dir = Path(args.c3d_dir)
     event_xlsm = Path(args.event_xlsm)
@@ -897,7 +865,7 @@ def main() -> None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_path = out_csv.with_name(f"{out_csv.name}.bak_{timestamp}")
                 out_csv.replace(backup_path)
-                print(f"[INFO] Existing output backed up: {backup_path}")
+                logger.info("Existing output backed up: %s", backup_path)
             else:
                 out_csv.unlink()
         else:
@@ -924,7 +892,7 @@ def main() -> None:
     force_assignment_config = _load_force_assignment_config(config_path)
     if fp_corner_overrides:
         enabled = ", ".join([f"FP{idx}" for idx in sorted(fp_corner_overrides.keys())])
-        print(f"[INFO] forceplate corner override enabled: {enabled}")
+        logger.info("forceplate corner override enabled: %s", enabled)
 
     allowed_trial_keys: set[str] | None = None
     trial_meta_lookup: dict[str, dict[str, Any]] | None = None
@@ -946,14 +914,14 @@ def main() -> None:
                 "state": row["state"],
                 "mixed": row["mixed"],
             }
-        print(
-            "[INFO] meta_prefilter enabled: "
-            f"subjects={prefilter_trials.select('subject').unique().height}, "
-            f"trials={prefilter_trials.height}"
+        logger.info(
+            "meta_prefilter enabled: subjects=%s, trials=%s",
+            prefilter_trials.select("subject").unique().height,
+            prefilter_trials.height,
         )
 
     for c3d_file in c3d_files:
-        # Subject/token + events matching can be skipped. Torque (forceplate) must abort.
+        # Subject/token + events matching can be skipped. Forceplates must abort.
         try:
             subject_token, velocity, trial = parse_subject_velocity_trial_from_filename(c3d_file.name)
             subject = resolve_subject_from_token(event_xlsm, subject_token)
@@ -961,14 +929,18 @@ def main() -> None:
             message = f"[SKIP] {c3d_file.name}: {exc}"
             if args.skip_unmatched:
                 skipped += 1
-                print(message)
+                logger.warning("%s", message)
                 continue
             raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
 
         trial_key = build_trial_key(str(subject).strip(), float(velocity), int(trial))
         if (allowed_trial_keys is not None) and (trial_key not in allowed_trial_keys):
             skipped += 1
-            print(f"[SKIP][meta_prefilter] {c3d_file.name}: trial={trial_key} not selected by meta filter")
+            logger.info(
+                "[SKIP][meta_prefilter] %s: trial=%s not selected by meta filter",
+                c3d_file.name,
+                trial_key,
+            )
             continue
         trial_meta = None if trial_meta_lookup is None else trial_meta_lookup.get(trial_key)
 
@@ -990,7 +962,7 @@ def main() -> None:
             message = f"[SKIP] {c3d_file.name}: {exc}"
             if args.skip_unmatched:
                 skipped += 1
-                print(message)
+                logger.warning("%s", message)
                 continue
             raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
 
@@ -1001,7 +973,7 @@ def main() -> None:
             message = f"[SKIP] {c3d_file.name}: cannot read C3D points ({exc})"
             if args.skip_unmatched:
                 skipped += 1
-                print(message)
+                logger.warning("%s", message)
                 continue
             raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
 
@@ -1015,9 +987,9 @@ def main() -> None:
             end_frame = total_frames
         end_frame = max(1, min(end_frame, total_frames))
 
-        # Torque requires FORCE_PLATFORM/ANALOG; always abort on failure.
+        # Forceplate extraction requires FORCE_PLATFORM/ANALOG; always abort on failure.
         try:
-            force_plate_used, torque_payload, raw_wrench_payload = _compute_ankle_torque_payload(
+            force_plate_used, forceplate_payload, raw_wrench_payload = _compute_inverse_dynamics_payload(
                 c3d_file=c3d_file,
                 selected_forceplate_ids=inverse_dynamics_forceplate_ids,
                 velocity=float(velocity),
@@ -1027,7 +999,6 @@ def main() -> None:
                 end_frame=end_frame,
                 platform_onset_local=int(events.platform_onset_local),
                 platform_offset_local=int(events.platform_offset_local),
-                body_mass_kg=None if body_mass_kg is None else float(body_mass_kg),
                 fp_inertial_templates=fp_inertial_templates,
                 fp_inertial_policy=str(args.fp_inertial_policy),
                 fp_inertial_qc_fz_threshold_n=float(args.fp_inertial_qc_fz_threshold),
@@ -1036,7 +1007,15 @@ def main() -> None:
                 fp_corner_overrides=fp_corner_overrides,
             )
         except Exception as exc:
-            raise RuntimeError(f"Forceplate/torque extraction failed for '{c3d_file.name}': {exc}") from exc
+            logger.exception(
+                "[ID][FAIL] file=%s subject=%s velocity=%s trial=%s forceplates=%s",
+                c3d_file.name,
+                subject,
+                velocity,
+                trial,
+                inverse_dynamics_forceplate_ids,
+            )
+            raise RuntimeError(f"Forceplate extraction failed for '{c3d_file.name}': {exc}") from exc
 
         # Remaining computations can be skipped if requested.
         try:
@@ -1063,7 +1042,7 @@ def main() -> None:
             except Exception as exc:
                 # Keep exporting COM/COP/GRF/MoS for trials that lack required
                 # joint-angle markers (e.g., T10). Export NaNs for joint angles.
-                print(f"[WARN] Joint angle computation skipped for {c3d_file.name}: {exc}")
+                logger.warning("Joint angle computation skipped for %s: %s", c3d_file.name, exc)
 
             joint_velocity_payload: dict[str, np.ndarray]
             if frames is None:
@@ -1072,30 +1051,17 @@ def main() -> None:
                 joint_velocity_payload = compute_joint_angular_velocity_columns(frames, rate_hz=rate_hz)
 
             joint_moment_payload: dict[str, np.ndarray]
-            if frames is None or joint_centers is None or body_mass_kg is None:
-                joint_moment_payload = {c: np.full(end_frame, np.nan, dtype=float) for c in _expected_joint_moment_cols()}
+            if raw_wrench_payload["mode"] == "single_plate_strict":
+                joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
+            elif frames is None or joint_centers is None or body_mass_kg is None:
+                joint_moment_payload = _nan_joint_moment_payload_all(end_frame)
                 if body_mass_kg is None:
-                    print(f"[WARN] Joint moment computation skipped for {c3d_file.name}: body mass missing in meta sheet")
-            else:
-                if raw_wrench_payload["mode"] == "single_plate_strict":
-                    legacy = raw_wrench_payload["legacy_single_forceplate"]
-                    joint_moment_payload = compute_joint_moment_columns(
-                        points=c3d.points,
-                        labels=c3d.labels,
-                        frames=frames,
-                        joint_centers=joint_centers,
-                        rate_hz=rate_hz,
-                        body_mass_kg=float(body_mass_kg),
-                        fp_origin_lab=legacy["fp_origin_lab"],
-                        grf_lab=legacy["grf_lab"],
-                        grm_lab_at_fp_origin=legacy["grm_lab_at_fp_origin"],
-                        cop_x_m=legacy["cop_x_m"],
-                        cop_y_m=legacy["cop_y_m"],
+                    logger.warning(
+                        "Joint moment computation skipped for %s: body mass missing in meta sheet",
+                        c3d_file.name,
                     )
-                    for joint in ("Hip_L", "Hip_R", "Knee_L", "Knee_R", "Ankle_L", "Ankle_R"):
-                        for axis in ("X", "Y", "Z"):
-                            joint_moment_payload[f"{joint}_ref_{axis}_Nm"] = np.full(end_frame, np.nan, dtype=float)
-                else:
+            else:
+                try:
                     joint_moment_payload = compute_joint_moment_columns_multi(
                         points=c3d.points,
                         labels=c3d.labels,
@@ -1106,8 +1072,21 @@ def main() -> None:
                         forceplates=raw_wrench_payload["forceplates"],
                         assignment_config=force_assignment_config,
                     )
+                except Exception:
+                    logger.exception(
+                        "[ID][multi][FAIL] file=%s subject=%s velocity=%s trial=%s forceplates=%s",
+                        c3d_file.name,
+                        subject,
+                        velocity,
+                        trial,
+                        inverse_dynamics_forceplate_ids,
+                    )
+                    raise
                 if all(bool(np.all(np.isnan(v))) for v in joint_moment_payload.values()):
-                    print(f"[WARN] Joint moment computation returned all-NaN for {c3d_file.name} (check COP/markers/labels)")
+                    logger.warning(
+                        "Joint moment computation returned all-NaN for %s (check COP/markers/labels)",
+                        c3d_file.name,
+                    )
 
             lower_limb_angles = None
             try:
@@ -1135,7 +1114,7 @@ def main() -> None:
                 mos=mos,
                 angles=angles,
                 lower_limb_angles=lower_limb_angles,
-                torque_payload=torque_payload,
+                forceplate_payload=forceplate_payload,
                 joint_velocity_payload=joint_velocity_payload,
                 joint_moment_payload=joint_moment_payload,
             )
@@ -1154,13 +1133,22 @@ def main() -> None:
             message = f"[SKIP] {c3d_file.name}: {exc}"
             if args.skip_unmatched:
                 skipped += 1
-                print(message)
+                logger.warning("%s", message)
                 continue
+            logger.exception(
+                "[FAIL] file=%s subject=%s velocity=%s trial=%s mode=%s forceplates=%s",
+                c3d_file.name,
+                subject,
+                velocity,
+                trial,
+                raw_wrench_payload.get("mode"),
+                inverse_dynamics_forceplate_ids,
+            )
             raise RuntimeError(f"Failed on file '{c3d_file}': {exc}") from exc
 
-    print(f"[OK] Saved: {out_csv}")
-    print(f"Processed files: {processed}")
-    print(f"Skipped files: {skipped}")
+    logger.info("Saved: %s", out_csv)
+    logger.info("Processed files: %s", processed)
+    logger.info("Skipped files: %s", skipped)
 
 
 if __name__ == "__main__":

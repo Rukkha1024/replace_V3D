@@ -11,14 +11,15 @@ import polars as pl
 
 def _is_forceplate_family_col(col: str) -> bool:
     prefixes = (
-        "GRF_",
-        "GRM_",
-        "COP_",
-        "AnkleTorque",
-        "FP_origin_",
-        "L_ankleJC_",
-        "R_ankleJC_",
-        "AnkleMid_",
+        "FP",
+        "GRF_",  # legacy
+        "GRM_",  # legacy
+        "COP_",  # legacy
+        "AnkleTorque",  # legacy
+        "FP_origin_",  # legacy
+        "L_ankleJC_",  # legacy
+        "R_ankleJC_",  # legacy
+        "AnkleMid_",  # legacy
         "time_from_platform_onset_s",
     )
     return col.startswith(prefixes)

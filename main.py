@@ -86,7 +86,7 @@ def _compare_md5(outputs: list[Path], reference_dir: Path, output_root: Path) ->
 def _make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         allow_abbrev=False,
-        description="Batch export unified time series CSV (MOS/COM/xCOM/BOS + joint angles + ankle torque)."
+        description="Batch export unified time series CSV (MOS/COM/xCOM/BOS + joint angles + forceplate raw + joint moments)."
     )
     p.add_argument("--c3d_dir", default=str(_REPO_ROOT / "data" / "all_data"))
     p.add_argument("--event_xlsm", default=str(_REPO_ROOT / "data" / "perturb_inform.xlsm"))

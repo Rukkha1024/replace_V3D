@@ -62,9 +62,6 @@ XCOM_OUTSIDE_COLOR = "mediumvioletred"
 XCOM_GHOST_COLOR = "purple"
 # COP is exported as absolute (lab) XY in the pipeline.
 COP_SOURCE_CHOICES = ("absolute",)
-COP_COLUMNS_BY_SOURCE: dict[str, tuple[str, str]] = {
-    "absolute": ("COP_X_m", "COP_Y_m"),
-}
 COP_TRAIL_COLOR = "tab:brown"
 COP_INSIDE_COLOR = "peru"
 COP_OUTSIDE_COLOR = "firebrick"
@@ -184,6 +181,7 @@ class RenderConfig:
     dpi: int
     gif_name_suffix: str
     cop_source: str
+    cop_fp: int | None
     rotate_ccw_deg: int
     show_trial_state: bool
     start_from_platform_onset_offset: int | None = None
@@ -291,7 +289,16 @@ def parse_args() -> argparse.Namespace:
         default="absolute",
         help=(
             "COP source for overlay. "
-            "'absolute' uses COP_X_m/COP_Y_m (already in lab coordinates)."
+            "'absolute' uses legacy COP_X_m/COP_Y_m if present; otherwise uses FP{n}_COP_X_m/FP{n}_COP_Y_m."
+        ),
+    )
+    ap.add_argument(
+        "--cop_fp",
+        type=int,
+        default=None,
+        help=(
+            "When multiple FP{n}_COP_* columns exist, select which forceplate COP to overlay "
+            "(e.g., --cop_fp 3). If omitted and multiple are present, COP overlay is disabled."
         ),
     )
     return ap.parse_args()
@@ -491,18 +498,55 @@ def warn_cop_once(*, key: str, message: str) -> None:
     _COP_WARNED_KEYS.add(key)
 
 
-def warn_missing_cop_columns_once(*, columns: list[str], cop_source: str) -> list[str]:
-    cols = COP_COLUMNS_BY_SOURCE[cop_source]
-    missing = [col for col in cols if col not in columns]
-    if missing:
+def _detect_forceplate_cop_ids(columns: list[str]) -> list[int]:
+    ids: set[int] = set()
+    for col in columns:
+        m = re.match(r"^FP(\\d+)_COP_X_m$", str(col))
+        if not m:
+            continue
+        ids.add(int(m.group(1)))
+    out = sorted(ids)
+    out = [fp for fp in out if (f"FP{fp}_COP_X_m" in columns and f"FP{fp}_COP_Y_m" in columns)]
+    return out
+
+
+def resolve_cop_columns(
+    *,
+    columns: list[str],
+    cop_source: str,
+    cop_fp: int | None,
+) -> tuple[str, str, str] | None:
+    _ = cop_source
+    if "COP_X_m" in columns and "COP_Y_m" in columns:
+        return ("COP_X_m", "COP_Y_m", "legacy")
+
+    fp_ids = _detect_forceplate_cop_ids(columns)
+    if not fp_ids:
+        return None
+    if cop_fp is None:
+        if len(fp_ids) == 1:
+            fp = int(fp_ids[0])
+            return (f"FP{fp}_COP_X_m", f"FP{fp}_COP_Y_m", f"FP{fp}")
         warn_cop_once(
-            key=f"missing:{cop_source}:{','.join(missing)}",
+            key=f"ambiguous_fp_cop:{','.join(map(str, fp_ids))}",
             message=(
-                f"Warning: COP overlay disabled for cop_source={cop_source}. "
-                f"Missing columns: {', '.join(missing)}"
+                "Warning: COP overlay disabled because multiple FP{n}_COP_* columns exist. "
+                f"Pass --cop_fp to select one. Available: {fp_ids}"
             ),
         )
-    return missing
+        return None
+
+    fp = int(cop_fp)
+    if fp not in fp_ids:
+        warn_cop_once(
+            key=f"invalid_cop_fp:{fp}",
+            message=(
+                f"Warning: COP overlay disabled because --cop_fp {fp} not found in CSV. "
+                f"Available: {fp_ids}"
+            ),
+        )
+        return None
+    return (f"FP{fp}_COP_X_m", f"FP{fp}_COP_Y_m", f"FP{fp}")
 
 
 def warn_disabled_cop_overlay_once(*, cop_source: str, reason: str) -> None:
@@ -526,6 +570,7 @@ def build_trial_series(
     trial: int,
     *,
     cop_source: str,
+    cop_fp: int | None,
 ) -> TrialSeries:
     trial_df = trial_df.sort("MocapFrame")
     cop_source_norm = normalize_cop_source(cop_source)
@@ -594,31 +639,30 @@ def build_trial_series(
     cop_valid_mask: np.ndarray | None = None
     cop_inside_mask: np.ndarray | None = None
     xy_shift_for_onset0 = (0.0, 0.0)
-    missing_cop = warn_missing_cop_columns_once(columns=trial_df.columns, cop_source=cop_source_norm)
-    if missing_cop:
-        cop_disabled_reason = f"missing columns: {', '.join(missing_cop)}"
+    cop_cols = resolve_cop_columns(columns=trial_df.columns, cop_source=cop_source_norm, cop_fp=cop_fp)
+    cop_label = "disabled"
+    if cop_cols is None:
+        cop_disabled_reason = "missing/ambiguous COP columns"
+        warn_disabled_cop_overlay_once(cop_source=cop_source_norm, reason=cop_disabled_reason)
     else:
-        cop_col_x, cop_col_y = COP_COLUMNS_BY_SOURCE[cop_source_norm]
+        cop_col_x, cop_col_y, cop_label = cop_cols
         cop_x_arr = np.asarray(trial_df.get_column(cop_col_x).to_list(), dtype=float)
         cop_y_arr = np.asarray(trial_df.get_column(cop_col_y).to_list(), dtype=float)
         cop_finite_mask = np.isfinite(cop_x_arr) & np.isfinite(cop_y_arr)
         cop_compare_x = cop_x_arr
         cop_compare_y = cop_y_arr
 
-        if cop_disabled_reason is None:
-            cop_enabled = True
-            cop_x = cop_x_arr
-            cop_y = cop_y_arr
-            cop_valid_mask = valid_mask & cop_finite_mask
-            cop_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
-            cop_inside_mask[cop_valid_mask] = (
-                (cop_compare_x[cop_valid_mask] >= bos_minx[cop_valid_mask])
-                & (cop_compare_x[cop_valid_mask] <= bos_maxx[cop_valid_mask])
-                & (cop_compare_y[cop_valid_mask] >= bos_miny[cop_valid_mask])
-                & (cop_compare_y[cop_valid_mask] <= bos_maxy[cop_valid_mask])
-            )
-        else:
-            warn_disabled_cop_overlay_once(cop_source=cop_source_norm, reason=cop_disabled_reason)
+        cop_enabled = True
+        cop_x = cop_x_arr
+        cop_y = cop_y_arr
+        cop_valid_mask = valid_mask & cop_finite_mask
+        cop_inside_mask = np.zeros(valid_mask.shape, dtype=bool)
+        cop_inside_mask[cop_valid_mask] = (
+            (cop_compare_x[cop_valid_mask] >= bos_minx[cop_valid_mask])
+            & (cop_compare_x[cop_valid_mask] <= bos_maxx[cop_valid_mask])
+            & (cop_compare_y[cop_valid_mask] >= bos_miny[cop_valid_mask])
+            & (cop_compare_y[cop_valid_mask] <= bos_maxy[cop_valid_mask])
+        )
 
     return TrialSeries(
         subject=subject,
@@ -639,7 +683,7 @@ def build_trial_series(
         xcom_y=xcom_y,
         xcom_valid_mask=xcom_valid_mask,
         xcom_inside_mask=xcom_inside_mask,
-        cop_source=cop_source_norm,
+        cop_source=f"{cop_source_norm}:{cop_label}",
         cop_enabled=cop_enabled,
         cop_disabled_reason=cop_disabled_reason,
         cop_x=cop_x,
@@ -2202,6 +2246,7 @@ def build_render_config(args: argparse.Namespace, rotate_ccw_deg: int) -> Render
         dpi=int(args.dpi),
         gif_name_suffix=str(args.gif_name_suffix),
         cop_source=normalize_cop_source(str(args.cop_source)),
+        cop_fp=None if args.cop_fp is None else int(args.cop_fp),
         rotate_ccw_deg=int(rotate_ccw_deg),
         show_trial_state=bool(args.show_trial_state),
         start_from_platform_onset_offset=start_offset,
@@ -2245,6 +2290,7 @@ def render_one_trial(
         velocity=key.velocity,
         trial=key.trial,
         cop_source=config.cop_source,
+        cop_fp=config.cop_fp,
     )
     display = build_display_series(series, rotate_ccw_deg=config.rotate_ccw_deg)
     trial_state = resolve_trial_state(
@@ -2261,9 +2307,10 @@ def render_one_trial(
     )
     subject_out_dir = config.out_dir / str(key.subject)
     subject_out_dir.mkdir(parents=True, exist_ok=True)
+    cop_fp_suffix = "" if config.cop_fp is None else f"__copfp-{int(config.cop_fp)}"
     gif_base = (
         subject_out_dir
-        / f"{base_name}__{safe_name(config.gif_name_suffix)}__copsrc-{safe_name(config.cop_source)}"
+        / f"{base_name}__{safe_name(config.gif_name_suffix)}__copsrc-{safe_name(config.cop_source)}{cop_fp_suffix}"
     )
 
     if verbose:

@@ -1,18 +1,8 @@
 """Grid-plot visualization of biomechanical time-series.
 
-Reads all_trials_timeseries.csv and generates grid figures for subject/subject_velocity/total_mean modes.
-Supports --sample preview, --group_by mode, and --no-x_piecewise for raw time axis.
-Output: output/figures/grid_timeseries/
-
-# 전체파일 생성 command. 
-```
-conda run -n module python scripts/plot_grid_timeseries.py \
-  --group_by subject \
-  --csv output/all_trials_timeseries.csv \
-  --config config.yaml \
-  --out_dir output/figures/grid_timeseries
-```
-
+Reads `output/all_trials_timeseries.csv` and generates grid figures for
+subject/subject_velocity/total_mean groupings based on `config.yaml`.
+Output: `output/figures/grid_timeseries/`.
 """
 
 from __future__ import annotations
@@ -42,7 +32,7 @@ TIME_COL = "time_from_platform_onset_s"
 DEFAULT_SEGMENT_FRAMES = 100
 STEP_COLOR = "tab:orange"
 NONSTEP_COLOR = "tab:blue"
-_NO_ZERO_PREFIXES = ("MOS_", "BOS_")
+_NO_ZERO_PREFIXES = ("MOS_", "BOS_", "FP")
 
 
 def parse_args() -> argparse.Namespace:
@@ -197,7 +187,50 @@ def load_plot_specs(config_path: Path) -> tuple[Path | None, list[dict]]:
         raise FileNotFoundError(
             f"Config not found: {config_path}. Expected a YAML file with plot_grid_timeseries.*"
         )
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    def parse_forceplate_key(raw_value: object, *, field_name: str) -> int:
+        text = str(raw_value).strip().lower()
+        if not text.startswith("fp") or (not text[2:].isdigit()):
+            raise ValueError(f"{field_name} entries must look like fp1/fp2/fp3. Got: {raw_value!r}")
+        return int(text[2:])
+
+    def load_inverse_dynamics_forceplate_selection(config_root: dict) -> list[int]:
+        forceplate_cfg = config_root.get("forceplate")
+        if not isinstance(forceplate_cfg, dict):
+            raise ValueError("config.forceplate must be a mapping.")
+        analysis_cfg = forceplate_cfg.get("analysis")
+        if not isinstance(analysis_cfg, dict):
+            raise ValueError("config.forceplate.analysis must be a mapping.")
+        selected_raw = analysis_cfg.get("use_for_inverse_dynamics")
+        if not isinstance(selected_raw, list) or not selected_raw:
+            raise ValueError("forceplate.analysis.use_for_inverse_dynamics must be a non-empty list.")
+        selected_ids: list[int] = []
+        seen: set[int] = set()
+        for item in selected_raw:
+            idx = parse_forceplate_key(item, field_name="forceplate.analysis.use_for_inverse_dynamics")
+            if idx in seen:
+                raise ValueError(f"Duplicate inverse-dynamics forceplate selection is not allowed: fp{idx}")
+            seen.add(idx)
+            selected_ids.append(idx)
+        return selected_ids
+
+    def parse_mode_filter(raw_value: object, *, field_name: str) -> list[str] | None:
+        if raw_value is None:
+            return None
+        if not isinstance(raw_value, list):
+            raise ValueError(f"{field_name} must be a list of mode strings.")
+        modes: list[str] = []
+        for item in raw_value:
+            text = str(item).strip()
+            if not text:
+                continue
+            modes.append(text)
+        return modes if modes else None
+
+    def replace_fp_placeholder(text: str, fp: int) -> str:
+        return str(text).replace("{fp}", str(int(fp)))
+
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8-sig"))
     if not isinstance(raw, dict):
         raise ValueError("config.yaml must be a mapping at the top level")
     root = raw.get("plot_grid_timeseries")
@@ -213,14 +246,25 @@ def load_plot_specs(config_path: Path) -> tuple[Path | None, list[dict]]:
     if not isinstance(categories_raw, list) or not categories_raw:
         raise ValueError("plot_grid_timeseries.categories must be a non-empty list")
 
+    inverse_dynamics_forceplate_ids = load_inverse_dynamics_forceplate_selection(raw)
+
     categories: list[dict] = []
     for cat_idx, cat in enumerate(categories_raw):
         if not isinstance(cat, dict):
             raise ValueError(f"categories[{cat_idx}] must be a mapping")
         tag = str(cat.get("tag", "")).strip()
+        if not tag:
+            raise ValueError(f"categories[{cat_idx}] requires 'tag'")
+
+        expand = bool(cat.get("expand_from_inverse_dynamics_forceplates", False))
+        base_mode_filter = parse_mode_filter(cat.get("mode_filter"), field_name=f"categories[{cat_idx}].mode_filter")
+
+        title_template = str(cat.get("title_template", "")).strip()
         title = str(cat.get("title", "")).strip()
-        if not tag or not title:
-            raise ValueError(f"categories[{cat_idx}] requires 'tag' and 'title'")
+        if expand and not title_template:
+            raise ValueError(f"categories[{cat_idx}] requires 'title_template' when expansion is enabled")
+        if (not expand) and not title:
+            raise ValueError(f"categories[{cat_idx}] requires 'title'")
         try:
             nrows = int(cat.get("nrows"))
             ncols = int(cat.get("ncols"))
@@ -237,49 +281,77 @@ def load_plot_specs(config_path: Path) -> tuple[Path | None, list[dict]]:
         subplots_raw = cat.get("subplots")
         if not isinstance(subplots_raw, list) or not subplots_raw:
             raise ValueError(f"categories[{cat_idx}].subplots must be a non-empty list")
-        subplots: list[tuple[int, int, object, str]] = []
-        for sp_idx, sp in enumerate(subplots_raw):
-            if not isinstance(sp, dict):
-                raise ValueError(f"categories[{cat_idx}].subplots[{sp_idx}] must be a mapping")
-            try:
-                r = int(sp.get("row"))
-                c = int(sp.get("col"))
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"subplots[{sp_idx}] requires integer row/col") from exc
-            ylabel = str(sp.get("ylabel", "")).strip()
-            if not ylabel:
-                raise ValueError(f"subplots[{sp_idx}] requires 'ylabel'")
-            series_raw = sp.get("series")
-            if not isinstance(series_raw, list) or not series_raw:
-                raise ValueError(f"subplots[{sp_idx}].series must be a non-empty list")
 
-            series_specs: list[tuple[str, str, str]] = []
-            for ser_idx, ser in enumerate(series_raw):
-                if not isinstance(ser, dict) or "col" not in ser:
-                    raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}] must be a mapping with 'col'")
-                col_name = str(ser.get("col", "")).strip()
-                if not col_name:
-                    raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}].col must be a non-empty string")
-                side = str(ser.get("side", "")).strip()
-                linestyle = str(ser.get("linestyle", "-")).strip() or "-"
-                series_specs.append((col_name, side, linestyle))
+        def parse_subplots(*, fp: int | None) -> list[tuple[int, int, object, str, list[str] | None]]:
+            subplots: list[tuple[int, int, object, str, list[str] | None]] = []
+            for sp_idx, sp in enumerate(subplots_raw):
+                if not isinstance(sp, dict):
+                    raise ValueError(f"categories[{cat_idx}].subplots[{sp_idx}] must be a mapping")
+                try:
+                    r = int(sp.get("row"))
+                    c = int(sp.get("col"))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"subplots[{sp_idx}] requires integer row/col") from exc
 
-            if len(series_specs) == 1 and not series_specs[0][1] and series_specs[0][2] == "-":
-                col_spec: object = series_specs[0][0]
-            else:
-                col_spec = series_specs
-            subplots.append((r, c, col_spec, ylabel))
+                sp_mode_filter = parse_mode_filter(
+                    sp.get("mode_filter"),
+                    field_name=f"categories[{cat_idx}].subplots[{sp_idx}].mode_filter",
+                )
+                ylabel = str(sp.get("ylabel", "")).strip()
+                if not ylabel:
+                    raise ValueError(f"subplots[{sp_idx}] requires 'ylabel'")
+                if fp is not None:
+                    ylabel = replace_fp_placeholder(ylabel, fp)
 
-        categories.append(
-            {
-                "tag": tag,
-                "title": title,
-                "nrows": nrows,
-                "ncols": ncols,
-                "figsize": figsize,
-                "subplots": subplots,
-            }
-        )
+                series_raw = sp.get("series")
+                if not isinstance(series_raw, list) or not series_raw:
+                    raise ValueError(f"subplots[{sp_idx}].series must be a non-empty list")
+
+                series_specs: list[tuple[str, str, str]] = []
+                for ser_idx, ser in enumerate(series_raw):
+                    if not isinstance(ser, dict) or "col" not in ser:
+                        raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}] must be a mapping with 'col'")
+                    col_name = str(ser.get("col", "")).strip()
+                    if not col_name:
+                        raise ValueError(f"subplots[{sp_idx}].series[{ser_idx}].col must be a non-empty string")
+                    if fp is not None:
+                        col_name = replace_fp_placeholder(col_name, fp)
+                    side = str(ser.get("side", "")).strip()
+                    linestyle = str(ser.get("linestyle", "-")).strip() or "-"
+                    series_specs.append((col_name, side, linestyle))
+
+                if len(series_specs) == 1 and not series_specs[0][1] and series_specs[0][2] == "-":
+                    col_spec: object = series_specs[0][0]
+                else:
+                    col_spec = series_specs
+                subplots.append((r, c, col_spec, ylabel, sp_mode_filter))
+            return subplots
+
+        if expand:
+            for fp in inverse_dynamics_forceplate_ids:
+                categories.append(
+                    {
+                        "tag": f"{tag}__fp{int(fp)}",
+                        "title": replace_fp_placeholder(title_template, fp),
+                        "nrows": nrows,
+                        "ncols": ncols,
+                        "figsize": figsize,
+                        "subplots": parse_subplots(fp=fp),
+                        "mode_filter": base_mode_filter,
+                    }
+                )
+        else:
+            categories.append(
+                {
+                    "tag": tag,
+                    "title": title,
+                    "nrows": nrows,
+                    "ncols": ncols,
+                    "figsize": figsize,
+                    "subplots": parse_subplots(fp=None),
+                    "mode_filter": base_mode_filter,
+                }
+            )
 
     return out_dir, categories
 
@@ -292,11 +364,42 @@ def load_data(csv_path: Path) -> pl.DataFrame:
         "platform_offset_local",
         "step_onset_local",
         TIME_COL,
+        "inverse_dynamics_mode",
     ]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
     return df
+
+
+def _iter_series_columns(col_spec: object) -> list[str]:
+    if isinstance(col_spec, str):
+        return [col_spec]
+    if isinstance(col_spec, list):
+        return [str(item[0]) for item in col_spec if isinstance(item, (list, tuple)) and item]
+    return []
+
+
+def validate_plot_specs(df: pl.DataFrame, categories: list[dict]) -> None:
+    missing: list[str] = []
+    available = set(df.columns)
+    for cat_idx, spec in enumerate(categories):
+        tag = str(spec.get("tag", f"cat{cat_idx}"))
+        for sp_idx, subplot in enumerate(spec.get("subplots", [])):
+            if not isinstance(subplot, (list, tuple)) or len(subplot) < 3:
+                continue
+            col_spec = subplot[2]
+            for col in _iter_series_columns(col_spec):
+                if col not in available:
+                    missing.append(f"{tag}[{sp_idx}]: {col}")
+    if missing:
+        sample = "\n".join(missing[:20])
+        more = "" if len(missing) <= 20 else f"\n... and {len(missing) - 20} more"
+        raise ValueError(
+            "Plot config references columns missing from CSV.\n"
+            "Fix config.yaml (plot_grid_timeseries.categories) or regenerate the CSV.\n"
+            f"{sample}{more}"
+        )
 
 
 def build_common_x_grid(df: pl.DataFrame, resample_hz: float) -> np.ndarray:
@@ -599,6 +702,7 @@ def plot_single_col(
 
     step_labeled = False
     nonstep_labeled = False
+    plotted_any = False
     for idx, trial_df in enumerate(trials):
         has_step = trial_has_step(trial_df)
         line_color = STEP_COLOR if has_step else NONSTEP_COLOR
@@ -620,6 +724,8 @@ def plot_single_col(
         if _should_zero(col_name, y_zero_onset):
             onset_x = 0.0
             y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
+        if not np.isfinite(y_vals).any():
+            continue
         ax.plot(
             x_plot,
             y_vals,
@@ -628,6 +734,7 @@ def plot_single_col(
             alpha=line_alpha,
             label=line_label,
         )
+        plotted_any = True
         draw_events(
             ax,
             trial_df,
@@ -638,6 +745,9 @@ def plot_single_col(
             draw_platform=(x_mode != "piecewise"),
             draw_step=True,
         )
+
+    if not plotted_any:
+        ax.text(0.5, 0.5, "All-NaN", transform=ax.transAxes, ha="center", va="center")
 
 
 def plot_lr_overlay(
@@ -673,6 +783,7 @@ def plot_lr_overlay(
             draw_step=False,
         )
 
+    plotted_any = False
     for trial_idx, trial_df in enumerate(trials):
         has_step = trial_has_step(trial_df)
         line_color = STEP_COLOR if has_step else NONSTEP_COLOR
@@ -698,6 +809,8 @@ def plot_lr_overlay(
             if _should_zero(col_name, y_zero_onset):
                 onset_x = 0.0
                 y_vals = subtract_baseline_at_x(y_vals, x_plot=x_plot, baseline_x=onset_x)
+            if not np.isfinite(y_vals).any():
+                continue
             ax.plot(
                 x_plot,
                 y_vals,
@@ -707,6 +820,7 @@ def plot_lr_overlay(
                 alpha=line_alpha,
                 label=group_label if ser_idx == 0 else None,
             )
+            plotted_any = True
         draw_events(
             ax,
             trial_df,
@@ -717,6 +831,9 @@ def plot_lr_overlay(
             draw_platform=(x_mode != "piecewise"),
             draw_step=True,
         )
+
+    if not plotted_any and col_specs:
+        ax.text(0.5, 0.5, "All-NaN", transform=ax.transAxes, ha="center", va="center")
 
 
 def build_trial_list(subject_df: pl.DataFrame) -> list[pl.DataFrame]:
@@ -880,7 +997,7 @@ def plot_single_col_mean(
         plotted = True
 
     if not plotted:
-        ax.text(0.5, 0.5, f"Missing: {col_name}", transform=ax.transAxes, ha="center", va="center")
+        ax.text(0.5, 0.5, "All-NaN", transform=ax.transAxes, ha="center", va="center")
 
 
 def plot_lr_overlay_mean(
@@ -945,7 +1062,7 @@ def plot_lr_overlay_mean(
             plotted = True
 
     if not plotted and col_specs:
-        ax.text(0.5, 0.5, f"Missing: {col_specs[0][0]}", transform=ax.transAxes, ha="center", va="center")
+        ax.text(0.5, 0.5, "All-NaN", transform=ax.transAxes, ha="center", va="center")
 
 
 def plot_subject_category(
@@ -980,11 +1097,32 @@ def plot_subject_category(
         plt.close(fig)
         return None
 
+    group_modes: list[str] = []
+    if "inverse_dynamics_mode" in subject_df.columns:
+        group_modes = (
+            subject_df.select("inverse_dynamics_mode")
+            .drop_nulls()
+            .unique()
+            .get_column("inverse_dynamics_mode")
+            .to_list()
+        )
+    group_modes = [str(m).strip() for m in group_modes if str(m).strip()]
+
     for subplot in spec["subplots"]:
         r, c = subplot[0], subplot[1]
         col_spec = subplot[2]
         ylabel = subplot[3]
+        subplot_mode_filter = subplot[4] if len(subplot) >= 5 else None
         ax = axes[r][c]
+
+        effective_mode_filter = subplot_mode_filter if subplot_mode_filter is not None else spec.get("mode_filter")
+        if effective_mode_filter is not None:
+            if (not group_modes) or (not any(mode in effective_mode_filter for mode in group_modes)):
+                modes_text = ", ".join(sorted(group_modes)) if group_modes else "unknown"
+                ax.text(0.5, 0.5, f"N/A for mode: {modes_text}", transform=ax.transAxes, ha="center", va="center")
+                ax.set_title(ylabel, fontsize=9)
+                ax.grid(True, linewidth=0.35, alpha=0.5)
+                continue
 
         if isinstance(col_spec, str):
             plot_single_col(
@@ -1121,11 +1259,32 @@ def plot_total_mean_category(
         plt.close(fig)
         return None
 
+    group_modes: list[str] = []
+    if "inverse_dynamics_mode" in total_df.columns:
+        group_modes = (
+            total_df.select("inverse_dynamics_mode")
+            .drop_nulls()
+            .unique()
+            .get_column("inverse_dynamics_mode")
+            .to_list()
+        )
+    group_modes = [str(m).strip() for m in group_modes if str(m).strip()]
+
     for subplot in spec["subplots"]:
         r, c = subplot[0], subplot[1]
         col_spec = subplot[2]
         ylabel = subplot[3]
+        subplot_mode_filter = subplot[4] if len(subplot) >= 5 else None
         ax = axes[r][c]
+
+        effective_mode_filter = subplot_mode_filter if subplot_mode_filter is not None else spec.get("mode_filter")
+        if effective_mode_filter is not None:
+            if (not group_modes) or (not any(mode in effective_mode_filter for mode in group_modes)):
+                modes_text = ", ".join(sorted(group_modes)) if group_modes else "unknown"
+                ax.text(0.5, 0.5, f"N/A for mode: {modes_text}", transform=ax.transAxes, ha="center", va="center")
+                ax.set_title(ylabel, fontsize=9)
+                ax.grid(True, linewidth=0.35, alpha=0.5)
+                continue
 
         if isinstance(col_spec, str):
             plot_single_col_mean(
@@ -1217,6 +1376,7 @@ def main() -> None:
 
     print(f"Loading data: {args.csv}")
     df = load_data(args.csv)
+    validate_plot_specs(df, categories)
     if args.segment_frames <= 0:
         raise ValueError("--segment_frames must be >= 1")
 

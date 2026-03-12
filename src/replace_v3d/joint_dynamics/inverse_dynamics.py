@@ -8,6 +8,7 @@ moment in the stated reference segment coordinate system.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 
@@ -15,6 +16,8 @@ from replace_v3d.joint_angles.v3d_joint_angles import SegmentFrames
 
 from .angular_velocity import _gradient, segment_angular_velocity_lab
 from .anthropometrics import BodySegmentParams, get_body_segment_params
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -534,7 +537,16 @@ def compute_joint_moment_columns(
             segment_params=get_body_segment_params() if segment_params is None else segment_params,
         )
     except Exception:
-        return nan_all
+        logger.exception(
+            "[ID][single][FAIL] T=%s body_mass_kg=%s labels=%s joint_centers=%s grf_shape=%s grm_shape=%s",
+            T,
+            body_mass_kg,
+            len(labels),
+            sorted(list(joint_centers.keys())),
+            tuple(np.asarray(grf_lab).shape),
+            tuple(np.asarray(grm_lab_at_fp_origin).shape),
+        )
+        raise
 
 
 def compute_joint_moment_columns_multi(
@@ -558,6 +570,12 @@ def compute_joint_moment_columns_multi(
     if not forceplates:
         return nan_all
 
+    plate_ids: list[int] | None = None
+    try:
+        plate_ids = [int(fp.plate_index_1based) for fp in forceplates]
+    except Exception:
+        plate_ids = None
+
     try:
         return _compute_joint_moment_columns_multi_impl(
             points=points,
@@ -571,7 +589,16 @@ def compute_joint_moment_columns_multi(
             assignment_config=ForceAssignmentConfig() if assignment_config is None else assignment_config,
         )
     except Exception:
-        return nan_all
+        logger.exception(
+            "[ID][multi][FAIL] T=%s body_mass_kg=%s labels=%s joint_centers=%s n_forceplates=%s plate_ids=%s",
+            T,
+            body_mass_kg,
+            len(labels),
+            sorted(list(joint_centers.keys())),
+            len(forceplates),
+            plate_ids,
+        )
+        raise
 
 
 def _plate_xy_bounds(corners_lab: np.ndarray | None) -> tuple[float, float, float, float] | None:

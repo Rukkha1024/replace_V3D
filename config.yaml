@@ -256,86 +256,155 @@ plot_grid_timeseries:
           series:
             - col: Neck_Z_deg
 
-    - tag: ankle_torque_internal
-      title: "Ankle Torque (Internal)"
+    - tag: forceplate_raw_template
+      title_template: "FP{fp} GRF / COP"
+      expand_from_inverse_dynamics_forceplates: true
+      mode_filter: [single_plate_strict, multi_plate_v3d]
       nrows: 3
-      ncols: 3
+      ncols: 2
       figsize: [14, 10]
-      subplots:
-        - row: 0
-          col: 0
-          ylabel: "Mid int X (Nm)"
-          series:
-            - col: AnkleTorqueMid_int_X_Nm
-        - row: 0
-          col: 1
-          ylabel: "Mid int Y (Nm)"
-          series:
-            - col: AnkleTorqueMid_int_Y_Nm
-        - row: 0
-          col: 2
-          ylabel: "Mid int Z (Nm)"
-          series:
-            - col: AnkleTorqueMid_int_Z_Nm
-        - row: 1
-          col: 0
-          ylabel: "L int X (Nm)"
-          series:
-            - col: AnkleTorqueL_int_X_Nm
-        - row: 1
-          col: 1
-          ylabel: "L int Y (Nm)"
-          series:
-            - col: AnkleTorqueL_int_Y_Nm
-        - row: 1
-          col: 2
-          ylabel: "L int Z (Nm)"
-          series:
-            - col: AnkleTorqueL_int_Z_Nm
-        - row: 2
-          col: 0
-          ylabel: "R int X (Nm)"
-          series:
-            - col: AnkleTorqueR_int_X_Nm
-        - row: 2
-          col: 1
-          ylabel: "R int Y (Nm)"
-          series:
-            - col: AnkleTorqueR_int_Y_Nm
-        - row: 2
-          col: 2
-          ylabel: "R int Z (Nm)"
-          series:
-            - col: AnkleTorqueR_int_Z_Nm
-
-    - tag: grf_cop
-      title: "GRF / COP"
-      nrows: 2
-      ncols: 3
-      figsize: [14, 7]
       subplots:
         - row: 0
           col: 0
           ylabel: "GRF X (N)"
           series:
-            - col: GRF_X_N
+            - col: FP{fp}_GRF_X_N
         - row: 0
           col: 1
           ylabel: "GRF Y (N)"
           series:
-            - col: GRF_Y_N
-        - row: 0
-          col: 2
-          ylabel: "GRF Z (N)"
-          series:
-            - col: GRF_Z_N
+            - col: FP{fp}_GRF_Y_N
         - row: 1
           col: 0
-          ylabel: "COP X (m)"
+          ylabel: "GRF Z (N)"
           series:
-            - col: COP_X_m
+            - col: FP{fp}_GRF_Z_N
         - row: 1
           col: 1
+          ylabel: "COP X (m)"
+          series:
+            - col: FP{fp}_COP_X_m
+        - row: 2
+          col: 0
           ylabel: "COP Y (m)"
           series:
-            - col: COP_Y_m
+            - col: FP{fp}_COP_Y_m
+        - row: 2
+          col: 1
+          ylabel: "ContactValid"
+          series:
+            - col: FP{fp}_ContactValid
+
+    - tag: joint_moment_ankle_ref
+      title: "Joint Moment - Ankle (ref)"
+      mode_filter: [multi_plate_v3d]
+      nrows: 3
+      ncols: 1
+      figsize: [9, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Ankle X (Nm)"
+          series:
+            - col: Ankle_L_ref_X_Nm
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_ref_X_Nm
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 0
+          ylabel: "Ankle Y (Nm)"
+          series:
+            - col: Ankle_L_ref_Y_Nm
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_ref_Y_Nm
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 0
+          ylabel: "Ankle Z (Nm)"
+          series:
+            - col: Ankle_L_ref_Z_Nm
+              side: L
+              linestyle: "-"
+            - col: Ankle_R_ref_Z_Nm
+              side: R
+              linestyle: "--"
+
+    - tag: joint_moment_knee_ref
+      title: "Joint Moment - Knee (ref)"
+      mode_filter: [multi_plate_v3d]
+      nrows: 3
+      ncols: 1
+      figsize: [9, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Knee X (Nm)"
+          series:
+            - col: Knee_L_ref_X_Nm
+              side: L
+              linestyle: "-"
+            - col: Knee_R_ref_X_Nm
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 0
+          ylabel: "Knee Y (Nm)"
+          series:
+            - col: Knee_L_ref_Y_Nm
+              side: L
+              linestyle: "-"
+            - col: Knee_R_ref_Y_Nm
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 0
+          ylabel: "Knee Z (Nm)"
+          series:
+            - col: Knee_L_ref_Z_Nm
+              side: L
+              linestyle: "-"
+            - col: Knee_R_ref_Z_Nm
+              side: R
+              linestyle: "--"
+
+    - tag: joint_moment_hip_ref
+      title: "Joint Moment - Hip (ref)"
+      mode_filter: [multi_plate_v3d]
+      nrows: 3
+      ncols: 1
+      figsize: [9, 10]
+      subplots:
+        - row: 0
+          col: 0
+          ylabel: "Hip X (Nm)"
+          series:
+            - col: Hip_L_ref_X_Nm
+              side: L
+              linestyle: "-"
+            - col: Hip_R_ref_X_Nm
+              side: R
+              linestyle: "--"
+        - row: 1
+          col: 0
+          ylabel: "Hip Y (Nm)"
+          series:
+            - col: Hip_L_ref_Y_Nm
+              side: L
+              linestyle: "-"
+            - col: Hip_R_ref_Y_Nm
+              side: R
+              linestyle: "--"
+        - row: 2
+          col: 0
+          ylabel: "Hip Z (Nm)"
+          series:
+            - col: Hip_L_ref_Z_Nm
+              side: L
+              linestyle: "-"
+            - col: Hip_R_ref_Z_Nm
+              side: R
+              linestyle: "--"
