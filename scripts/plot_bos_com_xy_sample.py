@@ -501,7 +501,7 @@ def warn_cop_once(*, key: str, message: str) -> None:
 def _detect_forceplate_cop_ids(columns: list[str]) -> list[int]:
     ids: set[int] = set()
     for col in columns:
-        m = re.match(r"^FP(\\d+)_COP_X_m$", str(col))
+        m = re.match(r"^FP(\d+)_COP_X_m$", str(col))
         if not m:
             continue
         ids.add(int(m.group(1)))
