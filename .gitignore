@@ -12,3 +12,6 @@ __pycache__/
 *.tiff
 *.svg
 *.webp
+
+# Large data files
+output/all_trials_timeseries.csv
