@@ -20,7 +20,7 @@
 | `Ankle_stance_Y_abs_onset` | 10.45±4.02 | 10.80±2.85 | -0.43 | n.s. |
 | `Ankle_stance_Z_abs_onset` | -8.49±5.65 | -8.00±5.81 | 0.14 | n.s. |
 | `Trunk_X_abs_onset` | 3.17±5.91 | 3.25±5.34 | -0.19 | n.s. |
-| `Trunk_Y_abs_onset` | -1.01±3.52 | 0.74±2.96 | -0.69 | * |
+| `Trunk_Y_abs_onset` | -1.01±3.52 | 0.74±2.96 | -0.69 | n.s. |
 | `Trunk_Z_abs_onset` | 0.97±3.37 | 0.36±2.60 | 0.34 | n.s. |
 | `Neck_X_abs_onset` | 21.22±8.16 | 23.36±6.98 | -0.10 | n.s. |
 | `Neck_Y_abs_onset` | 2.76±5.48 | 1.83±5.05 | 0.18 | n.s. |
@@ -68,7 +68,7 @@
   - nonstep step_onset 참조 부재 subject: `권유영, 김종철, 방주원`
 
 - 해석 노트:
-  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 2개가 FDR 유의였다: `Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`.
+  - platform_onset: 15개 segment angle 변수(X/Y/Z) 중 1개가 FDR 유의였다: `Hip_stance_Y_abs_onset`.
   - step_onset: 15개 step_onset segment angle 변수(X/Y/Z) 중 7개가 FDR 유의였다: `Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`.
   - 두 시점 모두에서 `Estimate`와 `Sig`는 변수별 `step/nonstep` 그룹 내부 `1.5×IQR` 이상치 제외 후 계산했다.
   - `95% CI`는 single-frame 보고서에 포함하지 않으며, baseline range mean 보고서에서만 제시한다.
@@ -78,7 +78,7 @@
 
 ## platform_onset 해석
 
-- platform onset joint-angle 15개 변수 중 `2`개가 FDR 유의였다: `Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`.
+- platform onset joint-angle 15개 변수 중 `1`개가 FDR 유의였다: `Hip_stance_Y_abs_onset`.
 - 이 시점은 baseline 평균이 아니라 섭동 직후의 posture snapshot에 가깝다.
 - 따라서 platform onset에서는 지지다리 및 체간 정렬 차이가 일부 축에서만 관찰되며, 전략 분화의 출발점이라기보다 제한적인 초기 반응 차이로 해석하는 편이 안전하다.
 

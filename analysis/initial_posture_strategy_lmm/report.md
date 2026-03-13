@@ -27,8 +27,8 @@
   - `data/all_data/*.c3d`
   - `src/replace_v3d/torque/assets/fp_inertial_templates.npz`
 - 분석 변수:
-  - onset 후보 총 **29개**
-  - 검정 가능(testable) **29개**
+  - onset 후보 총 **74개**
+  - 검정 가능(testable) **74개**
   - 검정 불가(untestable) **0개**
 - Force inertial QC mode: **non-strict**
 
@@ -40,7 +40,7 @@
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별 `step/nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
 - **Confidence interval policy**: 본 단일 프레임 보고서에서는 `Estimate`와 `Sig`만 보고하고, `95% CI`는 baseline range mean 보고서에서만 제시
-- **Multiple comparison correction**: BH-FDR (29개 onset 변수 전체 1회)
+- **Multiple comparison correction**: BH-FDR (74개 onset 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
 
@@ -59,14 +59,14 @@
 - Subject summary: `step_r_major=9`, `step_l_major=10`, `tie=5`
 - Tie subjects: `강비은, 김서하, 김유민, 안지연, 유재원`
 
-### Analyzed Variables (Full Set, n=29)
+### Analyzed Variables (Full Set, n=74)
 
 | Variable | Family | Testability at onset | Result status |
 |---|---|---|---|
 | `COM_X` | Balance | testable | n.s. |
 | `COM_Y` | Balance | testable | n.s. |
 | `vCOM_X` | Balance | testable | ** |
-| `vCOM_Y` | Balance | testable | * |
+| `vCOM_Y` | Balance | testable | n.s. |
 | `MOS_minDist_signed` | Balance | testable | *** |
 | `MOS_AP_v3d` | Balance | testable | *** |
 | `MOS_ML_v3d` | Balance | testable | n.s. |
@@ -81,11 +81,56 @@
 | `Ankle_stance_Y_abs_onset` | Joint_absolute | testable | n.s. |
 | `Ankle_stance_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Trunk_X_abs_onset` | Joint_absolute | testable | n.s. |
-| `Trunk_Y_abs_onset` | Joint_absolute | testable | * |
+| `Trunk_Y_abs_onset` | Joint_absolute | testable | n.s. |
 | `Trunk_Z_abs_onset` | Joint_absolute | testable | n.s. |
 | `Neck_X_abs_onset` | Joint_absolute | testable | n.s. |
 | `Neck_Y_abs_onset` | Joint_absolute | testable | n.s. |
 | `Neck_Z_abs_onset` | Joint_absolute | testable | n.s. |
+| `Hip_stance_ref_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Hip_stance_ref_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Hip_stance_ref_Z_deg_s` | Velocity_platform_onset | testable | * |
+| `Hip_stance_mov_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Hip_stance_mov_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Hip_stance_mov_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Hip_stance_ref_X_Nm` | Moment_platform_onset | testable | n.s. |
+| `Hip_stance_ref_Y_Nm` | Moment_platform_onset | testable | n.s. |
+| `Hip_stance_ref_Z_Nm` | Moment_platform_onset | testable | n.s. |
+| `Knee_stance_ref_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_ref_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_ref_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_mov_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_mov_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_mov_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Knee_stance_ref_X_Nm` | Moment_platform_onset | testable | n.s. |
+| `Knee_stance_ref_Y_Nm` | Moment_platform_onset | testable | n.s. |
+| `Knee_stance_ref_Z_Nm` | Moment_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_mov_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_mov_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_mov_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_X_Nm` | Moment_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_Y_Nm` | Moment_platform_onset | testable | n.s. |
+| `Ankle_stance_ref_Z_Nm` | Moment_platform_onset | testable | n.s. |
+| `Trunk_ref_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_ref_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_ref_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_mov_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_mov_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_mov_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Trunk_ref_X_Nm` | Moment_platform_onset | testable | n.s. |
+| `Trunk_ref_Y_Nm` | Moment_platform_onset | testable | n.s. |
+| `Trunk_ref_Z_Nm` | Moment_platform_onset | testable | n.s. |
+| `Neck_ref_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_ref_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_ref_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_mov_X_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_mov_Y_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_mov_Z_deg_s` | Velocity_platform_onset | testable | n.s. |
+| `Neck_ref_X_Nm` | Moment_platform_onset | testable | n.s. |
+| `Neck_ref_Y_Nm` | Moment_platform_onset | testable | n.s. |
+| `Neck_ref_Z_Nm` | Moment_platform_onset | testable | n.s. |
 | `COP_X_abs_onset` | Force_absolute | testable | n.s. |
 | `COP_Y_abs_onset` | Force_absolute | testable | n.s. |
 | `GRF_X_abs_onset` | Force_absolute | testable | * |
@@ -98,7 +143,7 @@
 ### Hypothesis Verdict (strict)
 
 - **Rule**: testable onset 변수 전부가 FDR 유의여야 PASS
-- **Observed**: testable significant ratio = `10/29`, untestable=`0`
+- **Observed**: testable significant ratio = `9/74`, untestable=`0`
 - **Verdict**: **FAIL**
 
 ### Significant Variables Only (BH-FDR < 0.05)
@@ -113,8 +158,7 @@
 | `vCOM_X` | Balance | 0.01±0.01 | 0.02±0.01 | -0.00 | ** |
 | `GRF_X_abs_onset` | Force_absolute | -1.27±3.33 | -2.79±0.90 | 1.20 | * |
 | `Hip_stance_Y_abs_onset` | Joint_absolute | 1.54±4.18 | -0.09±3.50 | 1.55 | * |
-| `Trunk_Y_abs_onset` | Joint_absolute | -1.01±3.52 | 0.74±2.96 | -0.69 | * |
-| `vCOM_Y` | Balance | -0.00±0.00 | 0.00±0.00 | -0.00 | * |
+| `Hip_stance_ref_Z_deg_s` | Velocity_platform_onset | 0.78±2.00 | -0.71±3.02 | 1.29 | * |
 
 ### Outlier Exclusion Summary (Platform Onset)
 
@@ -124,6 +168,15 @@
 | `Ankle_stance_X_abs_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
 | `Ankle_stance_Y_abs_onset` | 53 | 1 | 52 | 72 | 7 | 65 |
 | `Ankle_stance_Z_abs_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Ankle_stance_mov_X_deg_s` | 53 | 2 | 51 | 72 | 1 | 71 |
+| `Ankle_stance_mov_Y_deg_s` | 53 | 9 | 44 | 72 | 7 | 65 |
+| `Ankle_stance_mov_Z_deg_s` | 53 | 5 | 48 | 72 | 4 | 68 |
+| `Ankle_stance_ref_X_Nm` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Ankle_stance_ref_X_deg_s` | 53 | 1 | 52 | 72 | 2 | 70 |
+| `Ankle_stance_ref_Y_Nm` | 53 | 5 | 48 | 72 | 1 | 71 |
+| `Ankle_stance_ref_Y_deg_s` | 53 | 6 | 47 | 72 | 5 | 67 |
+| `Ankle_stance_ref_Z_Nm` | 53 | 8 | 45 | 72 | 16 | 56 |
+| `Ankle_stance_ref_Z_deg_s` | 53 | 7 | 46 | 72 | 5 | 67 |
 | `COM_X` | 53 | 0 | 53 | 72 | 0 | 72 |
 | `COM_Y` | 53 | 5 | 48 | 72 | 0 | 72 |
 | `COP_X_abs_onset` | 53 | 0 | 53 | 72 | 1 | 71 |
@@ -134,18 +187,54 @@
 | `Hip_stance_X_abs_onset` | 53 | 2 | 51 | 72 | 8 | 64 |
 | `Hip_stance_Y_abs_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
 | `Hip_stance_Z_abs_onset` | 53 | 0 | 53 | 72 | 3 | 69 |
+| `Hip_stance_mov_X_deg_s` | 53 | 0 | 53 | 72 | 4 | 68 |
+| `Hip_stance_mov_Y_deg_s` | 53 | 1 | 52 | 72 | 4 | 68 |
+| `Hip_stance_mov_Z_deg_s` | 53 | 4 | 49 | 72 | 2 | 70 |
+| `Hip_stance_ref_X_Nm` | 53 | 2 | 51 | 72 | 2 | 70 |
+| `Hip_stance_ref_X_deg_s` | 53 | 1 | 52 | 72 | 4 | 68 |
+| `Hip_stance_ref_Y_Nm` | 53 | 6 | 47 | 72 | 3 | 69 |
+| `Hip_stance_ref_Y_deg_s` | 53 | 0 | 53 | 72 | 2 | 70 |
+| `Hip_stance_ref_Z_Nm` | 53 | 4 | 49 | 72 | 4 | 68 |
+| `Hip_stance_ref_Z_deg_s` | 53 | 5 | 48 | 72 | 0 | 72 |
 | `Knee_stance_X_abs_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
 | `Knee_stance_Y_abs_onset` | 53 | 1 | 52 | 72 | 7 | 65 |
 | `Knee_stance_Z_abs_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Knee_stance_mov_X_deg_s` | 53 | 1 | 52 | 72 | 5 | 67 |
+| `Knee_stance_mov_Y_deg_s` | 53 | 4 | 49 | 72 | 6 | 66 |
+| `Knee_stance_mov_Z_deg_s` | 53 | 7 | 46 | 72 | 8 | 64 |
+| `Knee_stance_ref_X_Nm` | 53 | 1 | 52 | 72 | 3 | 69 |
+| `Knee_stance_ref_X_deg_s` | 53 | 1 | 52 | 72 | 4 | 68 |
+| `Knee_stance_ref_Y_Nm` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Knee_stance_ref_Y_deg_s` | 53 | 3 | 50 | 72 | 3 | 69 |
+| `Knee_stance_ref_Z_Nm` | 53 | 5 | 48 | 72 | 7 | 65 |
+| `Knee_stance_ref_Z_deg_s` | 53 | 5 | 48 | 72 | 7 | 65 |
 | `MOS_AP_v3d` | 53 | 0 | 53 | 72 | 1 | 71 |
 | `MOS_ML_v3d` | 53 | 0 | 53 | 72 | 0 | 72 |
 | `MOS_minDist_signed` | 53 | 0 | 53 | 72 | 3 | 69 |
 | `Neck_X_abs_onset` | 53 | 1 | 52 | 72 | 1 | 71 |
 | `Neck_Y_abs_onset` | 53 | 1 | 52 | 72 | 0 | 72 |
 | `Neck_Z_abs_onset` | 53 | 1 | 52 | 72 | 0 | 72 |
+| `Neck_mov_X_deg_s` | 53 | 1 | 52 | 72 | 3 | 69 |
+| `Neck_mov_Y_deg_s` | 53 | 3 | 50 | 72 | 8 | 64 |
+| `Neck_mov_Z_deg_s` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Neck_ref_X_Nm` | 53 | 4 | 49 | 72 | 4 | 68 |
+| `Neck_ref_X_deg_s` | 53 | 1 | 52 | 72 | 4 | 68 |
+| `Neck_ref_Y_Nm` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Neck_ref_Y_deg_s` | 53 | 5 | 48 | 72 | 7 | 65 |
+| `Neck_ref_Z_Nm` | 53 | 2 | 51 | 72 | 0 | 72 |
+| `Neck_ref_Z_deg_s` | 53 | 4 | 49 | 72 | 5 | 67 |
 | `Trunk_X_abs_onset` | 53 | 1 | 52 | 72 | 3 | 69 |
 | `Trunk_Y_abs_onset` | 53 | 2 | 51 | 72 | 3 | 69 |
 | `Trunk_Z_abs_onset` | 53 | 1 | 52 | 72 | 5 | 67 |
+| `Trunk_mov_X_deg_s` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Trunk_mov_Y_deg_s` | 53 | 3 | 50 | 72 | 9 | 63 |
+| `Trunk_mov_Z_deg_s` | 53 | 4 | 49 | 72 | 4 | 68 |
+| `Trunk_ref_X_Nm` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Trunk_ref_X_deg_s` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Trunk_ref_Y_Nm` | 53 | 0 | 53 | 72 | 3 | 69 |
+| `Trunk_ref_Y_deg_s` | 53 | 3 | 50 | 72 | 10 | 62 |
+| `Trunk_ref_Z_Nm` | 53 | 2 | 51 | 72 | 2 | 70 |
+| `Trunk_ref_Z_deg_s` | 53 | 4 | 49 | 72 | 7 | 65 |
 | `vCOM_X` | 53 | 5 | 48 | 72 | 1 | 71 |
 | `vCOM_Y` | 53 | 1 | 52 | 72 | 5 | 67 |
 | `xCOM_BOS_norm_onset` | 53 | 0 | 53 | 72 | 0 | 72 |
@@ -371,10 +460,10 @@
 
 ## Interpretation & Conclusion
 
-1. platform onset 단일 프레임에서는 29개 변수 중 `10`개만 유의해 strict 기준 가설은 **FAIL**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
-2. platform onset에서는 관절 각도 변수는 총 15개 중 2개가 유의했고 (`Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
+1. platform onset 단일 프레임에서는 총 `74`개 변수 중 `9`개만 유의해 strict 기준 가설은 **FAIL**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
+2. platform onset에서는 관절 각도 변수는 총 15개 중 1개가 유의했고 (`Hip_stance_Y_abs_onset`), 나머지는 `n.s.`였다. 나머지 유의 변수도 balance, joint velocity/moment, force/torque 영역의 일부 변수에 제한적으로 나타났다.
 3. step onset 단일 프레임에서는 총 `45`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
-4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` 29개 변수와 `step onset` 74개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` 74개 변수와 `step onset` 74개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 

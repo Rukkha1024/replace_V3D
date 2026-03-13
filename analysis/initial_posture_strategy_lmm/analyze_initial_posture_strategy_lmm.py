@@ -320,6 +320,23 @@ def _joint_angle_step_cols() -> list[str]:
     return cols
 
 
+def _platform_onset_dynamic_cols() -> list[str]:
+    cols: list[str] = []
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                cols.append(f"{seg}_stance_{res}_{axis}_deg_s")
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_stance_ref_{axis}_Nm")
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                cols.append(f"{seg}_{res}_{axis}_deg_s")
+        for axis in ANGLE_AXES:
+            cols.append(f"{seg}_ref_{axis}_Nm")
+    return cols
+
+
 def _step_onset_variable_catalog() -> list[dict[str, str]]:
     specs: list[dict[str, str]] = [
         {"dv": "COM_X_step_onset", "family": "Balance_step_onset"},
@@ -953,7 +970,7 @@ def build_analysis_dataframe(
         "MOS_AP_v3d",
         "MOS_ML_v3d",
         "xCOM_BOS_norm_onset",
-    ]
+    ] + _platform_onset_dynamic_cols()
     missing_cols = sorted(set(keep_cols) - set(onset_df.columns))
     if missing_cols:
         raise ValueError(f"Missing onset columns from CSV snapshot: {missing_cols}")
@@ -1018,6 +1035,28 @@ def variable_catalog() -> list[dict[str, str]]:
     for seg in MIDLINE_SEGMENTS:
         for axis in ANGLE_AXES:
             specs.append({"dv": f"{seg}_{axis}_abs_onset", "family": "Joint_absolute"})
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append(
+                    {
+                        "dv": f"{seg}_stance_{res}_{axis}_deg_s",
+                        "family": "Velocity_platform_onset",
+                    }
+                )
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_stance_ref_{axis}_Nm", "family": "Moment_platform_onset"})
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append(
+                    {
+                        "dv": f"{seg}_{res}_{axis}_deg_s",
+                        "family": "Velocity_platform_onset",
+                    }
+                )
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_ref_{axis}_Nm", "family": "Moment_platform_onset"})
     specs.extend([
         {"dv": "COP_X_abs_onset", "family": "Force_absolute"},
         {"dv": "COP_Y_abs_onset", "family": "Force_absolute"},
@@ -1627,10 +1666,10 @@ def write_report_markdown(
 
 ## Interpretation & Conclusion
 
-1. platform onset 단일 프레임에서는 29개 변수 중 `{n_sig}`개만 유의해 strict 기준 가설은 **{verdict}**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
-2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
+1. platform onset 단일 프레임에서는 총 `{len(specs)}`개 변수 중 `{n_sig}`개만 유의해 strict 기준 가설은 **{verdict}**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
+2. platform onset에서는 {joint_line} 나머지 유의 변수도 balance, joint velocity/moment, force/torque 영역의 일부 변수에 제한적으로 나타났다.
 3. step onset 단일 프레임에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
-4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` 29개 변수와 `step onset` {len(step_specs)}개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` {len(specs)}개 변수와 `step onset` {len(step_specs)}개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 
