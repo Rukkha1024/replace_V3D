@@ -159,9 +159,9 @@
 - **Valid trials**: `119/126` (step=`52`, nonstep=`67`)
 - **Excluded trials**: `7` (step_onset 결측 step=`1`, step 참조 부재 nonstep=`6`, frame 불일치=`0`)
 - **nonstep step_onset 참조 부재 subject**: `권유영, 김종철, 방주원`
-- **Observed**: testable significant ratio = `18/29`
+- **Observed**: testable significant ratio = `45/74`
 
-### Step-Onset Variables (Full Set, n=29)
+### Step-Onset Variables (Full Set, n=74)
 
 | Variable | Family | Testability at onset | Result status |
 |---|---|---|---|
@@ -188,6 +188,51 @@
 | `Neck_X_step_onset` | Joint_step_onset | testable | n.s. |
 | `Neck_Y_step_onset` | Joint_step_onset | testable | n.s. |
 | `Neck_Z_step_onset` | Joint_step_onset | testable | n.s. |
+| `Hip_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Hip_stance_ref_Y_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Hip_stance_ref_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Hip_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Hip_stance_mov_Y_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Hip_stance_mov_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Hip_stance_ref_X_Nm_step_onset` | Moment_step_onset | testable | * |
+| `Hip_stance_ref_Y_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Hip_stance_ref_Z_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Knee_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Knee_stance_ref_Y_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Knee_stance_ref_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Knee_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Knee_stance_mov_Y_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Knee_stance_mov_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Knee_stance_ref_X_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Knee_stance_ref_Y_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Knee_stance_ref_Z_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Ankle_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Ankle_stance_ref_Y_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Ankle_stance_ref_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Ankle_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Ankle_stance_mov_Y_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Ankle_stance_mov_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Ankle_stance_ref_X_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Ankle_stance_ref_Y_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Ankle_stance_ref_Z_Nm_step_onset` | Moment_step_onset | testable | ** |
+| `Trunk_ref_X_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Trunk_ref_Y_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Trunk_ref_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Trunk_mov_X_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Trunk_mov_Y_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Trunk_mov_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Trunk_ref_X_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Trunk_ref_Y_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Trunk_ref_Z_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Neck_ref_X_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Neck_ref_Y_deg_s_step_onset` | Velocity_step_onset | testable | * |
+| `Neck_ref_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Neck_mov_X_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Neck_mov_Y_deg_s_step_onset` | Velocity_step_onset | testable | *** |
+| `Neck_mov_Z_deg_s_step_onset` | Velocity_step_onset | testable | n.s. |
+| `Neck_ref_X_Nm_step_onset` | Moment_step_onset | testable | n.s. |
+| `Neck_ref_Y_Nm_step_onset` | Moment_step_onset | testable | *** |
+| `Neck_ref_Z_Nm_step_onset` | Moment_step_onset | testable | *** |
 | `COP_X_step_onset` | Force_step_onset | testable | n.s. |
 | `COP_Y_step_onset` | Force_step_onset | testable | *** |
 | `GRF_X_step_onset` | Force_step_onset | testable | ** |
@@ -199,23 +244,50 @@
 
 | Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | Sig |
 |---|---|---:|---:|---:|---|
+| `Hip_stance_ref_Y_Nm_step_onset` | Moment_step_onset | -72.94±26.95 | 10.29±17.33 | -83.73 | *** |
 | `COP_Y_step_onset` | Force_step_onset | 0.56±0.03 | 0.48±0.02 | 0.08 | *** |
+| `Knee_stance_ref_Z_Nm_step_onset` | Moment_step_onset | 17.31±8.14 | -1.14±2.10 | 18.54 | *** |
 | `GRF_Y_step_onset` | Force_step_onset | 44.47±21.60 | -2.51±11.29 | 46.35 | *** |
+| `Knee_stance_ref_Y_Nm_step_onset` | Moment_step_onset | -38.45±20.81 | 14.09±15.72 | -52.54 | *** |
+| `Trunk_ref_Z_Nm_step_onset` | Moment_step_onset | 6.79±3.47 | 0.62±2.92 | 5.85 | *** |
 | `vCOM_X_step_onset` | Balance_step_onset | -0.02±0.05 | 0.03±0.03 | -0.05 | *** |
 | `AnkleTorqueMid_Y_perkg_step_onset` | Force_step_onset | 1.43±0.23 | 1.74±0.09 | -0.23 | *** |
+| `Trunk_ref_Y_Nm_step_onset` | Moment_step_onset | 12.10±8.16 | 0.50±4.80 | 10.69 | *** |
+| `Ankle_stance_ref_Y_Nm_step_onset` | Moment_step_onset | -19.31±15.63 | 8.66±18.50 | -28.32 | *** |
+| `Ankle_stance_ref_X_Nm_step_onset` | Moment_step_onset | -69.18±23.12 | -31.15±28.94 | -35.62 | *** |
+| `Hip_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | 7.03±10.49 | -8.15±12.44 | 13.61 | *** |
+| `Hip_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | 6.75±10.05 | -7.98±12.36 | 13.11 | *** |
 | `vCOM_Y_step_onset` | Balance_step_onset | -0.03±0.04 | 0.01±0.03 | -0.04 | *** |
 | `MOS_minDist_signed_step_onset` | Balance_step_onset | 0.04±0.03 | 0.07±0.01 | -0.02 | *** |
 | `xCOM_BOS_norm_step_onset` | Balance_step_onset | 0.28±0.21 | 0.41±0.12 | -0.13 | *** |
 | `Hip_stance_X_step_onset` | Joint_step_onset | 6.70±2.89 | 4.49±2.20 | 2.55 | *** |
+| `Knee_stance_ref_X_Nm_step_onset` | Moment_step_onset | -86.65±34.38 | -42.16±38.25 | -42.18 | *** |
+| `Neck_ref_Z_Nm_step_onset` | Moment_step_onset | -0.26±0.38 | 0.08±0.35 | -0.29 | *** |
 | `COM_X_step_onset` | Balance_step_onset | -1.51±0.03 | -1.50±0.03 | -0.02 | *** |
 | `MOS_AP_v3d_step_onset` | Balance_step_onset | 0.06±0.03 | 0.08±0.02 | -0.02 | *** |
+| `Trunk_ref_X_Nm_step_onset` | Moment_step_onset | -27.92±12.79 | -34.92±9.80 | 6.99 | *** |
+| `Hip_stance_ref_Z_Nm_step_onset` | Moment_step_onset | -5.58±9.75 | 1.96±2.83 | -7.36 | *** |
+| `Neck_ref_Y_Nm_step_onset` | Moment_step_onset | 0.51±0.80 | -0.01±0.63 | 0.51 | *** |
 | `Trunk_X_step_onset` | Joint_step_onset | 2.15±2.82 | 0.04±1.97 | 2.00 | *** |
+| `Ankle_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | -0.59±13.42 | 10.54±16.45 | -9.89 | *** |
+| `Ankle_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | -1.02±13.59 | 9.84±16.54 | -9.25 | *** |
+| `Knee_stance_mov_X_deg_s_step_onset` | Velocity_step_onset | -3.85±13.90 | 2.70±10.97 | -7.98 | *** |
 | `Ankle_stance_Z_step_onset` | Joint_step_onset | -0.49±2.27 | 0.99±1.85 | -1.03 | *** |
+| `Knee_stance_ref_X_deg_s_step_onset` | Velocity_step_onset | -3.80±14.27 | 2.63±11.16 | -7.89 | *** |
 | `Knee_stance_Z_step_onset` | Joint_step_onset | -1.25±1.57 | -0.75±1.15 | -0.58 | *** |
+| `Neck_mov_Y_deg_s_step_onset` | Velocity_step_onset | -7.38±8.34 | -1.40±9.25 | -6.17 | *** |
+| `Ankle_stance_ref_Z_Nm_step_onset` | Moment_step_onset | 5.05±5.60 | 2.08±4.38 | 2.81 | ** |
 | `GRF_X_step_onset` | Force_step_onset | 6.69±22.36 | -2.28±16.73 | 9.76 | ** |
+| `Knee_stance_ref_Y_deg_s_step_onset` | Velocity_step_onset | -1.52±4.03 | -0.09±2.16 | -1.74 | * |
+| `Hip_stance_ref_Y_deg_s_step_onset` | Velocity_step_onset | 2.16±9.26 | -1.68±4.90 | 3.65 | * |
+| `Knee_stance_mov_Y_deg_s_step_onset` | Velocity_step_onset | -1.82±4.11 | 0.20±3.40 | -1.95 | * |
 | `Hip_stance_Z_step_onset` | Joint_step_onset | -0.06±2.55 | 0.78±1.60 | -0.93 | * |
-| `Hip_stance_Y_step_onset` | Joint_step_onset | -0.67±1.62 | 0.04±1.03 | -0.49 | * |
+| `Neck_ref_Y_deg_s_step_onset` | Velocity_step_onset | -8.05±9.90 | -3.81±9.78 | -5.00 | * |
+| `Hip_stance_ref_X_Nm_step_onset` | Moment_step_onset | -41.30±25.21 | -28.89±28.75 | -11.44 | * |
+| `Trunk_ref_X_deg_s_step_onset` | Velocity_step_onset | 1.74±11.87 | 6.28±11.14 | -4.53 | * |
+| `Trunk_mov_X_deg_s_step_onset` | Velocity_step_onset | 1.49±12.85 | 6.67±11.30 | -4.57 | * |
 | `GRF_Z_step_onset` | Force_step_onset | 6.23±34.30 | -8.49±31.54 | 11.29 | * |
+| `Hip_stance_Y_step_onset` | Joint_step_onset | -0.67±1.62 | 0.04±1.03 | -0.49 | * |
 | `Trunk_Y_step_onset` | Joint_step_onset | 0.80±1.71 | 0.46±0.95 | 0.51 | * |
 
 ### Outlier Exclusion Summary (Step Onset)
@@ -226,6 +298,15 @@
 | `Ankle_stance_X_step_onset` | 52 | 0 | 52 | 67 | 0 | 67 |
 | `Ankle_stance_Y_step_onset` | 52 | 3 | 49 | 67 | 1 | 66 |
 | `Ankle_stance_Z_step_onset` | 52 | 2 | 50 | 67 | 1 | 66 |
+| `Ankle_stance_mov_X_deg_s_step_onset` | 52 | 1 | 51 | 67 | 3 | 64 |
+| `Ankle_stance_mov_Y_deg_s_step_onset` | 52 | 6 | 46 | 67 | 6 | 61 |
+| `Ankle_stance_mov_Z_deg_s_step_onset` | 52 | 5 | 47 | 67 | 7 | 60 |
+| `Ankle_stance_ref_X_Nm_step_onset` | 52 | 0 | 52 | 67 | 0 | 67 |
+| `Ankle_stance_ref_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 3 | 64 |
+| `Ankle_stance_ref_Y_Nm_step_onset` | 52 | 3 | 49 | 67 | 10 | 57 |
+| `Ankle_stance_ref_Y_deg_s_step_onset` | 52 | 4 | 48 | 67 | 5 | 62 |
+| `Ankle_stance_ref_Z_Nm_step_onset` | 52 | 3 | 49 | 67 | 6 | 61 |
+| `Ankle_stance_ref_Z_deg_s_step_onset` | 52 | 4 | 48 | 67 | 8 | 59 |
 | `COM_X_step_onset` | 52 | 1 | 51 | 67 | 0 | 67 |
 | `COM_Y_step_onset` | 52 | 4 | 48 | 67 | 0 | 67 |
 | `COP_X_step_onset` | 52 | 0 | 52 | 67 | 1 | 66 |
@@ -236,18 +317,54 @@
 | `Hip_stance_X_step_onset` | 52 | 3 | 49 | 67 | 8 | 59 |
 | `Hip_stance_Y_step_onset` | 52 | 1 | 51 | 67 | 1 | 66 |
 | `Hip_stance_Z_step_onset` | 52 | 4 | 48 | 67 | 5 | 62 |
+| `Hip_stance_mov_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 1 | 66 |
+| `Hip_stance_mov_Y_deg_s_step_onset` | 52 | 2 | 50 | 67 | 3 | 64 |
+| `Hip_stance_mov_Z_deg_s_step_onset` | 52 | 8 | 44 | 67 | 6 | 61 |
+| `Hip_stance_ref_X_Nm_step_onset` | 52 | 3 | 49 | 67 | 2 | 65 |
+| `Hip_stance_ref_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 1 | 66 |
+| `Hip_stance_ref_Y_Nm_step_onset` | 52 | 7 | 45 | 67 | 12 | 55 |
+| `Hip_stance_ref_Y_deg_s_step_onset` | 52 | 3 | 49 | 67 | 3 | 64 |
+| `Hip_stance_ref_Z_Nm_step_onset` | 52 | 3 | 49 | 67 | 12 | 55 |
+| `Hip_stance_ref_Z_deg_s_step_onset` | 52 | 8 | 44 | 67 | 5 | 62 |
 | `Knee_stance_X_step_onset` | 52 | 0 | 52 | 67 | 3 | 64 |
 | `Knee_stance_Y_step_onset` | 52 | 1 | 51 | 67 | 0 | 67 |
 | `Knee_stance_Z_step_onset` | 52 | 1 | 51 | 67 | 0 | 67 |
+| `Knee_stance_mov_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 3 | 64 |
+| `Knee_stance_mov_Y_deg_s_step_onset` | 52 | 6 | 46 | 67 | 5 | 62 |
+| `Knee_stance_mov_Z_deg_s_step_onset` | 52 | 2 | 50 | 67 | 5 | 62 |
+| `Knee_stance_ref_X_Nm_step_onset` | 52 | 0 | 52 | 67 | 1 | 66 |
+| `Knee_stance_ref_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 3 | 64 |
+| `Knee_stance_ref_Y_Nm_step_onset` | 52 | 3 | 49 | 67 | 14 | 53 |
+| `Knee_stance_ref_Y_deg_s_step_onset` | 52 | 4 | 48 | 67 | 10 | 57 |
+| `Knee_stance_ref_Z_Nm_step_onset` | 52 | 2 | 50 | 67 | 16 | 51 |
+| `Knee_stance_ref_Z_deg_s_step_onset` | 52 | 2 | 50 | 67 | 4 | 63 |
 | `MOS_AP_v3d_step_onset` | 52 | 2 | 50 | 67 | 2 | 65 |
 | `MOS_ML_v3d_step_onset` | 52 | 2 | 50 | 67 | 3 | 64 |
 | `MOS_minDist_signed_step_onset` | 52 | 2 | 50 | 67 | 2 | 65 |
 | `Neck_X_step_onset` | 52 | 5 | 47 | 67 | 6 | 61 |
 | `Neck_Y_step_onset` | 52 | 2 | 50 | 67 | 0 | 67 |
 | `Neck_Z_step_onset` | 52 | 3 | 49 | 67 | 4 | 63 |
+| `Neck_mov_X_deg_s_step_onset` | 52 | 5 | 47 | 67 | 1 | 66 |
+| `Neck_mov_Y_deg_s_step_onset` | 52 | 8 | 44 | 67 | 6 | 61 |
+| `Neck_mov_Z_deg_s_step_onset` | 52 | 3 | 49 | 67 | 4 | 63 |
+| `Neck_ref_X_Nm_step_onset` | 52 | 3 | 49 | 67 | 6 | 61 |
+| `Neck_ref_X_deg_s_step_onset` | 52 | 6 | 46 | 67 | 1 | 66 |
+| `Neck_ref_Y_Nm_step_onset` | 52 | 1 | 51 | 67 | 0 | 67 |
+| `Neck_ref_Y_deg_s_step_onset` | 52 | 7 | 45 | 67 | 4 | 63 |
+| `Neck_ref_Z_Nm_step_onset` | 52 | 3 | 49 | 67 | 0 | 67 |
+| `Neck_ref_Z_deg_s_step_onset` | 52 | 1 | 51 | 67 | 3 | 64 |
 | `Trunk_X_step_onset` | 52 | 4 | 48 | 67 | 8 | 59 |
 | `Trunk_Y_step_onset` | 52 | 3 | 49 | 67 | 8 | 59 |
 | `Trunk_Z_step_onset` | 52 | 0 | 52 | 67 | 3 | 64 |
+| `Trunk_mov_X_deg_s_step_onset` | 52 | 2 | 50 | 67 | 2 | 65 |
+| `Trunk_mov_Y_deg_s_step_onset` | 52 | 2 | 50 | 67 | 9 | 58 |
+| `Trunk_mov_Z_deg_s_step_onset` | 52 | 6 | 46 | 67 | 3 | 64 |
+| `Trunk_ref_X_Nm_step_onset` | 52 | 1 | 51 | 67 | 1 | 66 |
+| `Trunk_ref_X_deg_s_step_onset` | 52 | 3 | 49 | 67 | 3 | 64 |
+| `Trunk_ref_Y_Nm_step_onset` | 52 | 5 | 47 | 67 | 2 | 65 |
+| `Trunk_ref_Y_deg_s_step_onset` | 52 | 3 | 49 | 67 | 8 | 59 |
+| `Trunk_ref_Z_Nm_step_onset` | 52 | 7 | 45 | 67 | 4 | 63 |
+| `Trunk_ref_Z_deg_s_step_onset` | 52 | 6 | 46 | 67 | 3 | 64 |
 | `vCOM_X_step_onset` | 52 | 3 | 49 | 67 | 4 | 63 |
 | `vCOM_Y_step_onset` | 52 | 1 | 51 | 67 | 2 | 65 |
 | `xCOM_BOS_norm_step_onset` | 52 | 0 | 52 | 67 | 0 | 67 |
@@ -256,8 +373,8 @@
 
 1. platform onset 단일 프레임에서는 29개 변수 중 `10`개만 유의해 strict 기준 가설은 **FAIL**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
 2. platform onset에서는 관절 각도 변수는 총 15개 중 2개가 유의했고 (`Hip_stance_Y_abs_onset, Trunk_Y_abs_onset`), 나머지는 `n.s.`였다. 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
-3. step onset 단일 프레임에서는 총 `18`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
-4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 두 시점 모두 29개 전 변수가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
+3. step onset 단일 프레임에서는 총 `45`개가 FDR 유의였고, joint-angle 15개 중 `7`개가 유의했다 (`Hip_stance_X_step_onset, Trunk_X_step_onset, Ankle_stance_Z_step_onset, Knee_stance_Z_step_onset, Hip_stance_Z_step_onset, Hip_stance_Y_step_onset, Trunk_Y_step_onset`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` 29개 변수와 `step onset` 74개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 

@@ -51,7 +51,7 @@
 ## 결과 해석
 
 - baseline 관절각 요약: 15개 baseline segment angle 변수(X/Y/Z) 중 1개가 FDR 유의였다: `Knee_stance_X_baseline`.
-- baseline balance 계열에서는 `MOS_minDist_signed_baseline`, `MOS_AP_v3d_baseline`, `xCOM_BOS_norm_baseline`, `vCOM_X_baseline`가 유의했다.
+- baseline balance / force / dynamics 계열에서 일부 변수가 유의할 수 있으나, 해석은 generated result table을 기준으로 확인해야 한다.
 - 모든 축이 일관되게 유의하지 않다면, baseline posture만으로 전략 차이를 설명하는 근거는 제한적이다.
 - 본 결과는 onset 직전 single-frame 차이와는 다른 질문을 다루며, "초기 자세를 평균 posture로 보았을 때도 차이가 남는가"를 확인하는 데 의미가 있다.
 

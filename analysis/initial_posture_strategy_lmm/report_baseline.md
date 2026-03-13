@@ -39,8 +39,8 @@ This analysis adopts the prior study's focus on initial posture and stability me
   - `output/all_trials_timeseries.csv`
   - `data/perturb_inform.xlsm`
 - 분석 변수:
-  - baseline 후보 총 **29개**
-  - 검정 가능(testable) **29개**
+  - baseline 후보 총 **74개**
+  - 검정 가능(testable) **74개**
   - 검정 불가(untestable) **0개**
 
 ## Analysis Methodology
@@ -49,7 +49,7 @@ This analysis adopts the prior study's focus on initial posture and stability me
 - **Statistical model**: `DV ~ step_TF + (1|subject)` (REML, `lmerTest`)
 - **Outlier rule**: 각 변수별로 `step`/`nonstep` 그룹 내부에서 `1.5×IQR` 밖 trial 제거
 - **Confidence interval**: `step_TFstep` 계수의 Wald `95% CI`를 baseline range mean 비교에 한해 함께 보고
-- **Multiple comparison correction**: BH-FDR (29개 baseline 변수 전체 1회)
+- **Multiple comparison correction**: BH-FDR (74개 baseline 변수 전체 1회)
 - **Significance reporting**: `Sig` only (`***`, `**`, `*`, `n.s.`), `alpha=0.05`
 - **Displayed result policy**: Results 표에는 **FDR 유의 변수만** 표시
 
@@ -75,6 +75,8 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | Variable group | (+)/(-) meaning | 추가 규칙 |
 |---|---|---|
 | Joint angle (`*_baseline`) | exported joint-angle axis의 양/음 방향 | frame-wise stance 선택 후 baseline 평균, 추가 C3D 재계산 없음 |
+| Joint angular velocity (`*_ref_*_baseline`, `*_mov_*_baseline`) | exported angular-velocity axis의 양/음 방향 | Hip/Knee/Ankle은 frame-wise stance 선택 후 baseline 평균 |
+| Segment moment (`*_ref_*_baseline`) | exported internal moment axis의 양/음 방향 | Hip/Knee/Ankle은 frame-wise stance 선택 후 baseline 평균 |
 | COP / COM / GRF | exported CSV 축 방향의 양/음 값 | onset-aligned timeseries CSV 값을 직접 평균 |
 | `AnkleTorqueMid_Y_perkg_baseline` | exported internal ankle torque Y축 양/음 방향 | `AnkleTorqueMid_int_Y_Nm_per_kg` baseline 평균 |
 
@@ -87,7 +89,7 @@ This analysis adopts the prior study's focus on initial posture and stability me
 - Subject summary: `step_r_major=9`, `step_l_major=10`, `tie=5`
 - Tie subjects: `강비은, 김서하, 김유민, 안지연, 유재원`
 
-### Analyzed Variables (Full Set, n=29)
+### Analyzed Variables (Full Set, n=74)
 
 | Variable | Family | Testability at baseline | Result status |
 |---|---|---|---|
@@ -114,6 +116,51 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | `Neck_X_baseline` | Joint_baseline | testable | n.s. |
 | `Neck_Y_baseline` | Joint_baseline | testable | n.s. |
 | `Neck_Z_baseline` | Joint_baseline | testable | n.s. |
+| `Hip_stance_ref_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_ref_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_ref_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_mov_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_mov_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_mov_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Hip_stance_ref_X_Nm_baseline` | Moment_baseline | testable | ** |
+| `Hip_stance_ref_Y_Nm_baseline` | Moment_baseline | testable | *** |
+| `Hip_stance_ref_Z_Nm_baseline` | Moment_baseline | testable | *** |
+| `Knee_stance_ref_X_deg_s_baseline` | Velocity_baseline | testable | * |
+| `Knee_stance_ref_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Knee_stance_ref_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Knee_stance_mov_X_deg_s_baseline` | Velocity_baseline | testable | * |
+| `Knee_stance_mov_Y_deg_s_baseline` | Velocity_baseline | testable | ** |
+| `Knee_stance_mov_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Knee_stance_ref_X_Nm_baseline` | Moment_baseline | testable | *** |
+| `Knee_stance_ref_Y_Nm_baseline` | Moment_baseline | testable | *** |
+| `Knee_stance_ref_Z_Nm_baseline` | Moment_baseline | testable | *** |
+| `Ankle_stance_ref_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_ref_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_ref_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_mov_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_mov_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_mov_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Ankle_stance_ref_X_Nm_baseline` | Moment_baseline | testable | *** |
+| `Ankle_stance_ref_Y_Nm_baseline` | Moment_baseline | testable | *** |
+| `Ankle_stance_ref_Z_Nm_baseline` | Moment_baseline | testable | *** |
+| `Trunk_ref_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_ref_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_ref_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_mov_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_mov_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_mov_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Trunk_ref_X_Nm_baseline` | Moment_baseline | testable | n.s. |
+| `Trunk_ref_Y_Nm_baseline` | Moment_baseline | testable | n.s. |
+| `Trunk_ref_Z_Nm_baseline` | Moment_baseline | testable | n.s. |
+| `Neck_ref_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_ref_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_ref_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_mov_X_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_mov_Y_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_mov_Z_deg_s_baseline` | Velocity_baseline | testable | n.s. |
+| `Neck_ref_X_Nm_baseline` | Moment_baseline | testable | n.s. |
+| `Neck_ref_Y_Nm_baseline` | Moment_baseline | testable | n.s. |
+| `Neck_ref_Z_Nm_baseline` | Moment_baseline | testable | n.s. |
 | `COP_X_baseline` | Force_baseline | testable | n.s. |
 | `COP_Y_baseline` | Force_baseline | testable | n.s. |
 | `GRF_X_baseline` | Force_baseline | testable | n.s. |
@@ -126,18 +173,30 @@ This analysis adopts the prior study's focus on initial posture and stability me
 ### Hypothesis Verdict (strict)
 
 - **Rule**: testable baseline 변수 전부가 FDR 유의여야 PASS
-- **Observed**: testable significant ratio = `5/29`, untestable=`0`
+- **Observed**: testable significant ratio = `17/74`, untestable=`0`
 - **Verdict**: **FAIL**
 
 ### Significant Variables Only (BH-FDR < 0.05)
 
 | Variable | Family | Step (M±SD) | Nonstep (M±SD) | Estimate (step−nonstep) | 95% CI | Sig |
 |---|---|---:|---:|---:|---:|---|
+| `Hip_stance_ref_Y_Nm_baseline` | Moment_baseline | -0.54±1.24 | 21.06±20.96 | -22.28 | `[-26.61, -17.95]` | *** |
+| `Ankle_stance_ref_Y_Nm_baseline` | Moment_baseline | 0.02±0.07 | 22.75±28.02 | -25.06 | `[-30.13, -19.98]` | *** |
+| `Knee_stance_ref_Y_Nm_baseline` | Moment_baseline | 0.24±0.28 | 16.89±17.09 | -18.55 | `[-22.30, -14.80]` | *** |
+| `Ankle_stance_ref_X_Nm_baseline` | Moment_baseline | 0.32±0.08 | 22.62±20.38 | -22.77 | `[-27.59, -17.95]` | *** |
+| `Hip_stance_ref_Z_Nm_baseline` | Moment_baseline | -0.14±0.35 | 5.94±6.21 | -6.63 | `[-8.04, -5.21]` | *** |
+| `Knee_stance_ref_X_Nm_baseline` | Moment_baseline | -0.09±0.35 | 10.06±11.27 | -11.97 | `[-14.59, -9.35]` | *** |
 | `MOS_minDist_signed_baseline` | Balance | 0.07±0.01 | 0.06±0.01 | 0.01 | `[0.01, 0.01]` | *** |
+| `Knee_stance_ref_Z_Nm_baseline` | Moment_baseline | 0.00±0.03 | 1.32±1.68 | -1.44 | `[-1.84, -1.05]` | *** |
 | `xCOM_BOS_norm_baseline` | Balance | 0.64±0.07 | 0.70±0.07 | -0.05 | `[-0.06, -0.03]` | *** |
 | `MOS_AP_v3d_baseline` | Balance | 0.07±0.01 | 0.06±0.02 | 0.01 | `[0.01, 0.01]` | *** |
+| `Ankle_stance_ref_Z_Nm_baseline` | Moment_baseline | 0.01±0.01 | 1.01±1.58 | -1.01 | `[-1.46, -0.57]` | *** |
+| `Knee_stance_mov_Y_deg_s_baseline` | Velocity_baseline | -0.07±0.25 | 0.11±0.29 | -0.19 | `[-0.29, -0.09]` | ** |
+| `Hip_stance_ref_X_Nm_baseline` | Moment_baseline | -0.29±2.03 | 1.87±5.14 | -1.72 | `[-2.63, -0.81]` | ** |
 | `Knee_stance_X_baseline` | Joint_baseline | -0.26±0.18 | -0.21±0.16 | -0.09 | `[-0.14, -0.04]` | ** |
 | `vCOM_X_baseline` | Balance | 0.00±0.00 | 0.00±0.00 | -0.00 | `[-0.00, -0.00]` | ** |
+| `Knee_stance_mov_X_deg_s_baseline` | Velocity_baseline | 1.28±1.06 | 1.02±0.76 | 0.39 | `[0.14, 0.64]` | * |
+| `Knee_stance_ref_X_deg_s_baseline` | Velocity_baseline | 1.28±1.06 | 1.06±0.72 | 0.36 | `[0.11, 0.61]` | * |
 
 ### Outlier Exclusion Summary
 
@@ -147,6 +206,15 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | `Ankle_stance_X_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
 | `Ankle_stance_Y_baseline` | 53 | 13 | 40 | 72 | 8 | 64 |
 | `Ankle_stance_Z_baseline` | 53 | 6 | 47 | 72 | 6 | 66 |
+| `Ankle_stance_mov_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 1 | 71 |
+| `Ankle_stance_mov_Y_deg_s_baseline` | 53 | 11 | 42 | 72 | 6 | 66 |
+| `Ankle_stance_mov_Z_deg_s_baseline` | 53 | 7 | 46 | 72 | 6 | 66 |
+| `Ankle_stance_ref_X_Nm_baseline` | 53 | 11 | 42 | 72 | 0 | 72 |
+| `Ankle_stance_ref_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 4 | 68 |
+| `Ankle_stance_ref_Y_Nm_baseline` | 53 | 11 | 42 | 72 | 1 | 71 |
+| `Ankle_stance_ref_Y_deg_s_baseline` | 53 | 9 | 44 | 72 | 4 | 68 |
+| `Ankle_stance_ref_Z_Nm_baseline` | 53 | 11 | 42 | 72 | 13 | 59 |
+| `Ankle_stance_ref_Z_deg_s_baseline` | 53 | 7 | 46 | 72 | 7 | 65 |
 | `COM_X_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
 | `COM_Y_baseline` | 53 | 4 | 49 | 73 | 0 | 73 |
 | `COP_X_baseline` | 53 | 0 | 53 | 73 | 1 | 72 |
@@ -157,18 +225,54 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | `Hip_stance_X_baseline` | 53 | 6 | 47 | 72 | 7 | 65 |
 | `Hip_stance_Y_baseline` | 53 | 7 | 46 | 72 | 6 | 66 |
 | `Hip_stance_Z_baseline` | 53 | 7 | 46 | 72 | 9 | 63 |
+| `Hip_stance_mov_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 3 | 69 |
+| `Hip_stance_mov_Y_deg_s_baseline` | 53 | 5 | 48 | 72 | 7 | 65 |
+| `Hip_stance_mov_Z_deg_s_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Hip_stance_ref_X_Nm_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Hip_stance_ref_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Hip_stance_ref_Y_Nm_baseline` | 53 | 12 | 41 | 72 | 3 | 69 |
+| `Hip_stance_ref_Y_deg_s_baseline` | 53 | 9 | 44 | 72 | 7 | 65 |
+| `Hip_stance_ref_Z_Nm_baseline` | 53 | 11 | 42 | 72 | 4 | 68 |
+| `Hip_stance_ref_Z_deg_s_baseline` | 53 | 3 | 50 | 72 | 5 | 67 |
 | `Knee_stance_X_baseline` | 53 | 6 | 47 | 72 | 8 | 64 |
 | `Knee_stance_Y_baseline` | 53 | 6 | 47 | 72 | 3 | 69 |
 | `Knee_stance_Z_baseline` | 53 | 11 | 42 | 72 | 9 | 63 |
+| `Knee_stance_mov_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 8 | 64 |
+| `Knee_stance_mov_Y_deg_s_baseline` | 53 | 7 | 46 | 72 | 5 | 67 |
+| `Knee_stance_mov_Z_deg_s_baseline` | 53 | 8 | 45 | 72 | 10 | 62 |
+| `Knee_stance_ref_X_Nm_baseline` | 53 | 14 | 39 | 72 | 3 | 69 |
+| `Knee_stance_ref_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 9 | 63 |
+| `Knee_stance_ref_Y_Nm_baseline` | 53 | 12 | 41 | 72 | 5 | 67 |
+| `Knee_stance_ref_Y_deg_s_baseline` | 53 | 7 | 46 | 72 | 6 | 66 |
+| `Knee_stance_ref_Z_Nm_baseline` | 53 | 11 | 42 | 72 | 6 | 66 |
+| `Knee_stance_ref_Z_deg_s_baseline` | 53 | 9 | 44 | 72 | 11 | 61 |
 | `MOS_AP_v3d_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
 | `MOS_ML_v3d_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
 | `MOS_minDist_signed_baseline` | 53 | 0 | 53 | 73 | 1 | 72 |
 | `Neck_X_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
 | `Neck_Y_baseline` | 53 | 2 | 51 | 72 | 4 | 68 |
 | `Neck_Z_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Neck_mov_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 9 | 63 |
+| `Neck_mov_Y_deg_s_baseline` | 53 | 2 | 51 | 72 | 7 | 65 |
+| `Neck_mov_Z_deg_s_baseline` | 53 | 5 | 48 | 72 | 5 | 67 |
+| `Neck_ref_X_Nm_baseline` | 53 | 4 | 49 | 72 | 3 | 69 |
+| `Neck_ref_X_deg_s_baseline` | 53 | 5 | 48 | 72 | 9 | 63 |
+| `Neck_ref_Y_Nm_baseline` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Neck_ref_Y_deg_s_baseline` | 53 | 3 | 50 | 72 | 5 | 67 |
+| `Neck_ref_Z_Nm_baseline` | 53 | 1 | 52 | 72 | 0 | 72 |
+| `Neck_ref_Z_deg_s_baseline` | 53 | 6 | 47 | 72 | 6 | 66 |
 | `Trunk_X_baseline` | 53 | 7 | 46 | 72 | 2 | 70 |
 | `Trunk_Y_baseline` | 53 | 5 | 48 | 72 | 3 | 69 |
 | `Trunk_Z_baseline` | 53 | 2 | 51 | 72 | 4 | 68 |
+| `Trunk_mov_X_deg_s_baseline` | 53 | 4 | 49 | 72 | 2 | 70 |
+| `Trunk_mov_Y_deg_s_baseline` | 53 | 3 | 50 | 72 | 6 | 66 |
+| `Trunk_mov_Z_deg_s_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Trunk_ref_X_Nm_baseline` | 53 | 0 | 53 | 72 | 0 | 72 |
+| `Trunk_ref_X_deg_s_baseline` | 53 | 2 | 51 | 72 | 2 | 70 |
+| `Trunk_ref_Y_Nm_baseline` | 53 | 1 | 52 | 72 | 4 | 68 |
+| `Trunk_ref_Y_deg_s_baseline` | 53 | 4 | 49 | 72 | 5 | 67 |
+| `Trunk_ref_Z_Nm_baseline` | 53 | 0 | 53 | 72 | 2 | 70 |
+| `Trunk_ref_Z_deg_s_baseline` | 53 | 3 | 50 | 72 | 5 | 67 |
 | `vCOM_X_baseline` | 53 | 3 | 50 | 73 | 6 | 67 |
 | `vCOM_Y_baseline` | 53 | 1 | 52 | 73 | 2 | 71 |
 | `xCOM_BOS_norm_baseline` | 53 | 0 | 53 | 73 | 0 | 73 |
@@ -179,7 +283,7 @@ This analysis adopts the prior study's focus on initial posture and stability me
 |---|---|---|---|
 | Initial posture operationalization | onset/posture-related 초기 상태가 전략 variability를 설명 | onset 직전 300 ms baseline 평균으로 posture를 정의 | Partially consistent |
 | Broad posture separation by kinematic variables | initial posture effect가 존재하지만 subject/task interaction이 중요 | baseline joint-angle 유의 변수 `1/15` (`Knee_stance_X_baseline`) | Consistent |
-| Stability metric relevance | `xCOM/BOS`와 onset stability interpretation 제시 | baseline 유의 변수 `vCOM_X_baseline, MOS_minDist_signed_baseline, MOS_AP_v3d_baseline, xCOM_BOS_norm_baseline, Knee_stance_X_baseline` | Consistent |
+| Stability metric relevance | `xCOM/BOS`와 onset stability interpretation 제시 | baseline 유의 변수 `vCOM_X_baseline, MOS_minDist_signed_baseline, MOS_AP_v3d_baseline, xCOM_BOS_norm_baseline, Knee_stance_X_baseline, Hip_stance_ref_X_Nm_baseline, Hip_stance_ref_Y_Nm_baseline, Hip_stance_ref_Z_Nm_baseline, Knee_stance_ref_X_deg_s_baseline, Knee_stance_mov_X_deg_s_baseline, Knee_stance_mov_Y_deg_s_baseline, Knee_stance_ref_X_Nm_baseline, Knee_stance_ref_Y_Nm_baseline, Knee_stance_ref_Z_Nm_baseline, Ankle_stance_ref_X_Nm_baseline, Ankle_stance_ref_Y_Nm_baseline, Ankle_stance_ref_Z_Nm_baseline` | Consistent |
 
 ## Interpretation & Conclusion
 

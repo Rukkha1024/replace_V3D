@@ -60,6 +60,29 @@ _STANCE_X_SOURCES = [
     ("Knee_stance_X_deg", "Knee_L_X_deg", "Knee_R_X_deg"),
     ("Ankle_stance_X_deg", "Ankle_L_X_deg", "Ankle_R_X_deg"),
 ]
+_LOWER_LIMB_SEGMENTS = ("Hip", "Knee", "Ankle")
+_MIDLINE_SEGMENTS = ("Trunk", "Neck")
+_DYNAMIC_AXES = ("X", "Y", "Z")
+_ANGULAR_VELOCITY_RESOLUTIONS = ("ref", "mov")
+_STANCE_DYNAMIC_SOURCES: list[tuple[str, str, str]] = []
+for _seg in _LOWER_LIMB_SEGMENTS:
+    for _res in _ANGULAR_VELOCITY_RESOLUTIONS:
+        for _axis in _DYNAMIC_AXES:
+            _STANCE_DYNAMIC_SOURCES.append(
+                (
+                    f"{_seg}_stance_{_res}_{_axis}_deg_s",
+                    f"{_seg}_L_{_res}_{_axis}_deg_s",
+                    f"{_seg}_R_{_res}_{_axis}_deg_s",
+                )
+            )
+    for _axis in _DYNAMIC_AXES:
+        _STANCE_DYNAMIC_SOURCES.append(
+            (
+                f"{_seg}_stance_ref_{_axis}_Nm",
+                f"{_seg}_L_ref_{_axis}_Nm",
+                f"{_seg}_R_ref_{_axis}_Nm",
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -69,7 +92,7 @@ class VariableSpec:
 
 
 def build_variable_specs() -> list[VariableSpec]:
-    return [
+    specs = [
         VariableSpec("COM_X", "COM"),
         VariableSpec("COM_Y", "COM"),
         VariableSpec("COM_Z", "COM"),
@@ -109,6 +132,19 @@ def build_variable_specs() -> list[VariableSpec]:
         VariableSpec("xCOM_BOS_AP_foot", "xCOM_BOS"),
         VariableSpec("xCOM_BOS_ML_foot", "xCOM_BOS"),
     ]
+    for seg in _LOWER_LIMB_SEGMENTS:
+        for res in _ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in _DYNAMIC_AXES:
+                specs.append(VariableSpec(f"{seg}_stance_{res}_{axis}_deg_s", "JointVelocity"))
+        for axis in _DYNAMIC_AXES:
+            specs.append(VariableSpec(f"{seg}_stance_ref_{axis}_Nm", "SegmentMoment"))
+    for seg in _MIDLINE_SEGMENTS:
+        for res in _ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in _DYNAMIC_AXES:
+                specs.append(VariableSpec(f"{seg}_{res}_{axis}_deg_s", "JointVelocity"))
+        for axis in _DYNAMIC_AXES:
+            specs.append(VariableSpec(f"{seg}_ref_{axis}_Nm", "SegmentMoment"))
+    return specs
 
 
 FAMILY_SIZE = Counter(spec.family for spec in build_variable_specs())
@@ -239,11 +275,13 @@ def build_subject_major_step_side(platform: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_stance_joint_x_columns(df: pl.DataFrame, platform: pd.DataFrame) -> tuple[pl.DataFrame, pd.DataFrame]:
-    """Attach stance-equivalent sagittal joint columns to frame-level timeseries."""
+    """Attach stance-equivalent lower-limb joint and dynamics columns."""
     major_side = build_subject_major_step_side(platform)
     trial_meta = platform[TRIAL_KEYS + ["step_TF", "state"]].drop_duplicates().copy()
 
     for out_col, _left, _right in _STANCE_X_SOURCES:
+        df = df.drop([out_col], strict=False)
+    for out_col, _left, _right in _STANCE_DYNAMIC_SOURCES:
         df = df.drop([out_col], strict=False)
     df = df.drop(["major_step_side"], strict=False)
 
@@ -259,6 +297,19 @@ def add_stance_joint_x_columns(df: pl.DataFrame, platform: pd.DataFrame) -> tupl
 
     stance_exprs: list[pl.Expr] = []
     for out_col, left_col, right_col in _STANCE_X_SOURCES:
+        stance_exprs.append(
+            pl.when(pl.col("state") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("state") == "step_l")
+            .then(pl.col(right_col))
+            .when(pl.col("major_step_side") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("major_step_side") == "step_l")
+            .then(pl.col(right_col))
+            .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+            .alias(out_col)
+        )
+    for out_col, left_col, right_col in _STANCE_DYNAMIC_SOURCES:
         stance_exprs.append(
             pl.when(pl.col("state") == "step_r")
             .then(pl.col(left_col))
@@ -421,6 +472,15 @@ def prepare_frame_level_dataset(csv_path: Path, xlsm_path: Path) -> tuple[pd.Dat
         "Ankle_L_X_deg",
         "Ankle_R_X_deg",
     }
+    for _out_col, left_col, right_col in _STANCE_DYNAMIC_SOURCES:
+        required_cols.add(left_col)
+        required_cols.add(right_col)
+    for seg in _MIDLINE_SEGMENTS:
+        for res in _ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in _DYNAMIC_AXES:
+                required_cols.add(f"{seg}_{res}_{axis}_deg_s")
+        for axis in _DYNAMIC_AXES:
+            required_cols.add(f"{seg}_ref_{axis}_Nm")
     missing_cols = sorted(required_cols - set(df.columns))
     if missing_cols:
         raise ValueError(f"CSV missing required columns: {missing_cols}")
@@ -1126,6 +1186,8 @@ def write_report(
     lines.append("| Variable group | (+)/(-) meaning | 추가 규칙 |")
     lines.append("|----------------|------------------|-----------|")
     lines.append("| Joint angles (Hip/Knee/Ankle/Trunk/Neck) | 각 축의 해부학적 회전 부호를 데이터 원 부호 그대로 사용 | stance side만 Hip/Knee/Ankle X축에 적용 |")
+    lines.append("| Joint angular velocity (`*_ref_*_deg_s`, `*_mov_*_deg_s`) | 각속도 축 성분의 원 부호 유지 | Hip/Knee/Ankle은 stance side로 변환 후 비교 |")
+    lines.append("| Segment moment (`*_ref_*_Nm`) | internal moment 축 성분의 원 부호 유지 | Hip/Knee/Ankle은 stance side로 변환 후 비교 |")
     lines.append("| GRF_* / GRM_* | force/torque 원시 부호 유지 | onset-zeroing 없이 절대 시계열 사용 |")
     lines.append("| COP_* | COP 절대 좌표 부호 유지 | onset-zeroing 없이 절대 시계열 사용 |")
     lines.append("| AnkleTorqueMid_int_Y_Nm_per_kg | internal torque 부호 유지 | 체중 정규화 값 사용 |")

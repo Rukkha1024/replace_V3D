@@ -41,6 +41,26 @@ TRIAL_KEYS = ["subject", "velocity", "trial"]
 ANGLE_AXES = ("X", "Y", "Z")
 STANCE_SEGMENTS = ("Hip", "Knee", "Ankle")
 MIDLINE_SEGMENTS = ("Trunk", "Neck")
+ANGULAR_VELOCITY_RESOLUTIONS = ("ref", "mov")
+STANCE_DYNAMIC_SOURCES: list[tuple[str, str, str]] = []
+for _seg in STANCE_SEGMENTS:
+    for _res in ANGULAR_VELOCITY_RESOLUTIONS:
+        for _axis in ANGLE_AXES:
+            STANCE_DYNAMIC_SOURCES.append(
+                (
+                    f"{_seg}_stance_{_res}_{_axis}_deg_s",
+                    f"{_seg}_L_{_res}_{_axis}_deg_s",
+                    f"{_seg}_R_{_res}_{_axis}_deg_s",
+                )
+            )
+    for _axis in ANGLE_AXES:
+        STANCE_DYNAMIC_SOURCES.append(
+            (
+                f"{_seg}_stance_ref_{_axis}_Nm",
+                f"{_seg}_L_ref_{_axis}_Nm",
+                f"{_seg}_R_ref_{_axis}_Nm",
+            )
+        )
 WINDOW_START_S = -0.30
 WINDOW_END_S = 0.00
 
@@ -166,7 +186,7 @@ def build_trial_meta(df: pl.DataFrame, platform: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
-    """Create frame-wise stance-side joint-angle columns from left/right exports."""
+    """Create frame-wise stance-side joint and dynamics columns."""
     exprs: list[pl.Expr] = []
     for seg in STANCE_SEGMENTS:
         for axis in ANGLE_AXES:
@@ -185,6 +205,19 @@ def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
                 .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
                 .alias(out_col)
             )
+    for out_col, left_col, right_col in STANCE_DYNAMIC_SOURCES:
+        exprs.append(
+            pl.when(pl.col("state") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("state") == "step_l")
+            .then(pl.col(right_col))
+            .when(pl.col("major_step_side") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("major_step_side") == "step_l")
+            .then(pl.col(right_col))
+            .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+            .alias(out_col)
+        )
     return df.with_columns(exprs)
 
 
@@ -217,7 +250,7 @@ def summarize_major_step_side(major_side: pd.DataFrame) -> dict[str, Any]:
 
 
 def variable_catalog() -> list[dict[str, str]]:
-    """Return the fixed 29-variable baseline analysis specification."""
+    """Return the baseline analysis specification for exported CSV variables."""
     specs: list[dict[str, str]] = [
         {"dv": "COM_X_baseline", "family": "Balance"},
         {"dv": "COM_Y_baseline", "family": "Balance"},
@@ -234,6 +267,23 @@ def variable_catalog() -> list[dict[str, str]]:
     for seg in MIDLINE_SEGMENTS:
         for axis in ANGLE_AXES:
             specs.append({"dv": f"{seg}_{axis}_baseline", "family": "Joint_baseline"})
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append(
+                    {
+                        "dv": f"{seg}_stance_{res}_{axis}_deg_s_baseline",
+                        "family": "Velocity_baseline",
+                    }
+                )
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_stance_ref_{axis}_Nm_baseline", "family": "Moment_baseline"})
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append({"dv": f"{seg}_{res}_{axis}_deg_s_baseline", "family": "Velocity_baseline"})
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_ref_{axis}_Nm_baseline", "family": "Moment_baseline"})
     specs.extend([
         {"dv": "COP_X_baseline", "family": "Force_baseline"},
         {"dv": "COP_Y_baseline", "family": "Force_baseline"},
@@ -301,6 +351,28 @@ def build_baseline_dataframe(
         for axis in ANGLE_AXES:
             agg_exprs.append(
                 pl.col(f"{seg}_stance_{axis}_deg").mean().alias(f"{seg}_stance_{axis}_baseline")
+            )
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                agg_exprs.append(
+                    pl.col(f"{seg}_stance_{res}_{axis}_deg_s")
+                    .mean()
+                    .alias(f"{seg}_stance_{res}_{axis}_deg_s_baseline")
+                )
+        for axis in ANGLE_AXES:
+            agg_exprs.append(
+                pl.col(f"{seg}_stance_ref_{axis}_Nm").mean().alias(f"{seg}_stance_ref_{axis}_Nm_baseline")
+            )
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                agg_exprs.append(
+                    pl.col(f"{seg}_{res}_{axis}_deg_s").mean().alias(f"{seg}_{res}_{axis}_deg_s_baseline")
+                )
+        for axis in ANGLE_AXES:
+            agg_exprs.append(
+                pl.col(f"{seg}_ref_{axis}_Nm").mean().alias(f"{seg}_ref_{axis}_Nm_baseline")
             )
 
     baseline_df = baseline_frames.group_by(TRIAL_KEYS).agg(agg_exprs).sort(TRIAL_KEYS)
@@ -972,6 +1044,8 @@ This analysis adopts the prior study's focus on initial posture and stability me
 | Variable group | (+)/(-) meaning | 추가 규칙 |
 |---|---|---|
 | Joint angle (`*_baseline`) | exported joint-angle axis의 양/음 방향 | frame-wise stance 선택 후 baseline 평균, 추가 C3D 재계산 없음 |
+| Joint angular velocity (`*_ref_*_baseline`, `*_mov_*_baseline`) | exported angular-velocity axis의 양/음 방향 | Hip/Knee/Ankle은 frame-wise stance 선택 후 baseline 평균 |
+| Segment moment (`*_ref_*_baseline`) | exported internal moment axis의 양/음 방향 | Hip/Knee/Ankle은 frame-wise stance 선택 후 baseline 평균 |
 | COP / COM / GRF | exported CSV 축 방향의 양/음 값 | onset-aligned timeseries CSV 값을 직접 평균 |
 | `AnkleTorqueMid_Y_perkg_baseline` | exported internal ankle torque Y축 양/음 방향 | `AnkleTorqueMid_int_Y_Nm_per_kg` baseline 평균 |
 
@@ -1106,7 +1180,7 @@ def write_segment_angle_markdown(
 ## 결과 해석
 
 - baseline 관절각 요약: {joint_note}
-- baseline balance 계열에서는 `MOS_minDist_signed_baseline`, `MOS_AP_v3d_baseline`, `xCOM_BOS_norm_baseline`, `vCOM_X_baseline`가 유의했다.
+- baseline balance / force / dynamics 계열에서 일부 변수가 유의할 수 있으나, 해석은 generated result table을 기준으로 확인해야 한다.
 - 모든 축이 일관되게 유의하지 않다면, baseline posture만으로 전략 차이를 설명하는 근거는 제한적이다.
 - 본 결과는 onset 직전 single-frame 차이와는 다른 질문을 다루며, "초기 자세를 평균 posture로 보았을 때도 차이가 남는가"를 확인하는 데 의미가 있다.
 

@@ -163,6 +163,29 @@ _JOINT_NAMES = [
     ("Trunk", "Trunk_X_deg"),
     ("Neck", "Neck_X_deg"),
 ]
+_LOWER_LIMB_SEGMENTS = ("Hip", "Knee", "Ankle")
+_MIDLINE_SEGMENTS = ("Trunk", "Neck")
+_DYNAMIC_AXES = ("X", "Y", "Z")
+_ANGULAR_VELOCITY_RESOLUTIONS = ("ref", "mov")
+_STANCE_DYNAMIC_SOURCES: list[tuple[str, str, str]] = []
+for _seg in _LOWER_LIMB_SEGMENTS:
+    for _res in _ANGULAR_VELOCITY_RESOLUTIONS:
+        for _axis in _DYNAMIC_AXES:
+            _STANCE_DYNAMIC_SOURCES.append(
+                (
+                    f"{_seg}_stance_{_res}_{_axis}_deg_s",
+                    f"{_seg}_L_{_res}_{_axis}_deg_s",
+                    f"{_seg}_R_{_res}_{_axis}_deg_s",
+                )
+            )
+    for _axis in _DYNAMIC_AXES:
+        _STANCE_DYNAMIC_SOURCES.append(
+            (
+                f"{_seg}_stance_ref_{_axis}_Nm",
+                f"{_seg}_L_ref_{_axis}_Nm",
+                f"{_seg}_R_ref_{_axis}_Nm",
+            )
+        )
 
 FAMILY_KINEMATICS = "운동학"
 FAMILY_KINETICS = "운동역학"
@@ -239,11 +262,47 @@ def build_dv_specs() -> list[dict]:
         specs.append({"dv": f"{name}_ROM", "col": col, "agg": "range", "family": FAMILY_KINEMATICS})
         specs.append({"dv": f"{name}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINEMATICS})
 
+    # Joint angular velocity
+    for seg in _LOWER_LIMB_SEGMENTS:
+        for res in _ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in _DYNAMIC_AXES:
+                col = f"{seg}_stance_{res}_{axis}_deg_s"
+                specs.append(
+                    {
+                        "dv": f"{col}_peak",
+                        "col": col,
+                        "agg": "abs_peak",
+                        "family": FAMILY_KINEMATICS,
+                    }
+                )
+    for seg in _MIDLINE_SEGMENTS:
+        for res in _ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in _DYNAMIC_AXES:
+                col = f"{seg}_{res}_{axis}_deg_s"
+                specs.append(
+                    {
+                        "dv": f"{col}_peak",
+                        "col": col,
+                        "agg": "abs_peak",
+                        "family": FAMILY_KINEMATICS,
+                    }
+                )
+
     # GRF
     for ax in _GRF_AXES:
         col = f"GRF_{ax}_N"
         specs.append({"dv": f"GRF_{ax}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINETICS})
         specs.append({"dv": f"GRF_{ax}_range", "col": col, "agg": "range", "family": FAMILY_KINETICS})
+
+    # Segment moments
+    for seg in _LOWER_LIMB_SEGMENTS:
+        for axis in _DYNAMIC_AXES:
+            col = f"{seg}_stance_ref_{axis}_Nm"
+            specs.append({"dv": f"{col}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINETICS})
+    for seg in _MIDLINE_SEGMENTS:
+        for axis in _DYNAMIC_AXES:
+            col = f"{seg}_ref_{axis}_Nm"
+            specs.append({"dv": f"{col}_peak", "col": col, "agg": "abs_peak", "family": FAMILY_KINETICS})
 
     # Ankle torque
     specs.append({"dv": "AnkleTorqueMid_Y_peak", "col": "AnkleTorqueMid_int_Y_Nm_per_kg", "agg": "abs_peak", "family": FAMILY_KINETICS})
@@ -347,11 +406,13 @@ def build_subject_major_step_side(platform: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_stance_joint_x_columns(df: pl.DataFrame, platform: pd.DataFrame) -> tuple[pl.DataFrame, pd.DataFrame]:
-    """Attach stance-equivalent sagittal joint columns to frame-level timeseries."""
+    """Attach stance-equivalent lower-limb joint and dynamics columns."""
     major_side = build_subject_major_step_side(platform)
     trial_meta = platform[TRIAL_KEYS + ["step_TF", "state"]].drop_duplicates().copy()
 
     for out_col, _left, _right in _STANCE_X_SOURCES:
+        df = df.drop([out_col], strict=False)
+    for out_col, _left, _right in _STANCE_DYNAMIC_SOURCES:
         df = df.drop([out_col], strict=False)
     df = df.drop(["step_TF", "state", "major_step_side"], strict=False)
 
@@ -367,6 +428,19 @@ def add_stance_joint_x_columns(df: pl.DataFrame, platform: pd.DataFrame) -> tupl
 
     stance_exprs: list[pl.Expr] = []
     for out_col, left_col, right_col in _STANCE_X_SOURCES:
+        stance_exprs.append(
+            pl.when(pl.col("state") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("state") == "step_l")
+            .then(pl.col(right_col))
+            .when(pl.col("major_step_side") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("major_step_side") == "step_l")
+            .then(pl.col(right_col))
+            .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+            .alias(out_col)
+        )
+    for out_col, left_col, right_col in _STANCE_DYNAMIC_SOURCES:
         stance_exprs.append(
             pl.when(pl.col("state") == "step_r")
             .then(pl.col(left_col))
@@ -1168,8 +1242,8 @@ def write_report_md(
     lines.append("")
     lines.append("- Model (DV별 독립): `DV ~ step_TF + (1|subject)` (REML, R `lmerTest`)")
     lines.append("- Multiple comparison: Benjamini–Hochberg FDR (BH-FDR), family-wise")
-    lines.append(f"  - {FAMILY_KINETICS}: COM/COP/GRF/MoS/xCOM-BOS 등")
-    lines.append(f"  - {FAMILY_KINEMATICS}: Hip/Knee/Ankle/Trunk/Neck (ROM/peak)")
+    lines.append(f"  - {FAMILY_KINETICS}: COM/COP/GRF/MoS/xCOM-BOS, ankle torque, segment moment")
+    lines.append(f"  - {FAMILY_KINEMATICS}: Hip/Knee/Ankle/Trunk/Neck angle and angular velocity")
     lines.append("")
     lines.append("## Coordinate Definition (Joint Angle)")
     lines.append("")

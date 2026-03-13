@@ -63,6 +63,26 @@ TRIAL_KEYS = ["subject", "velocity", "trial"]
 ANGLE_AXES = ("X", "Y", "Z")
 STANCE_SEGMENTS = ("Hip", "Knee", "Ankle")
 MIDLINE_SEGMENTS = ("Trunk", "Neck")
+ANGULAR_VELOCITY_RESOLUTIONS = ("ref", "mov")
+STANCE_DYNAMIC_SOURCES: list[tuple[str, str, str]] = []
+for _seg in STANCE_SEGMENTS:
+    for _res in ANGULAR_VELOCITY_RESOLUTIONS:
+        for _axis in ANGLE_AXES:
+            STANCE_DYNAMIC_SOURCES.append(
+                (
+                    f"{_seg}_stance_{_res}_{_axis}_deg_s",
+                    f"{_seg}_L_{_res}_{_axis}_deg_s",
+                    f"{_seg}_R_{_res}_{_axis}_deg_s",
+                )
+            )
+    for _axis in ANGLE_AXES:
+        STANCE_DYNAMIC_SOURCES.append(
+            (
+                f"{_seg}_stance_ref_{_axis}_Nm",
+                f"{_seg}_L_ref_{_axis}_Nm",
+                f"{_seg}_R_ref_{_axis}_Nm",
+            )
+        )
 
 WINDOWS_R_HOME = Path(r"C:\Users\Alice\miniconda3\envs\module\lib\R")
 WINDOWS_RSCRIPT = WINDOWS_R_HOME / "bin" / "x64" / "Rscript.exe"
@@ -317,6 +337,33 @@ def _step_onset_variable_catalog() -> list[dict[str, str]]:
     for seg in MIDLINE_SEGMENTS:
         for axis in ANGLE_AXES:
             specs.append({"dv": f"{seg}_{axis}_step_onset", "family": "Joint_step_onset"})
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append(
+                    {
+                        "dv": f"{seg}_stance_{res}_{axis}_deg_s_step_onset",
+                        "family": "Velocity_step_onset",
+                    }
+                )
+        for axis in ANGLE_AXES:
+            specs.append(
+                {
+                    "dv": f"{seg}_stance_ref_{axis}_Nm_step_onset",
+                    "family": "Moment_step_onset",
+                }
+            )
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                specs.append(
+                    {
+                        "dv": f"{seg}_{res}_{axis}_deg_s_step_onset",
+                        "family": "Velocity_step_onset",
+                    }
+                )
+        for axis in ANGLE_AXES:
+            specs.append({"dv": f"{seg}_ref_{axis}_Nm_step_onset", "family": "Moment_step_onset"})
     specs.extend([
         {"dv": "COP_X_step_onset", "family": "Force_step_onset"},
         {"dv": "COP_Y_step_onset", "family": "Force_step_onset"},
@@ -347,6 +394,19 @@ def add_stance_cols_pl(df: pl.DataFrame) -> pl.DataFrame:
                 .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
                 .alias(out_col)
             )
+    for out_col, left_col, right_col in STANCE_DYNAMIC_SOURCES:
+        exprs.append(
+            pl.when(pl.col("state") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("state") == "step_l")
+            .then(pl.col(right_col))
+            .when(pl.col("major_step_side") == "step_r")
+            .then(pl.col(left_col))
+            .when(pl.col("major_step_side") == "step_l")
+            .then(pl.col(right_col))
+            .otherwise((pl.col(left_col) + pl.col(right_col)) / 2.0)
+            .alias(out_col)
+        )
     return df.with_columns(exprs)
 
 
@@ -479,10 +539,22 @@ def build_step_onset_snapshot(
     for seg in MIDLINE_SEGMENTS:
         for axis in ANGLE_AXES:
             src_to_out[f"{seg}_{axis}_deg"] = f"{seg}_{axis}_step_onset"
+    for seg in STANCE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                src_to_out[f"{seg}_stance_{res}_{axis}_deg_s"] = f"{seg}_stance_{res}_{axis}_deg_s_step_onset"
+        for axis in ANGLE_AXES:
+            src_to_out[f"{seg}_stance_ref_{axis}_Nm"] = f"{seg}_stance_ref_{axis}_Nm_step_onset"
+    for seg in MIDLINE_SEGMENTS:
+        for res in ANGULAR_VELOCITY_RESOLUTIONS:
+            for axis in ANGLE_AXES:
+                src_to_out[f"{seg}_{res}_{axis}_deg_s"] = f"{seg}_{res}_{axis}_deg_s_step_onset"
+        for axis in ANGLE_AXES:
+            src_to_out[f"{seg}_ref_{axis}_Nm"] = f"{seg}_ref_{axis}_Nm_step_onset"
 
     missing_src = sorted(set(src_to_out.keys()) - set(snap.columns))
     if missing_src:
-        raise ValueError(f"Missing step-onset angle columns from CSV snapshot: {missing_src}")
+        raise ValueError(f"Missing step-onset snapshot columns from CSV snapshot: {missing_src}")
 
     step_df = (
         snap.select(TRIAL_KEYS + ["step_TF"] + list(src_to_out.keys()))
@@ -1558,7 +1630,7 @@ def write_report_markdown(
 1. platform onset 단일 프레임에서는 29개 변수 중 `{n_sig}`개만 유의해 strict 기준 가설은 **{verdict}**였다. 즉, 섭동 직후 posture snapshot만으로 전략 분화를 광범위하게 설명하기는 어려웠다.
 2. platform onset에서는 {joint_line} 유의 변수는 COM/MOS와 일부 force/torque 변수에 제한적으로 나타났다.
 3. step onset 단일 프레임에서는 총 `{step_sig_total}`개가 FDR 유의였고, joint-angle 15개 중 `{step_joint_sig_count}`개가 유의했다 (`{', '.join(step_joint_sig_names) if step_joint_sig_names else '(none)'}`). 본 데이터에서는 전략 분화가 섭동 직후보다 발 들기 직전 프레임에서 더 강하게 관찰됐다.
-4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 두 시점 모두 29개 전 변수가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
+4. 따라서 single-frame 비교만 놓고 보면, step/nonstep 전략 차이는 `platform onset`의 초기 snapshot보다 `step onset` 직전의 준비 자세에서 더 뚜렷하다. 다만 `platform onset` 29개 변수와 `step onset` {len(step_specs)}개 변수 전체가 일관되게 유의하지는 않으므로, 단일 프레임 변수만으로 전략 차이를 완전히 설명한다고 단정할 수는 없다.
 
 ## Limitations
 
